@@ -1,7 +1,9 @@
 # Face Attendance stack (ARM-native)
 #  - recognizer : OpenCV YuNet + SFace face recognition (runs natively on Apple Silicon)
-#  - attendance : kiosk page, admin page, attendance log, CSV export
-#  - caddy      : HTTPS in front of attendance (iPad Safari needs HTTPS for the camera)
+#  - recognizer : also returns emotion (FER+) and clothing colour for the face in front of the kiosk
+#  - listener   : speech -> text + language (faster-whisper, local)
+#  - attendance : Aura kiosk, admin, insights, attendance log, CSV export, conversation brain
+#  - caddy      : HTTPS in front of attendance (iPad Safari needs HTTPS for the camera + mic)
 #
 # This replaces the earlier CompreFace-based stack: CompreFace ships x86-only ML images that
 # need AVX, which Apple Silicon (Rosetta) doesn't provide, so its core never became healthy.
@@ -9,6 +11,7 @@
 volumes:
   attendance-data:
   recognizer-data:
+  listener-models:
   caddy-data:
   caddy-config:
 
@@ -19,6 +22,13 @@ services:
     container_name: "recognizer"
     volumes:
       - recognizer-data:/data
+    expose:
+      - "8000"
+
+  listener:
+    build: ./listener
+    restart: always
+    container_name: "listener"
     expose:
       - "8000"
 
@@ -37,10 +47,25 @@ services:
       - ADMIN_PIN=${ADMIN_PIN:-2468}
       - TZ=${TZ:-Indian/Maldives}
       - DB_PATH=/data/attendance.db
+      - MEDIA_DIR=/data/media
+      - LISTENER_URL=http://listener:8000
+      # ---- Aura: conversation + insights (values come from .env; see .env.example) ----
+      - TYPESAFE_API_KEY=${TYPESAFE_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-claude-opus-5}
+      - AIRPORT_NAME=${AIRPORT_NAME:-Velana International Airport}
+      - WIFI_INFO=${WIFI_INFO:-network “Airport-Free-WiFi”, no password}
+      - UNIFORM_COLORS=${UNIFORM_COLORS:-}
+      - WEEKEND_DAYS=${WEEKEND_DAYS:-fri,sat}
+      - SHIFT_START=${SHIFT_START:-08:00}
+      - LATE_GRACE_MINUTES=${LATE_GRACE_MINUTES:-5}
+      - MOOD_TRACKING=${MOOD_TRACKING:-on}
+      - INTERACTION_RETENTION_DAYS=${INTERACTION_RETENTION_DAYS:-365}
     volumes:
       - attendance-data:/data
     depends_on:
       - recognizer
+      - listener
     ports:
       - "8181:8080"   # admin from this Mac: http://localhost:8181/admin
 

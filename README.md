@@ -1,27 +1,88 @@
-# Face Attendance — iPad kiosk + local face recognition
+# Aura — Face Attendance & AI host for airports
 
-Simple IN / BREAK / BACK / OUT attendance for a shop floor. Staff look at an iPad, are
-recognised within ~0.5 s, and tap one big button. Everything runs on one Mac (or any
-Docker host) on your LAN. No cloud, no per-seat licence.
+A wall-mounted iPad that recognises staff in ~0.5 s, clocks them IN / BREAK / BACK / OUT,
+greets them personally, chats with staff and travellers in their own language, shows
+location-specific content, and feeds a staff-behaviour and mood **Insights** dashboard.
+Everything except the optional language services runs on one Mac (or any Docker host) on your LAN.
 
 ```
- iPad (Safari kiosk page) ──HTTPS:8443──▶ caddy ──▶ attendance (Python/Starlette + SQLite)
-                                                          │ REST
-                                                          ▼
-                                                    recognizer (OpenCV YuNet + SFace, ARM-native)
+ iPad kiosk (Safari) ──HTTPS:8443──▶ caddy ──▶ attendance  (Starlette + SQLite: kiosk, admin, insights, brain)
+                                                   │           │                    │
+                                                   ▼           ▼                    ▼
+                                             recognizer     listener          Jev (TypeSafe) + optional Claude
+                                        (face match, FER+   (Whisper speech    (intent, sentiment, language,
+                                         emotion, outfit)    -> text + lang)    wellbeing; free-form replies)
 ```
 
 | Part | What it is |
 |---|---|
-| `recognizer/` | Face detection (YuNet) + 128-d face embeddings (SFace) via OpenCV. Runs natively on Apple Silicon and x86. Stores one vector per enrolled photo under a Docker volume — no photos kept. |
-| `attendance/` | ~330 lines of Python: kiosk page, admin page, attendance log, CSV export. |
-| `caddy` | HTTPS with a local CA. iPad Safari only allows the camera on HTTPS pages. |
-| `run.command` | One-click: installs Docker Desktop if missing, sets your LAN IP, builds, starts, opens admin. |
-| `start.command` | Day-to-day start/restart (e.g. after a reboot). |
+| `recognizer/` | YuNet detection + SFace 128-d embeddings + **FER+ emotion** + dominant **outfit colour**, all OpenCV/ONNX, ARM-native. Stores one vector per enrolled photo — no photos kept. |
+| `listener/` | **faster-whisper** (base, int8) — turns a voice clip into text and detects the language (99 languages). Model is baked into the image, works offline. |
+| `attendance/` | `app.py` routes · `brain.py` conversation + greetings · `phrases.py` multilingual templates · `insights.py` analytics · `store.py` schema · `demo.py` demo data · `static/` kiosk, admin, insights pages |
+| `caddy` | HTTPS with a local CA. iPad Safari only allows camera + microphone on HTTPS pages. |
 
-> Why not CompreFace? We tried it first. Its ML images are x86-only and need AVX, which
-> Apple Silicon/Rosetta doesn't provide — the core never became healthy. The OpenCV
-> recognizer replaces it with the same API surface, so nothing else changed.
+## What Aura does
+
+**On the wall (ambient mode)** — location name, big clock, a living "orb", a slideshow of the
+images/videos you upload for that location, rotating info cards (prayer room, taxis, Wi-Fi…),
+an announcements ticker and a live pulse (staff on duty, today's mood, chats today).
+
+**When staff walk up** — recognised in under a second; the screen greets them by name with 2–3
+lines chosen for the moment: birthday / work anniversary, a follow-up on something they told Aura
+("you said you were tired yesterday — hope you rested"), a compliment on their outfit colour or
+uniform, an upbeat response to their expression, and their punctuality (minutes early, on-time
+streak, stayed late yesterday). Jev picks which line fits best. One tap to clock IN/BREAK/BACK/OUT,
+then a personalised confirmation. Everything is spoken aloud (toggle per kiosk).
+
+**When travellers walk up** — a rotating multilingual welcome, quick-question buttons generated
+from the location's info cards, and "Talk to Aura": speak or type in any language, Aura answers
+in that language (text + voice). Visitors stay anonymous: no identity, no face data, only an
+aggregate mood reading per approach.
+
+**Conversation brain** — Jev (TypeSafe's decision model) classifies each message: intent (16
+kinds), sentiment, tiredness / illness / stress / celebration, the language (for Latin-script
+text), and which info card answers the question. Replies come from Claude when
+`ANTHROPIC_API_KEY` is set (free-form, uses the person's history and memories), otherwise from
+built-in templates in 11 languages. Every exchange is stored per person (or per anonymous
+visitor encounter), and wellbeing signals become short-lived *memories* Aura follows up on.
+
+**Insights (`/insights`)** — on-time %, arrival times, hours, breaks, staff & visitor mood trends,
+mood by hour/weekday/location/department, arrivals heatmap, conversation intents & languages,
+per-person drill-down (daily timeline, mood calendar, outfits, memories, full chat history) and
+"needs attention" alerts: persistent low mood, sudden mood drop, repeated lateness, long breaks,
+and kudos for on-time streaks.
+
+## Configuration (`.env`, see `.env.example`)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `TYPESAFE_API_KEY` | — | Jev key. Without it Aura falls back to keyword rules. |
+| `ANTHROPIC_API_KEY` | — | Optional. Enables free-form Claude replies in any language (`LLM_MODEL`, default `claude-opus-5`). |
+| `AIRPORT_NAME`, `WIFI_INFO` | Velana… | Used in replies |
+| `UNIFORM_COLORS` | — | e.g. `navy,white` → "Uniform on point today ✔" |
+| `SHIFT_START`, `LATE_GRACE_MINUTES` | `08:00`, `5` | Default shift; each person can have their own in Admin → People |
+| `WEEKEND_DAYS` | `fri,sat` | For day-of-week greetings |
+| `MOOD_TRACKING` | `on` | `on` · `staff_only` · `visitors_only` · `off` |
+| `INTERACTION_RETENTION_DAYS` | `365` | Conversations and mood readings older than this are purged on start |
+
+Per-location content (headline, theme, info cards, images/videos, announcements, voice on/off)
+is managed in **Admin → Locations**. Load **demo data** from Admin → Setup to show the system to
+another airport before enrolling anyone; "Remove demo data" deletes only demo rows.
+
+## Privacy & compliance — read before deploying
+
+* Camera frames and voice clips are processed in memory and discarded. Only face *vectors*,
+  names, timestamps, mood *labels*, outfit colour names and conversation text are stored.
+* Only text and derived signals go to Jev / Claude — never images or audio.
+* Each staff member can opt out of mood tracking (Admin → People); opting out also erases past
+  mood readings. "Forget conversations" wipes their chat history and memories. Deleting a person
+  removes face data, profile, moods and conversations (attendance records stay for payroll).
+* **Emotion recognition of employees is restricted or banned in some jurisdictions** — e.g. the
+  EU AI Act (Art. 5(1)(f)) prohibits it in the workplace except for medical/safety reasons. For
+  such sites set `MOOD_TRACKING=visitors_only` or `off`. Get legal sign-off and staff consent,
+  and use mood insights for wellbeing support, never for performance evaluation.
+* Facial-expression models read *expressions*, not feelings, and are less accurate across some
+  faces and lighting; treat trends over days as signals, single readings as noise.
 
 ## 1. Run it (macOS)
 
@@ -57,8 +118,8 @@ with/without glasses), or upload photos. Good frontal light, one face in frame.
 
 ## 4. Set up each iPad kiosk
 
-1. Safari → `https://<mac-ip>:8443/?kiosk=Floor-1` (one `kiosk=` name per location; the admin
-   **Setup** tab generates links). Allow camera.
+1. Safari → `https://<mac-ip>:8443/?kiosk=Arrivals-Hall` (one `kiosk=` name per location; the admin
+   **Setup** tab generates links). Tap "Tap to wake Aura" once, allow camera **and microphone**.
 2. Share → **Add to Home Screen**, open from the icon.
 3. **Settings → Accessibility → Guided Access → on**; in the kiosk triple-click the top button →
    Start. Staff can't leave the page.
@@ -68,11 +129,15 @@ with/without glasses), or upload photos. Good frontal light, one face in frame.
 
 | Tab | What |
 |---|---|
-| Today | who is IN / on BREAK / OUT now, auto-refresh |
+| Today | who is IN / on BREAK / OUT now (with mood), auto-refresh |
 | Log & Export | date range + employee filter, **Download CSV**, delete mistakes |
-| Employees | list, photo counts, rename, delete |
+| People | profiles (department, shift, birthday, language, mood consent), rename, delete, forget |
 | Enrol | camera capture or photo upload |
-| Setup | kiosk links, recognizer health |
+| Locations | per-kiosk headline, theme, info cards, images/videos, announcements |
+| Conversations | everything said to Aura, filterable, CSV |
+| Setup | kiosk links, AI engine status, demo data, privacy settings |
+
+**Insights** (`/insights`, same PIN) is the analytics dashboard described above.
 
 ## Tuning (`docker-compose.yml` → `attendance.environment`)
 
@@ -90,15 +155,16 @@ After a change: `docker compose up -d attendance` (or double-click `start.comman
 ```bash
 docker run --rm -v face-attendance_attendance-data:/d -v "$PWD":/b alpine tar czf /b/attendance-db.tgz -C /d .
 docker run --rm -v face-attendance_recognizer-data:/d  -v "$PWD":/b alpine tar czf /b/faces.tgz -C /d .
+# attendance-data also holds uploaded kiosk media (/data/media) and all conversations
 ```
-
-## Privacy
-
-Camera frames are matched and discarded. Only face vectors (not images) and names + timestamps are
-stored. Inform staff; most jurisdictions treat face data as biometric.
 
 ## Known limits
 
 * No liveness check — a printed photo could clock someone in. Fine with supervisors around.
+* Kiosk endpoints (`/api/event`, `/api/talk`) are unauthenticated on the LAN, as before; put the
+  kiosks on their own VLAN before connecting other networks.
+* Info cards are answered in the admin's language; with Claude enabled they are translated on the fly.
+* Dhivehi replies in `phrases.py` should be reviewed by a native speaker; iPads have no Dhivehi voice,
+  so Dhivehi replies are shown but not spoken.
 * Single shared admin PIN over LAN HTTPS; add users before exposing beyond the LAN.
 * One Mac comfortably handles 5–10 kiosks at 1 frame/s each.

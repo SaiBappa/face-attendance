@@ -2,127 +2,476 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Attendance Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Aura Admin</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --fg:#111827; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --in:#16a34a; --break:#d97706; --back:#2563eb; --out:#dc2626; }
+  :root {
+    --bg:#f4f6f9; --surface:#fff; --surface-2:#f1f4f8; --fg:#0f172a; --muted:#64748b; --line:#e3e8ef;
+    --accent:#4f46e5; --accent-fg:#fff; --accent-soft:#eef0ff; --accent-2:#0891b2;
+    --ok:#16a34a; --ok-soft:#e8f7ee; --warn:#d97706; --warn-soft:#fff4e0; --bad:#dc2626; --bad-soft:#fdecec; --off-soft:#eef1f5;
+    --in:#16a34a; --break:#d97706; --back:#2563eb; --out:#dc2626;
+    --shadow:0 1px 2px rgba(15,23,42,.05), 0 4px 16px rgba(15,23,42,.05);
+    --radius:14px; --side:236px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0a0e16; --surface:#111724; --surface-2:#182031; --fg:#e6eaf2; --muted:#93a0b5; --line:#232d42;
+      --accent:#818cf8; --accent-fg:#0b0f1a; --accent-soft:#1e2346; --accent-2:#22d3ee;
+      --ok:#4ade80; --ok-soft:#10291b; --warn:#fbbf24; --warn-soft:#2d230c; --bad:#f87171; --bad-soft:#2f1515; --off-soft:#1b2232;
+      --in:#22c55e; --break:#f59e0b; --back:#3b82f6; --out:#ef4444;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.25);
+    }
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,system-ui,sans-serif; font-size:16px; }
-  header { background:#111827; color:#fff; padding:14px 20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
-  header h1 { font-size:18px; margin:0 auto 0 0; }
-  nav button { background:transparent; color:#cbd5e1; border:0; padding:8px 12px; font-size:15px; border-radius:8px; cursor:pointer; }
-  nav button.active { background:#374151; color:#fff; }
-  main { max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
-  section { display:none; } section.active { display:block; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; }
-  h2 { font-size:17px; margin:0 0 12px; }
-  table { width:100%; border-collapse:collapse; font-size:15px; }
-  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
-  th { color:var(--muted); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.03em; }
-  .tag { display:inline-block; padding:3px 10px; border-radius:999px; color:#fff; font-size:13px; font-weight:600; }
-  .t-IN{background:var(--in)} .t-BREAK{background:var(--break)} .t-BACK{background:var(--back)} .t-OUT{background:var(--out)}
-  input, select, button.btn { font:inherit; padding:9px 12px; border:1px solid var(--line); border-radius:8px; background:#fff; }
-  button.btn { background:var(--accent); color:#fff; border-color:var(--accent); cursor:pointer; }
-  button.btn.ghost { background:#fff; color:var(--fg); }
-  button.btn.danger { background:#fff; color:var(--out); border-color:var(--out); }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif; font-size:15px; line-height:1.45; overflow-x:hidden; }
+  a { color:var(--accent); }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; background:var(--surface-2); padding:3px 7px; border-radius:6px; word-break:break-all; }
+  svg.i { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  [hidden] { display:none !important; }
+
+  /* ---------- gate ---------- */
+  #gate { min-height:100vh; display:grid; place-items:center; padding:24px 16px; background:radial-gradient(1200px 600px at 20% -10%, var(--accent-soft), transparent), var(--bg); }
+  .gate-card { width:100%; max-width:360px; background:var(--surface); border:1px solid var(--line); border-radius:22px; padding:32px 26px; text-align:center; box-shadow:var(--shadow); }
+  .gate-card h1 { margin:14px 0 4px; font-size:22px; }
+  #gate input { font-size:28px; text-align:center; letter-spacing:.35em; width:100%; margin:18px 0 12px; }
+  .logo { width:46px; height:46px; border-radius:14px; display:inline-grid; place-items:center; color:#fff; font-weight:800; font-size:20px; background:linear-gradient(135deg,#6366f1,#06b6d4); box-shadow:0 6px 18px rgba(99,102,241,.35); }
+
+  /* ---------- shell ---------- */
+  #app { display:flex; min-height:100vh; }
+  .side { position:sticky; top:0; height:100vh; width:var(--side); flex:none; background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:18px 12px; gap:4px; }
+  .brand { display:flex; align-items:center; gap:10px; padding:4px 8px 16px; }
+  .brand .logo { width:34px; height:34px; border-radius:10px; font-size:16px; }
+  .brand b { font-size:17px; display:block; line-height:1.1; }
+  .brand small { color:var(--muted); font-size:12px; }
+  nav { display:flex; flex-direction:column; gap:2px; }
+  nav button, .navlink { display:flex; align-items:center; gap:11px; width:100%; background:transparent; color:var(--muted); border:0; padding:9px 11px; font:inherit; font-weight:550; border-radius:10px; cursor:pointer; text-align:left; text-decoration:none; white-space:nowrap; }
+  nav button:hover, .navlink:hover { background:var(--surface-2); color:var(--fg); }
+  nav button.active { background:var(--accent-soft); color:var(--accent); }
+  .navlink.insights { margin-top:10px; color:#fff; background:linear-gradient(135deg,#6366f1,#0891b2); justify-content:flex-start; box-shadow:0 4px 14px rgba(79,70,229,.25); }
+  .navlink.insights:hover { color:#fff; filter:brightness(1.07); background:linear-gradient(135deg,#6366f1,#0891b2); }
+  .side-foot { margin-top:auto; display:flex; flex-direction:column; gap:6px; }
+  .content { flex:1; min-width:0; }
+  .topbar { display:flex; align-items:center; gap:12px; padding:22px 28px 6px; }
+  .topbar h1 { margin:0; font-size:24px; letter-spacing:-.01em; }
+  .topbar p { margin:2px 0 0; color:var(--muted); font-size:14px; }
+  main { padding:14px 28px 60px; max-width:1180px; }
+  section { display:none; } section.active { display:block; animation:fade .18s ease; }
+  @keyframes fade { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+
+  /* ---------- cards / layout ---------- */
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; margin-bottom:18px; box-shadow:var(--shadow); min-width:0; }
+  .card > h2:first-child, .card-h { margin-top:0; }
+  h2 { font-size:16px; margin:0 0 12px; letter-spacing:-.005em; }
+  h3 { font-size:14px; margin:18px 0 8px; }
+  .card-h { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .card-h h2 { margin:0 auto 0 0; }
   .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
-  .muted { color:var(--muted); font-size:14px; }
-  #gate { max-width:360px; margin:80px auto; text-align:center; }
-  #gate input { font-size:28px; text-align:center; letter-spacing:.3em; width:100%; margin:14px 0; }
-  video, #shot { width:100%; max-width:420px; border-radius:12px; background:#000; transform:scaleX(-1); display:block; }
-  .kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:18px; }
-  .kpi div { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
-  .kpi b { display:block; font-size:28px; }
-  .kpi span { color:var(--muted); font-size:13px; }
-  .err { color:var(--out); }
+  .row > * { min-width:0; }
+  .grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 14px; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 14px; }
+  .span2 { grid-column:1 / -1; }
+  .split { display:grid; grid-template-columns:300px minmax(0,1fr); gap:18px; align-items:start; }
+  .muted { color:var(--muted); font-size:13.5px; }
+  .hint { color:var(--muted); font-size:12.5px; margin-top:4px; }
+  .err { color:var(--bad); }
+  .tablewrap { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -4px; }
+  table { width:100%; border-collapse:collapse; font-size:14.5px; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr:hover td { background:var(--surface-2); }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+  td.num, th.num { text-align:right; }
+  .empty { padding:28px 10px; text-align:center; color:var(--muted); }
+
+  /* ---------- controls ---------- */
+  input, select, textarea, button.btn, a.btn { font:inherit; font-size:14.5px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--fg); min-width:0; max-width:100%; }
+  textarea { width:100%; resize:vertical; min-height:70px; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--accent); outline-offset:-1px; border-color:transparent; }
+  .field { display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .field > span { font-size:12.5px; font-weight:600; color:var(--muted); }
+  .field input, .field select, .field textarea { width:100%; }
+  button.btn, a.btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; background:var(--accent); color:var(--accent-fg); border-color:var(--accent); cursor:pointer; font-weight:600; text-decoration:none; white-space:nowrap; transition:filter .12s, background .12s; }
+  button.btn:hover, a.btn:hover { filter:brightness(1.06); }
+  button.btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn.ghost { background:var(--surface) !important; color:var(--fg) !important; border-color:var(--line) !important; }
+  .btn.ghost:hover { background:var(--surface-2) !important; }
+  .btn.danger { background:var(--surface) !important; color:var(--bad) !important; border-color:color-mix(in srgb, var(--bad) 45%, var(--line)) !important; }
+  .btn.danger:hover { background:var(--bad-soft) !important; }
+  .btn.sm { padding:5px 10px; font-size:13px; border-radius:8px; }
+  .btn.icon { padding:6px 8px; }
+  .switch { position:relative; display:inline-flex; align-items:center; gap:10px; cursor:pointer; font-weight:550; }
+  .switch input { position:absolute; opacity:0; width:1px; height:1px; }
+  .switch .sl { width:42px; height:25px; border-radius:99px; background:var(--line); position:relative; flex:none; transition:background .15s; }
+  .switch .sl::after { content:""; position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .15s; }
+  .switch input:checked + .sl { background:var(--ok); }
+  .switch input:checked + .sl::after { transform:translateX(17px); }
+  .switch input:focus-visible + .sl { outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* ---------- tags / pills ---------- */
+  .tag { display:inline-block; padding:3px 10px; border-radius:999px; color:#fff; font-size:12px; font-weight:700; letter-spacing:.02em; }
+  .t-IN{background:var(--in)} .t-BREAK{background:var(--break)} .t-BACK{background:var(--back)} .t-OUT{background:var(--out)}
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; background:var(--off-soft); color:var(--muted); white-space:nowrap; }
+  .pill::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.9; }
+  .pill.plain::before { display:none; }
+  .pill.ok { background:var(--ok-soft); color:var(--ok); }
+  .pill.warn { background:var(--warn-soft); color:var(--warn); }
+  .pill.bad { background:var(--bad-soft); color:var(--bad); }
+  .pill.acc { background:var(--accent-soft); color:var(--accent); }
+  .chip { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11.5px; font-weight:600; background:var(--surface-2); color:var(--muted); border:1px solid var(--line); white-space:nowrap; }
+  .mood { font-size:19px; line-height:1; }
+
+  /* ---------- KPIs ---------- */
+  .kpi { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:18px; }
+  .kpi > div { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); position:relative; overflow:hidden; }
+  .kpi > div::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--c, var(--accent)); }
+  .kpi b { display:block; font-size:30px; letter-spacing:-.02em; line-height:1.1; }
+  .kpi span { color:var(--muted); font-size:13px; font-weight:550; }
+
+  /* ---------- people ---------- */
+  .people { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+  .person { display:flex; gap:12px; align-items:flex-start; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px; cursor:pointer; font:inherit; color:inherit; width:100%; transition:border-color .12s, transform .12s, box-shadow .12s; }
+  .person:hover { border-color:var(--accent); box-shadow:var(--shadow); transform:translateY(-1px); }
+  .person .who { min-width:0; flex:1; }
+  .person .who b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .person .who .muted { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .person .badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .avatar { width:40px; height:40px; border-radius:12px; display:grid; place-items:center; font-weight:700; font-size:14px; color:#fff; flex:none; }
+  .avatar.sm { width:30px; height:30px; border-radius:9px; font-size:12px; }
+
+  /* ---------- dialog ---------- */
+  dialog { border:1px solid var(--line); border-radius:18px; padding:0; width:min(680px, calc(100vw - 24px)); max-height:calc(100vh - 32px); background:var(--surface); color:var(--fg); box-shadow:0 20px 60px rgba(0,0,0,.35); }
+  dialog::backdrop { background:rgba(10,14,22,.5); backdrop-filter:blur(3px); }
+  .dlg-h { display:flex; align-items:center; gap:12px; padding:18px 20px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--surface); z-index:1; }
+  .dlg-h h2 { margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .dlg-b { padding:18px 20px; }
+  .dlg-f { display:flex; gap:8px; flex-wrap:wrap; padding:14px 20px 18px; border-top:1px solid var(--line); position:sticky; bottom:0; background:var(--surface); }
+  .dlg-f .spacer { flex:1; }
+  .notice { background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--muted); }
+  .notice.warn { background:var(--warn-soft); color:var(--warn); border-color:transparent; }
+
+  /* ---------- locations ---------- */
+  .klist { display:flex; flex-direction:column; gap:8px; }
+  .kitem { display:flex; flex-direction:column; gap:3px; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; cursor:pointer; font:inherit; color:inherit; width:100%; }
+  .kitem:hover { border-color:var(--accent); }
+  .kitem.active { border-color:var(--accent); background:var(--accent-soft); }
+  .kitem .top { display:flex; align-items:flex-start; gap:8px; }
+  .kitem .top b { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .themes { display:flex; gap:8px; flex-wrap:wrap; }
+  .theme-opt { position:relative; cursor:pointer; }
+  .theme-opt input { position:absolute; opacity:0; }
+  .theme-opt span { display:flex; align-items:center; gap:8px; padding:6px 12px 6px 6px; border:1px solid var(--line); border-radius:10px; font-size:13px; font-weight:600; }
+  .theme-opt i { width:24px; height:24px; border-radius:7px; display:block; }
+  .theme-opt input:checked + span { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+  .th-lagoon { background:linear-gradient(135deg,#0ea5e9,#14b8a6); } .th-sunset { background:linear-gradient(135deg,#f97316,#db2777); }
+  .th-aurora { background:linear-gradient(135deg,#7c3aed,#22d3ee); } .th-mono { background:linear-gradient(135deg,#334155,#94a3b8); }
+  .cards-ed { display:flex; flex-direction:column; gap:8px; }
+  .card-row { display:grid; grid-template-columns:52px minmax(0,1fr) auto; gap:8px; align-items:center; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:8px; }
+  .card-row input.ico { text-align:center; font-size:20px; padding:5px; }
+  .card-row input[data-f=title] { font-weight:600; }
+  .card-row textarea { grid-column:1 / -1; grid-row:2; min-height:44px; height:52px; }
+  .card-row .acts { display:flex; gap:4px; grid-column:3; grid-row:1; }
+  .gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
+  .media { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface-2); display:flex; flex-direction:column; }
+  .media img, .media video { width:100%; aspect-ratio:16/10; object-fit:cover; display:block; background:#000; }
+  .media .mb { padding:8px; display:flex; flex-direction:column; gap:6px; }
+  .media .mb input { width:100%; font-size:13px; padding:6px 8px; }
+  .media .ma { display:flex; gap:4px; }
+  .media .ma .btn { flex:1; }
+  .upl { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:12px; border:1.5px dashed var(--line); border-radius:12px; margin-top:12px; }
+  .upl input[type=file] { flex:1 1 200px; }
+  .upl input[type=text] { flex:1 1 180px; }
+  .ann { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--line); }
+  .ann:last-child { border-bottom:0; }
+  .ann .txt { flex:1; min-width:0; overflow-wrap:anywhere; }
+
+  /* ---------- conversations ---------- */
+  .filters { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:6px; }
+  .convos { display:flex; flex-direction:column; gap:12px; }
+  .convo { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow); }
+  .convo-h { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .convo-h b { margin-right:2px; }
+  .convo-h .when { color:var(--muted); font-size:12.5px; margin-left:auto; white-space:nowrap; }
+  .bubble { max-width:82%; padding:9px 13px; border-radius:16px; font-size:14.5px; overflow-wrap:anywhere; white-space:pre-wrap; }
+  .bubble.them { background:var(--surface-2); border:1px solid var(--line); border-bottom-left-radius:5px; }
+  .bubble.aura { margin:8px 0 0 auto; background:linear-gradient(135deg,#6366f1,#0891b2); color:#fff; border-bottom-right-radius:5px; }
+  .bubble.aura small { display:block; opacity:.8; font-size:11px; font-weight:600; margin-bottom:2px; }
+
+  /* ---------- setup ---------- */
+  .engines { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .eng { border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--surface-2); }
+  .eng .eh { display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+  .eng .eh b { flex:1; }
+  .eng p { margin:0; font-size:13px; color:var(--muted); }
+  .eng code { padding:1px 5px; font-size:11.5px; }
+  ul.priv { margin:0; padding:0; list-style:none; display:grid; gap:10px; }
+  ul.priv li { display:flex; gap:10px; align-items:flex-start; font-size:14px; }
+  ul.priv li .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; background:var(--ok-soft); color:var(--ok); flex:none; }
+  video#ev { width:100%; max-width:440px; aspect-ratio:4/3; object-fit:cover; border-radius:14px; background:#000; transform:scaleX(-1); display:block; }
+  .enrol-grid { display:grid; grid-template-columns:minmax(0,440px) minmax(0,1fr); gap:22px; align-items:start; }
+
+  /* ---------- toast ---------- */
+  #toasts { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:1000; max-width:calc(100vw - 32px); }
+  .toast { background:var(--fg); color:var(--bg); padding:10px 14px; border-radius:10px; font-size:14px; box-shadow:0 8px 24px rgba(0,0,0,.25); animation:fade .18s ease; overflow-wrap:anywhere; }
+  .toast.bad { background:var(--bad); color:#fff; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1100px) { .split { grid-template-columns:240px minmax(0,1fr); } }
+  @media (max-width: 900px) {
+    #app { flex-direction:column; }
+    .side { position:sticky; top:0; z-index:50; height:auto; width:100%; flex-direction:row; flex-wrap:wrap; align-items:center; padding:10px 12px 0; border-right:0; border-bottom:1px solid var(--line); gap:0; background:color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter:blur(10px); padding-top:max(10px, env(safe-area-inset-top)); }
+    .brand { padding:0 6px 8px; flex:1; }
+    .brand small { display:none; }
+    .side-foot { margin:0 0 8px; flex-direction:row; }
+    .side-foot .navlink { padding:7px 10px; width:auto; }
+    .side-foot .navlink.insights { margin-top:0; }
+    .side-foot .navlink span.lbl-lock { display:none; }
+    nav { order:3; flex-direction:row; width:calc(100% + 24px); margin:0 -12px; padding:0 8px 8px; overflow-x:auto; scrollbar-width:none; gap:4px; }
+    nav::-webkit-scrollbar { display:none; }
+    nav button { width:auto; padding:7px 11px; font-size:14px; }
+    .topbar { padding:16px 16px 2px; }
+    .topbar h1 { font-size:20px; }
+    main { padding:12px 16px 50px; }
+    .split { grid-template-columns:minmax(0,1fr); }
+    .kpi { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .enrol-grid { grid-template-columns:minmax(0,1fr); }
+  }
+  @media (max-width: 600px) {
+    .grid2, .grid3 { grid-template-columns:minmax(0,1fr); }
+    .card { padding:14px; }
+    .kpi b { font-size:24px; }
+    .bubble { max-width:94%; }
+    .hide-sm { display:none; }
+    .dlg-h, .dlg-b, .dlg-f { padding-left:14px; padding-right:14px; }
+    dialog { width:calc(100vw - 16px); max-height:calc(100vh - 16px); }
+    .filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
 </style>
 </head>
 <body>
 <div id="gate">
-  <h2>Attendance Admin</h2>
-  <p class="muted">Enter the admin PIN</p>
-  <input id="pin" type="password" inputmode="numeric" autocomplete="off">
-  <button class="btn" id="pinGo">Unlock</button>
-  <p id="pinErr" class="err"></p>
+  <div class="gate-card">
+    <div class="logo">A</div>
+    <h1>Aura Admin</h1>
+    <p class="muted" style="margin:0">Enter the admin PIN to continue</p>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" aria-label="Admin PIN">
+    <button class="btn" id="pinGo" style="width:100%">Unlock</button>
+    <p id="pinErr" class="err" style="margin:10px 0 0;min-height:1em"></p>
+  </div>
 </div>
 
 <div id="app" hidden>
-<header>
-  <h1>Attendance Admin</h1>
+<aside class="side">
+  <div class="brand"><div class="logo">A</div><div><b>Aura</b><small>Kiosk admin console</small></div></div>
   <nav>
-    <button data-s="status" class="active">Today</button>
-    <button data-s="log">Log &amp; Export</button>
-    <button data-s="employees">Employees</button>
-    <button data-s="enrol">Enrol</button>
-    <button data-s="setup">Setup</button>
+    <button data-s="status" class="active"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Today</button>
+    <button data-s="log"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M18 13v7m-3-3l3 3 3-3"/></svg>Log &amp; Export</button>
+    <button data-s="people"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/></svg>People</button>
+    <button data-s="enrol"><svg class="i" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><circle cx="12" cy="10.5" r="2.8"/><path d="M8 17c1-1.5 2.4-2.2 4-2.2s3 .7 4 2.2"/></svg>Enrol</button>
+    <button data-s="locations"><svg class="i" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0119 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Locations</button>
+    <button data-s="conversations"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Conversations</button>
+    <button data-s="setup"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>Setup</button>
   </nav>
-  <button class="btn ghost" id="lock" style="padding:6px 12px">Lock</button>
-</header>
+  <div class="side-foot">
+    <a class="navlink insights" href="/insights"><svg class="i" viewBox="0 0 24 24"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg>Insights ↗</a>
+    <button class="navlink" id="lock" title="Lock"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg><span class="lbl-lock">Lock</span></button>
+  </div>
+</aside>
+
+<div class="content">
+<div class="topbar"><div><h1 id="pageTitle">Today</h1><p id="pageSub"></p></div></div>
 <main>
 
+<!-- ================= TODAY ================= -->
 <section id="s-status" class="active">
-  <div class="row"><input type="date" id="statusDay"><button class="btn ghost" id="statusRefresh">Refresh</button><span class="muted">auto-refreshes every 15 s</span></div>
-  <div class="kpi"><div><b id="kIn">0</b><span>On duty</span></div><div><b id="kBreak">0</b><span>On break</span></div><div><b id="kOut">0</b><span>Clocked out</span></div><div><b id="kTotal">0</b><span>Seen today</span></div></div>
-  <div class="card"><table><thead><tr><th>Employee</th><th>State</th><th>Since</th><th>Kiosk</th></tr></thead><tbody id="statusBody"></tbody></table></div>
+  <div class="row"><input type="date" id="statusDay" aria-label="Day"><button class="btn ghost" id="statusRefresh">Refresh</button><span class="muted">Auto-refreshes every 15 s</span></div>
+  <div class="kpi">
+    <div style="--c:var(--in)"><b id="kIn">0</b><span>On duty</span></div>
+    <div style="--c:var(--break)"><b id="kBreak">0</b><span>On break</span></div>
+    <div style="--c:var(--out)"><b id="kOut">0</b><span>Clocked out</span></div>
+    <div style="--c:var(--accent)"><b id="kTotal">0</b><span>Seen today</span></div>
+  </div>
+  <div class="card"><div class="tablewrap"><table><thead><tr><th>Employee</th><th>State</th><th>Since</th><th>Kiosk</th><th>Mood</th></tr></thead><tbody id="statusBody"></tbody></table></div></div>
 </section>
 
+<!-- ================= LOG ================= -->
 <section id="s-log">
   <div class="card">
     <div class="row">
-      <label>From <input type="date" id="from"></label>
-      <label>To <input type="date" id="to"></label>
-      <input id="empFilter" placeholder="Employee (optional)">
-      <button class="btn" id="logGo">Show</button>
-      <button class="btn ghost" id="csv">⬇︎ Download CSV</button>
+      <label class="field"><span>From</span><input type="date" id="from"></label>
+      <label class="field"><span>To</span><input type="date" id="to"></label>
+      <label class="field" style="flex:1 1 180px"><span>Employee</span><input id="empFilter" placeholder="Optional" list="nameList"></label>
+      <div style="display:flex;gap:8px;align-self:flex-end;flex-wrap:wrap"><button class="btn" id="logGo">Show</button><button class="btn ghost" id="csv">⬇︎ Download CSV</button></div>
     </div>
-    <table><thead><tr><th>Time</th><th>Employee</th><th>Action</th><th>Kiosk</th><th>Match</th><th></th></tr></thead><tbody id="logBody"></tbody></table>
+    <div class="tablewrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Action</th><th>Kiosk</th><th>Mood</th><th class="num">Match</th><th></th></tr></thead><tbody id="logBody"></tbody></table></div>
   </div>
 </section>
 
-<section id="s-employees">
+<!-- ================= PEOPLE ================= -->
+<section id="s-people">
   <div class="card">
-    <div class="row"><h2 style="margin:0 auto 0 0">Registered employees</h2><button class="btn ghost" id="empRefresh">Refresh</button></div>
-    <p class="muted">Aim for 3–5 photos per person (front, slight left/right, with/without glasses). Names are what appears on the kiosk.</p>
-    <table><thead><tr><th>Name</th><th>Photos</th><th></th></tr></thead><tbody id="empBody"></tbody></table>
+    <div class="card-h">
+      <h2 id="peopleCount">People</h2>
+      <input id="peopleQ" type="search" placeholder="Search name, role, department" style="flex:1 1 220px;max-width:340px">
+      <select id="peopleF" aria-label="Filter"><option value="">Everyone</option><option value="enrolled">Face enrolled</option><option value="not">Not enrolled</option></select>
+      <button class="btn ghost" id="empRefresh">Refresh</button>
+    </div>
+    <p class="muted" style="margin-top:0">Click a person to edit their profile. Aim for 3–5 face photos per person (front, slight left/right, with/without glasses) — use the Enrol tab. Names are what appears on the kiosk.</p>
+    <p id="peopleWarn" class="notice warn" hidden></p>
+    <div class="people" id="peopleGrid"></div>
   </div>
 </section>
 
+<dialog id="pDlg">
+  <form method="dialog" id="pForm">
+    <div class="dlg-h"><div class="avatar" id="pAv"></div><div style="flex:1;min-width:0"><h2 id="pName"></h2><div class="muted" id="pMeta"></div></div><button type="button" class="btn ghost icon" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-b">
+      <div class="grid2">
+        <label class="field"><span>Role</span><input id="pf_role" placeholder="e.g. Ramp Lead"></label>
+        <label class="field"><span>Department</span><input id="pf_department" placeholder="e.g. Ground Handling" list="deptList"></label>
+        <label class="field"><span>Shift start</span><input id="pf_shift" type="time"></label>
+        <label class="field"><span>Nickname</span><input id="pf_nick" placeholder="What Aura calls them"></label>
+        <label class="field"><span>Birthday</span><input id="pf_bday" type="date"><span class="hint" id="pf_bdayHint">Year is ignored — stored as month-day</span></label>
+        <label class="field"><span>Joined</span><input id="pf_joined" type="date"></label>
+        <label class="field"><span>Preferred language</span><select id="pf_lang"></select></label>
+        <div class="field"><span>Mood tracking</span><label class="switch"><input type="checkbox" id="pf_consent"><span class="sl"></span><span id="pf_consentLbl">Consent given</span></label></div>
+        <p class="notice span2" id="consentNote" style="margin:0">With consent, the kiosk reads a mood estimate (on-device, from the face) at each visit. Turning it off stops mood tracking for this person <b>and erases all their past mood readings</b>.</p>
+        <label class="field span2"><span>Notes</span><textarea id="pf_notes" placeholder="Private notes for admins"></textarea></label>
+      </div>
+      <h3>Actions</h3>
+      <div class="row" style="margin:0">
+        <a class="btn ghost sm" id="pInsights" target="_blank" rel="noopener">Open in Insights ↗</a>
+        <button type="button" class="btn ghost sm" id="pForget">Forget conversations</button>
+        <button type="button" class="btn ghost sm" id="pRename">Rename</button>
+        <button type="button" class="btn danger sm" id="pDelete">Delete</button>
+      </div>
+      <p class="hint" id="pActHint"></p>
+    </div>
+    <div class="dlg-f"><span class="spacer"></span><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn" id="pSave" value="default">Save profile</button></div>
+  </form>
+</dialog>
+
+<!-- ================= ENROL ================= -->
 <section id="s-enrol">
   <div class="card">
     <h2>Enrol / add photos</h2>
-    <div class="row"><input id="enrolName" placeholder="Employee name, e.g. Aishath Ali" list="empList" style="min-width:260px"><datalist id="empList"></datalist></div>
-    <div class="row" style="align-items:flex-start">
+    <p class="muted" style="margin-top:0">Pick an existing profile or type a new name. Only face vectors are stored — the photos themselves are discarded after processing.</p>
+    <div class="row"><input id="enrolName" placeholder="Employee name, e.g. Aishath Ali" list="nameList" style="flex:1 1 260px;max-width:420px"></div>
+    <div class="enrol-grid">
       <div>
         <video id="ev" autoplay playsinline muted></video>
-        <div class="row" style="margin-top:10px"><button class="btn" id="startCam">Start camera</button><button class="btn" id="snap" disabled>📸 Capture &amp; add</button></div>
+        <div class="row" style="margin-top:10px"><button class="btn ghost" id="startCam">Start camera</button><button class="btn" id="snap" disabled>📸 Capture &amp; add</button></div>
       </div>
       <div>
-        <p class="muted">…or upload existing photos</p>
-        <input type="file" id="files" accept="image/*" multiple>
-        <button class="btn ghost" id="upload">Upload selected</button>
+        <h3 style="margin-top:0">…or upload existing photos</h3>
+        <div class="upl" style="margin-top:0"><input type="file" id="files" accept="image/*" multiple><button class="btn ghost" id="upload">Upload selected</button></div>
+        <p class="hint">Tips: good light, face the camera, no hats. 3–5 photos from slightly different angles work best.</p>
       </div>
     </div>
     <p id="enrolMsg" class="muted"></p>
   </div>
 </section>
 
+<!-- ================= LOCATIONS ================= -->
+<section id="s-locations">
+  <div class="split">
+    <div>
+      <div class="card">
+        <h2>Kiosks</h2>
+        <div class="klist" id="kList"></div>
+        <h3>New location</h3>
+        <div class="row" style="margin:0"><input id="kNew" placeholder="e.g. Gate-5" style="flex:1"><button class="btn" id="kCreate">Add</button></div>
+        <p class="hint">Use a short name without spaces — it becomes part of the kiosk URL.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card" id="kEditor"><div class="empty">Select a kiosk to edit it.</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>Shared media — all kiosks</h2><span class="muted">Shown on every kiosk's ambient screen, alongside each location's own media.</span></div>
+    <div id="sharedGallery"></div>
+  </div>
+
+  <div class="card">
+    <h2>Announcements</h2>
+    <p class="muted" style="margin-top:0">Scrolling ticker messages. "Alert" announcements are highlighted on screen.</p>
+    <div class="grid3">
+      <label class="field"><span>Show on</span><select id="aKiosk"></select></label>
+      <label class="field"><span>Level</span><select id="aLevel"><option value="info">Info</option><option value="alert">Alert</option></select></label>
+      <div></div>
+      <label class="field span2" style="grid-column:1 / 3"><span>Message</span><input id="aText" placeholder="e.g. Staff townhall Thursday 14:00 in the training room"></label>
+      <div></div>
+      <label class="field"><span>Starts (optional)</span><input id="aStarts" type="datetime-local"></label>
+      <label class="field"><span>Ends (optional)</span><input id="aEnds" type="datetime-local"></label>
+      <div class="field" style="justify-content:flex-end"><button class="btn" id="aAdd">Add announcement</button></div>
+    </div>
+    <div id="aList" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<!-- ================= CONVERSATIONS ================= -->
+<section id="s-conversations">
+  <div class="card">
+    <div class="filters">
+      <label class="field"><span>From</span><input type="date" id="cFrom"></label>
+      <label class="field"><span>To</span><input type="date" id="cTo"></label>
+      <label class="field"><span>Show</span><select id="cChannel"><option value="convo">Conversations</option><option value="voice">Voice only</option><option value="text">Text only</option><option value="greeting">Greetings only</option><option value="">Everything</option></select></label>
+      <label class="field"><span>Who</span><select id="cKind"><option value="">Everyone</option><option value="staff">Staff</option><option value="visitor">Visitors</option></select></label>
+      <label class="field"><span>Kiosk</span><select id="cKiosk"><option value="">All kiosks</option></select></label>
+      <label class="field"><span>Person</span><input id="cPerson" list="nameList" placeholder="Any"></label>
+      <label class="field"><span>Search text</span><input id="cQ" type="search" placeholder="Words said or replied"></label>
+      <div class="field" style="justify-content:flex-end"><div style="display:flex;gap:8px"><button class="btn" id="cGo">Show</button><button class="btn ghost" id="cCsv" title="Download CSV">⬇︎ CSV</button></div></div>
+    </div>
+    <p class="hint" id="cHint"></p>
+  </div>
+  <div class="convos" id="cList"></div>
+</section>
+
+<!-- ================= SETUP ================= -->
 <section id="s-setup">
   <div class="card">
+    <div class="card-h"><h2>AI engines</h2><button class="btn ghost sm" id="engRefresh">Re-check</button></div>
+    <div class="engines" id="engines"><div class="muted">Checking…</div></div>
+  </div>
+
+  <div class="card">
     <h2>Kiosk links</h2>
-    <p class="muted">Open one of these on each iPad, Share → Add to Home Screen, then lock with Guided Access (triple-click top button).</p>
-    <div class="row"><input id="kioskName" placeholder="Kiosk name, e.g. Floor-1" value="Floor-1"><code id="kioskUrl"></code></div>
-    <h2 style="margin-top:20px">Server</h2>
-    <p id="health" class="muted">Checking…</p>
-    <p class="muted">Face recognition runs locally on this Mac (OpenCV YuNet + SFace). Enrol staff in the Enrol tab.</p>
+    <p class="muted" style="margin-top:0">Open one of these on each iPad, Share → Add to Home Screen, then lock with Guided Access (triple-click top button).</p>
+    <div class="row"><input id="kioskName" placeholder="Kiosk name, e.g. Floor-1" value="Floor-1" list="kioskNames" style="flex:1 1 200px;max-width:280px"><datalist id="kioskNames"></datalist><code id="kioskUrl"></code></div>
+    <div class="row" style="margin:0"><button class="btn ghost sm" id="kioskCopy">Copy link</button><a class="btn ghost sm" id="kioskOpen" target="_blank" rel="noopener">Open preview ↗</a></div>
+    <h3>Server</h3>
+    <p id="health" class="muted" style="margin:0 0 4px">Checking…</p>
+    <p class="muted" style="margin:0">Face recognition runs locally on this server. Enrol staff in the Enrol tab.</p>
+  </div>
+
+  <div class="card">
+    <h2>Privacy</h2>
+    <ul class="priv" id="privacy"></ul>
+  </div>
+
+  <div class="card">
+    <h2>Demo data</h2>
+    <p class="muted" style="margin-top:0">Loads 30 days of realistic sample staff, kiosks, conversations and moods so you can explore Aura before go-live. Demo rows are tagged and can be removed in one go without touching real data.</p>
+    <div class="row" style="margin:0"><button class="btn" id="demoLoad">Load demo data</button><button class="btn danger" id="demoClear">Remove demo data</button></div>
+    <p id="demoMsg" class="muted" style="margin-bottom:0"></p>
   </div>
 </section>
 
 </main>
 </div>
+</div>
+
+<datalist id="nameList"></datalist>
+<datalist id="deptList"></datalist>
+<div id="toasts" aria-live="polite"></div>
 
 <script>
 (() => {
   const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let PIN = sessionStorage.getItem('pin') || '';
   const api = async (path, opts = {}) => {
     opts.headers = Object.assign({ 'X-Admin-Pin': PIN }, opts.headers || {});
@@ -130,40 +479,88 @@
     const j = await r.json().catch(() => ({}));
     if (r.status === 401) { lock(); throw new Error('PIN rejected'); }
     if (j.error) throw new Error(j.error);
+    if (!r.ok) throw new Error(`Request failed (${r.status})`);
     return j;
   };
+  const jsonBody = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const enc = encodeURIComponent;
   const today = () => new Date().toLocaleDateString('sv');           // YYYY-MM-DD local
+  const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toLocaleDateString('sv'); };
   const fmtT = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const fmtDT = ts => new Date(ts).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
-  const tag = a => `<span class="tag t-${a}">${a}</span>`;
+  const ago = ts => {
+    if (!ts) return 'never';
+    const s = (Date.now() - new Date(ts)) / 1000;
+    if (s < 60) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago';
+    if (s < 86400) return Math.round(s / 3600) + ' h ago'; return fmtDT(ts);
+  };
+  const tag = a => `<span class="tag t-${esc(a)}">${esc(a)}</span>`;
+  const MOODS = { happiness: '😊', neutral: '😌', surprise: '😮', sadness: '😔', anger: '😠', fear: '😟', disgust: '😣', contempt: '😏' };
+  const mood = m => m ? `<span class="mood" title="${esc(m)}">${MOODS[m] || '•'}</span>` : '<span class="muted">—</span>';
+  const LANGS = { en: 'English', dv: 'Dhivehi', ar: 'Arabic', zh: 'Chinese', ru: 'Russian', hi: 'Hindi', de: 'German', it: 'Italian', fr: 'French', es: 'Spanish', ja: 'Japanese' };
+  const langOpts = sel => Object.entries(LANGS).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${v} (${k})</option>`).join('');
+  const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  const hue = n => { let h = 0; for (const c of String(n)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+  const avatar = (n, cls = '') => `<div class="avatar ${cls}" style="background:linear-gradient(135deg,hsl(${hue(n)} 62% 52%),hsl(${(hue(n) + 40) % 360} 62% 44%))">${esc(initials(n))}</div>`;
+  const toast = (msg, bad) => { const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = msg; $('toasts').appendChild(t); setTimeout(() => t.remove(), bad ? 6000 : 3000); };
+  const fail = e => toast(e.message || String(e), true);
+  const copy = async text => {
+    try { await navigator.clipboard.writeText(text); }
+    catch { const t = document.createElement('textarea'); t.value = text; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+    toast('Copied to clipboard');
+  };
+  const kioskLink = name => `${location.origin}/?kiosk=${enc(name || 'Main')}`;
 
   // ---- gate ----
-  function unlock() { $('gate').hidden = true; $('app').hidden = false; loadStatus(); health(); }
+  function unlock() { $('gate').hidden = true; $('app').hidden = false; show((location.hash.slice(1).split('=')[0]) || 'status'); health(); refreshNames(); }
   function lock() { PIN = ''; sessionStorage.removeItem('pin'); $('app').hidden = true; $('gate').hidden = false; $('pin').value = ''; }
   $('pinGo').onclick = async () => {
     PIN = $('pin').value; sessionStorage.setItem('pin', PIN);
-    try { await api('/api/status'); unlock(); } catch (e) { $('pinErr').textContent = 'Wrong PIN'; }
+    try { await api('/api/status'); $('pinErr').textContent = ''; unlock(); } catch (e) { $('pinErr').textContent = 'Wrong PIN'; }
   };
   $('pin').onkeydown = e => { if (e.key === 'Enter') $('pinGo').click(); };
   $('lock').onclick = lock;
   if (PIN) api('/api/status').then(unlock).catch(() => {});
 
   // ---- nav ----
-  document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
-    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
-    document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === 's-' + b.dataset.s));
-    ({ status: loadStatus, log: loadLog, employees: loadEmployees, enrol: loadEmployees, setup: health })[b.dataset.s]();
-  });
+  const PAGES = {
+    status: ['Today', 'Who is on duty right now', () => loadStatus()],
+    log: ['Log & Export', 'Every clock event, filter and download for payroll', () => loadLog()],
+    people: ['People', 'Staff profiles, face enrolment and consent', () => loadPeople()],
+    enrol: ['Enrol', 'Add face photos so the kiosk recognises staff', () => refreshNames()],
+    locations: ['Locations', 'Kiosk screens, info cards, media and announcements', () => loadLocations()],
+    conversations: ['Conversations', 'What people asked Aura, and what Aura replied', () => loadConvos()],
+    setup: ['Setup', 'Kiosk links, AI engines, privacy and demo data', () => { health(); loadEngines(); }],
+  };
+  function show(s) {
+    if (!PAGES[s]) s = 'status';
+    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x.dataset.s === s));
+    document.querySelectorAll('main > section').forEach(x => x.classList.toggle('active', x.id === 's-' + s));
+    $('pageTitle').textContent = PAGES[s][0]; $('pageSub').textContent = PAGES[s][1];
+    if (location.hash.slice(1) !== s) history.replaceState(null, '', '#' + s);
+    Promise.resolve().then(PAGES[s][2]).catch(fail);
+  }
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => { show(b.dataset.s); window.scrollTo(0, 0); });
 
-  // ---- status ----
+  // shared name list (profiles + enrolled) for datalists
+  async function refreshNames() {
+    try {
+      const [p, e] = await Promise.all([api('/api/people'), api('/api/employees').catch(() => ({ employees: [] }))]);
+      const names = [...new Set([...p.people.map(x => x.name), ...e.employees.map(x => x.name)])].sort((a, b) => a.localeCompare(b));
+      $('nameList').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+      $('deptList').innerHTML = [...new Set(p.people.map(x => x.department).filter(Boolean))].map(d => `<option value="${esc(d)}">`).join('');
+    } catch (e) { /* non-critical */ }
+  }
+
+  // ---- today ----
   $('statusDay').value = today();
   async function loadStatus() {
     const j = await api('/api/status?day=' + $('statusDay').value);
     const c = { IN: 0, BREAK: 0, BACK: 0, OUT: 0 };
-    $('statusBody').innerHTML = j.rows.map(r => { c[r.action]++; return `<tr><td>${r.employee}</td><td>${tag(r.action)}</td><td>${fmtT(r.ts)}</td><td>${r.kiosk || ''}</td></tr>`; }).join('') || '<tr><td colspan=4 class="muted">No activity</td></tr>';
+    $('statusBody').innerHTML = j.rows.map(r => { c[r.action] = (c[r.action] || 0) + 1; return `<tr><td><div style="display:flex;align-items:center;gap:10px">${avatar(r.employee, 'sm')}<b style="font-weight:600">${esc(r.employee)}</b></div></td><td>${tag(r.action)}</td><td>${fmtT(r.ts)}</td><td>${esc(r.kiosk || '')}</td><td>${mood(r.mood)}</td></tr>`; }).join('') || '<tr><td colspan=5 class="empty">No activity on this day</td></tr>';
     $('kIn').textContent = c.IN + c.BACK; $('kBreak').textContent = c.BREAK; $('kOut').textContent = c.OUT; $('kTotal').textContent = j.rows.length;
   }
-  $('statusRefresh').onclick = loadStatus; $('statusDay').onchange = loadStatus;
+  $('statusRefresh').onclick = () => loadStatus().catch(fail); $('statusDay').onchange = () => loadStatus().catch(fail);
   setInterval(() => { if (!$('app').hidden && $('s-status').classList.contains('active')) loadStatus().catch(() => {}); }, 15000);
 
   // ---- log ----
@@ -172,32 +569,105 @@
     const p = new URLSearchParams({ from: $('from').value, to: $('to').value });
     if ($('empFilter').value) p.set('employee', $('empFilter').value);
     const j = await api('/api/events?' + p);
-    $('logBody').innerHTML = j.rows.map(r => `<tr><td>${fmtDT(r.ts)}</td><td>${r.employee}</td><td>${tag(r.action)}</td><td>${r.kiosk || ''}</td><td class="muted">${r.similarity ? Math.round(r.similarity * 100) + '%' : ''}</td><td><button class="btn danger" style="padding:3px 8px" data-id="${r.id}">✕</button></td></tr>`).join('') || '<tr><td colspan=6 class="muted">No entries</td></tr>';
-    $('logBody').querySelectorAll('button').forEach(b => b.onclick = async () => { if (confirm('Delete this entry?')) { await api('/api/events/' + b.dataset.id, { method: 'DELETE' }); loadLog(); } });
+    $('logBody').innerHTML = j.rows.map(r => `<tr><td style="white-space:nowrap">${fmtDT(r.ts)}</td><td>${esc(r.employee)}</td><td>${tag(r.action)}</td><td>${esc(r.kiosk || '')}</td><td>${mood(r.mood)}</td><td class="num muted">${r.similarity ? Math.round(r.similarity * 100) + '%' : ''}</td><td class="num"><button class="btn danger sm" data-id="${esc(r.id)}" title="Delete entry">✕</button></td></tr>`).join('') || '<tr><td colspan=7 class="empty">No entries</td></tr>';
+    $('logBody').querySelectorAll('button').forEach(b => b.onclick = async () => { if (confirm('Delete this entry?')) { try { await api('/api/events/' + enc(b.dataset.id), { method: 'DELETE' }); loadLog(); } catch (e) { fail(e); } } });
   }
-  $('logGo').onclick = loadLog;
-  $('csv').onclick = () => location.href = `/api/export.csv?pin=${encodeURIComponent(PIN)}&from=${$('from').value}&to=${$('to').value}`;
+  $('logGo').onclick = () => loadLog().catch(fail);
+  $('csv').onclick = () => location.href = `/api/export.csv?pin=${enc(PIN)}&from=${enc($('from').value)}&to=${enc($('to').value)}`;
 
-  // ---- employees ----
-  async function loadEmployees() {
-    const j = await api('/api/employees');
-    $('empList').innerHTML = j.employees.map(e => `<option value="${e.name}">`).join('');
-    $('empBody').innerHTML = j.employees.map(e => `<tr><td>${e.name}</td><td>${e.photos}${e.photos < 3 ? ' <span class="muted">(add more)</span>' : ''}</td><td style="text-align:right"><button class="btn ghost" data-r="${e.name}">Rename</button> <button class="btn danger" data-d="${e.name}">Delete</button></td></tr>`).join('') || '<tr><td colspan=3 class="muted">Nobody enrolled yet — use the Enrol tab.</td></tr>';
-    $('empBody').querySelectorAll('[data-d]').forEach(b => b.onclick = async () => { if (confirm(`Delete ${b.dataset.d} and all their photos?`)) { await api('/api/employees/' + encodeURIComponent(b.dataset.d), { method: 'DELETE' }); loadEmployees(); } });
-    $('empBody').querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { const n = prompt('New name', b.dataset.r); if (n && n !== b.dataset.r) { await api('/api/employees/' + encodeURIComponent(b.dataset.r), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n }) }); loadEmployees(); } });
+  // ---- people ----
+  let PEOPLE = [], current = null;
+  async function loadPeople() {
+    const [p, e] = await Promise.all([api('/api/people'), api('/api/employees').catch(err => ({ employees: [], err }))]);
+    const m = new Map();
+    p.people.forEach(x => m.set(x.name, { ...x, enrolled: false, photos: 0 }));
+    e.employees.forEach(x => m.set(x.name, { mood_consent: 1, ...(x.profile || {}), ...(m.get(x.name) || {}), name: x.name, enrolled: true, photos: x.photos }));
+    PEOPLE = [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
+    $('peopleWarn').hidden = !e.err;
+    if (e.err) $('peopleWarn').textContent = `Face recognizer unavailable (${e.err.message}) — photo counts are not shown.`;
+    $('nameList').innerHTML = PEOPLE.map(x => `<option value="${esc(x.name)}">`).join('');
+    $('deptList').innerHTML = [...new Set(PEOPLE.map(x => x.department).filter(Boolean))].map(d => `<option value="${esc(d)}">`).join('');
+    renderPeople();
   }
-  $('empRefresh').onclick = loadEmployees;
+  function renderPeople() {
+    const q = $('peopleQ').value.trim().toLowerCase(), f = $('peopleF').value;
+    const list = PEOPLE.filter(x => (!f || (f === 'enrolled') === x.enrolled) && (!q || [x.name, x.nickname, x.role, x.department].some(v => (v || '').toLowerCase().includes(q))));
+    const enrolled = PEOPLE.filter(x => x.enrolled).length;
+    $('peopleCount').textContent = `People · ${PEOPLE.length}` + (PEOPLE.length ? ` (${enrolled} enrolled)` : '');
+    $('peopleGrid').innerHTML = list.map(x => {
+      const sub = [x.role, x.department].filter(Boolean).join(' · ') || 'No role set';
+      const photos = x.enrolled ? `<span class="pill ${x.photos < 3 ? 'warn' : 'ok'}">${x.photos} photo${x.photos === 1 ? '' : 's'}${x.photos < 3 ? ' · add more' : ''}</span>` : '<span class="pill">not enrolled</span>';
+      const consent = +x.mood_consent === 0 ? '<span class="pill bad plain">Mood off</span>' : '<span class="pill acc plain">Mood consent</span>';
+      return `<button class="person" data-n="${esc(x.name)}">${avatar(x.name)}<div class="who"><b>${esc(x.name)}</b><div class="muted">${esc(sub)}</div><div class="badges">${photos}${consent}${x.demo ? '<span class="chip">demo</span>' : ''}</div></div></button>`;
+    }).join('') || `<div class="empty" style="grid-column:1/-1">${PEOPLE.length ? 'No matches.' : 'Nobody here yet — enrol someone in the Enrol tab, or load demo data in Setup.'}</div>`;
+    $('peopleGrid').querySelectorAll('[data-n]').forEach(b => b.onclick = () => openPerson(b.dataset.n));
+  }
+  $('peopleQ').oninput = renderPeople; $('peopleF').onchange = renderPeople;
+  $('empRefresh').onclick = () => loadPeople().catch(fail);
+  $('pf_lang').innerHTML = '<option value="">Auto / default</option>' + langOpts('');
+
+  function openPerson(name) {
+    const x = PEOPLE.find(p => p.name === name); if (!x) return;
+    current = x;
+    $('pAv').outerHTML = avatar(x.name).replace('class="avatar ', 'id="pAv" class="avatar ');
+    $('pName').textContent = x.name;
+    $('pMeta').textContent = (x.enrolled ? `Face enrolled · ${x.photos} photo${x.photos === 1 ? '' : 's'}` : 'Face not enrolled') + (x.demo ? ' · demo profile' : '');
+    $('pf_role').value = x.role || ''; $('pf_department').value = x.department || '';
+    $('pf_shift').value = x.shift_start || ''; $('pf_nick').value = x.nickname || '';
+    $('pf_bday').value = /^\d\d-\d\d$/.test(x.birthday || '') ? '2000-' + x.birthday : '';
+    $('pf_joined').value = x.joined || '';
+    $('pf_lang').value = LANGS[x.language] ? x.language : '';
+    $('pf_consent').checked = +(x.mood_consent ?? 1) !== 0; consentUi();
+    $('pf_notes').value = x.notes || '';
+    bdayHint();
+    $('pInsights').href = '/insights#person=' + enc(x.name);
+    $('pActHint').textContent = 'Delete removes face data (if enrolled), profile, mood readings and conversations. Attendance records are kept for payroll.';
+    $('pDlg').showModal();
+  }
+  const bdayHint = () => { const v = $('pf_bday').value; $('pf_bdayHint').textContent = v ? `Stored as ${v.slice(5)} (${new Date(v + 'T12:00').toLocaleDateString([], { day: 'numeric', month: 'long' })}) — year is ignored` : 'Year is ignored — stored as month-day'; };
+  $('pf_bday').oninput = bdayHint;
+  function consentUi() {
+    const on = $('pf_consent').checked, was = +(current?.mood_consent ?? 1) !== 0;
+    $('pf_consentLbl').textContent = on ? 'Consent given' : 'Off';
+    $('consentNote').className = 'notice span2' + (!on && was ? ' warn' : '');
+  }
+  $('pf_consent').onchange = consentUi;
+  $('pDlg').querySelectorAll('[data-close]').forEach(b => b.onclick = () => $('pDlg').close());
+  $('pForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const x = current, v = id => $(id).value.trim() || null;
+    const consent = $('pf_consent').checked;
+    if (!consent && +(x.mood_consent ?? 1) !== 0 && !confirm(`Turn off mood tracking for ${x.name}? This also permanently erases their past mood readings.`)) return;
+    const body = { role: v('pf_role'), department: v('pf_department'), shift_start: v('pf_shift'), birthday: $('pf_bday').value ? $('pf_bday').value.slice(5) : null,
+      joined: v('pf_joined'), language: v('pf_lang'), nickname: v('pf_nick'), mood_consent: consent, notes: v('pf_notes') };
+    try { $('pSave').disabled = true; await api('/api/people/' + enc(x.name), jsonBody('PUT', body)); $('pDlg').close(); toast(`Saved ${x.name}`); loadPeople().catch(fail); }
+    catch (e) { fail(e); } finally { $('pSave').disabled = false; }
+  };
+  $('pForget').onclick = async () => {
+    const x = current;
+    if (!confirm(`Forget all conversations with ${x.name}?\n\nThis permanently deletes what they said to Aura and anything Aura remembered about them. Attendance and mood data are not affected.`)) return;
+    try { await api(`/api/people/${enc(x.name)}/conversations`, { method: 'DELETE' }); toast(`Conversations with ${x.name} forgotten`); } catch (e) { fail(e); }
+  };
+  $('pRename').onclick = async () => {
+    const x = current, n = (prompt('New name', x.name) || '').trim();
+    if (!n || n === x.name) return;
+    try { await api('/api/employees/' + enc(x.name), jsonBody('PUT', { name: n })); $('pDlg').close(); toast(`Renamed to ${n}`); loadPeople().catch(fail); } catch (e) { fail(e); }
+  };
+  $('pDelete').onclick = async () => {
+    const x = current;
+    if (!confirm(`Delete ${x.name}?\n\nThis removes their face data (all photos), profile, mood readings and conversations. Attendance records are kept for payroll.`)) return;
+    try { await api('/api/employees/' + enc(x.name), { method: 'DELETE' }); $('pDlg').close(); toast(`${x.name} deleted`); loadPeople().catch(fail); } catch (e) { fail(e); }
+  };
 
   // ---- enrol ----
   const ev = $('ev'); let stream;
   $('startCam').onclick = async () => {
     try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } } }); ev.srcObject = stream; $('snap').disabled = false; }
-    catch (e) { $('enrolMsg').innerHTML = `<span class="err">Camera: ${e.message}</span>`; }
+    catch (e) { $('enrolMsg').innerHTML = `<span class="err">Camera: ${esc(e.message)}</span>`; }
   };
-  async function addPhoto(name, blob, label) {
+  async function addPhoto(name, blob) {
     const fd = new FormData(); fd.append('file', blob, 'face.jpg');
-    const j = await api(`/api/employees/${encodeURIComponent(name)}/photo`, { method: 'POST', body: fd });
-    return j;
+    return api(`/api/employees/${enc(name)}/photo`, { method: 'POST', body: fd });
   }
   $('snap').onclick = async () => {
     const name = $('enrolName').value.trim(); if (!name) return $('enrolMsg').textContent = 'Enter a name first';
@@ -205,24 +675,262 @@
     c.toBlob(async blob => {
       $('enrolMsg').textContent = 'Saving…';
       try { await addPhoto(name, blob); $('enrolMsg').textContent = `✓ Photo added for ${name}. Take 2–4 more from slightly different angles.`; }
-      catch (e) { $('enrolMsg').innerHTML = `<span class="err">${e.message}</span>`; }
+      catch (e) { $('enrolMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
     }, 'image/jpeg', 0.92);
   };
   $('upload').onclick = async () => {
     const name = $('enrolName').value.trim(); if (!name) return $('enrolMsg').textContent = 'Enter a name first';
     const files = [...$('files').files]; if (!files.length) return $('enrolMsg').textContent = 'Choose photos first';
-    let ok = 0, fail = [];
-    for (const f of files) { try { await addPhoto(name, f); ok++; } catch (e) { fail.push(`${f.name}: ${e.message}`); } }
-    $('enrolMsg').innerHTML = `✓ ${ok} photo(s) added for ${name}.` + (fail.length ? `<br><span class="err">${fail.join('<br>')}</span>` : '');
+    let ok = 0; const errs = [];
+    $('enrolMsg').textContent = 'Uploading…';
+    for (const f of files) { try { await addPhoto(name, f); ok++; } catch (e) { errs.push(`${f.name}: ${e.message}`); } }
+    $('enrolMsg').innerHTML = `✓ ${ok} photo(s) added for ${esc(name)}.` + (errs.length ? `<br><span class="err">${errs.map(esc).join('<br>')}</span>` : '');
   };
 
-  // ---- setup ----
-  const kioskUrl = () => $('kioskUrl').textContent = `${location.origin}/?kiosk=${encodeURIComponent($('kioskName').value || 'Main')}`;
-  $('kioskName').oninput = kioskUrl; kioskUrl();
-  async function health() {
-    try { const j = await fetch('/api/health').then(r => r.json()); $('health').innerHTML = j.ok ? `✓ Recognizer connected · match threshold ${Math.round(j.threshold * 100)}%` : `<span class="err">✕ Recognizer not reachable</span>`; }
-    catch { $('health').innerHTML = '<span class="err">Server unreachable</span>'; }
+  // ---- locations ----
+  const THEMES = { lagoon: 'Lagoon', sunset: 'Sunset', aurora: 'Aurora', mono: 'Mono' };
+  let KIOSKS = [], SHARED = [], SEL = null, CARDS = [];
+  const online = k => k.last_seen && (Date.now() - new Date(k.last_seen)) < 120000;
+  async function loadLocations() {
+    const [k, a] = await Promise.all([api('/api/kiosks'), api('/api/announcements')]);
+    KIOSKS = k.kiosks; SHARED = k.shared_media || [];
+    if (SEL && !KIOSKS.some(x => x.name === SEL)) SEL = null;
+    if (!SEL && KIOSKS.length) SEL = KIOSKS[0].name;
+    renderKList(); renderEditor();
+    $('sharedGallery').innerHTML = galleryHtml(SHARED, '*'); wireGallery($('sharedGallery'), SHARED, '*');
+    $('aKiosk').innerHTML = '<option value="*">All kiosks</option>' + KIOSKS.map(x => `<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
+    renderAnns(a.announcements);
   }
+  function renderKList() {
+    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
+    $('kList').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { SEL = b.dataset.k; renderKList(); renderEditor(); if (innerWidth < 900) $('kEditor').scrollIntoView({ behavior: 'smooth' }); });
+  }
+  function renderEditor() {
+    const k = KIOSKS.find(x => x.name === SEL);
+    if (!k) { $('kEditor').innerHTML = '<div class="empty">Select or create a kiosk to edit it.</div>'; return; }
+    CARDS = (k.info || []).map(c => ({ icon: c.icon || '', title: c.title || '', text: c.text || '' }));
+    const url = kioskLink(k.name);
+    $('kEditor').innerHTML = `
+      <div class="card-h"><h2>${esc(k.name)}</h2>${online(k) ? '<span class="pill ok">online</span>' : `<span class="pill">offline · ${esc(ago(k.last_seen))}</span>`}</div>
+      <div class="row"><code style="flex:1 1 220px">${esc(url)}</code><button class="btn ghost sm" id="kCopy">Copy URL</button><a class="btn ghost sm" href="/?kiosk=${esc(enc(k.name))}" target="_blank" rel="noopener">Live preview ↗</a></div>
+      <div class="grid2">
+        <label class="field"><span>Zone</span><input id="k_zone" value="${esc(k.zone || '')}" placeholder="e.g. Departures"></label>
+        <label class="field"><span>Screen language</span><select id="k_lang">${langOpts(k.language || 'en')}</select></label>
+        <label class="field"><span>Headline</span><input id="k_head" value="${esc(k.headline || '')}" placeholder="e.g. Welcome to the Maldives"></label>
+        <label class="field"><span>Subtitle</span><input id="k_sub" value="${esc(k.subtitle || '')}" placeholder="Shown under the headline"></label>
+        <div class="field span2"><span>Theme</span><div class="themes">${Object.entries(THEMES).map(([v, l]) => `<label class="theme-opt"><input type="radio" name="k_theme" value="${v}"${(k.theme || 'lagoon') === v ? ' checked' : ''}><span><i class="th-${v}"></i>${l}</span></label>`).join('')}</div></div>
+        <div class="field span2"><span>Voice</span><label class="switch"><input type="checkbox" id="k_voice"${+k.voice !== 0 ? ' checked' : ''}><span class="sl"></span><span>Aura speaks replies aloud and listens for questions</span></label></div>
+      </div>
+      <h3>Info cards</h3>
+      <p class="muted" style="margin-top:0">Shown on the kiosk screen — and they're also what Aura uses to answer visitors' questions ("where is the prayer room?"), so keep them accurate and specific.</p>
+      <div class="cards-ed" id="kCards"></div>
+      <div class="row" style="margin-top:10px"><button class="btn ghost sm" id="kAddCard">+ Add card</button></div>
+      <div class="row" style="margin:16px 0 0;border-top:1px solid var(--line);padding-top:14px"><button class="btn" id="kSave">Save changes</button><span style="flex:1"></span><button class="btn danger sm" id="kDel">Delete kiosk</button></div>
+      <h3 style="margin-top:22px">Images &amp; videos</h3>
+      <p class="muted" style="margin-top:0">Rotates on this kiosk's ambient screen together with shared media.</p>
+      <div id="kGallery">${galleryHtml(k.media || [], k.name)}</div>`;
+    renderCards();
+    wireGallery($('kGallery'), k.media || [], k.name);
+    $('kCopy').onclick = () => copy(url);
+    $('kAddCard').onclick = () => { CARDS.push({ icon: 'ℹ️', title: '', text: '' }); renderCards(); const rows = $('kCards').querySelectorAll('.card-row'); rows[rows.length - 1].querySelector('[data-f=title]').focus(); };
+    $('kSave').onclick = () => saveKiosk(k.name).catch(fail);
+    $('kDel').onclick = async () => {
+      if (!confirm(`Delete kiosk "${k.name}"?\n\nIts settings and info cards are removed. If a device is still showing this kiosk it will re-appear with default settings.`)) return;
+      try { await api('/api/kiosks/' + enc(k.name), { method: 'DELETE' }); SEL = null; toast('Kiosk deleted'); loadLocations().catch(fail); } catch (e) { fail(e); }
+    };
+  }
+  function renderCards() {
+    $('kCards').innerHTML = CARDS.map((c, i) => `<div class="card-row" data-i="${i}">
+        <input class="ico" data-f="icon" value="${esc(c.icon)}" maxlength="4" aria-label="Icon (emoji)">
+        <input data-f="title" value="${esc(c.title)}" placeholder="Title" aria-label="Title">
+        <textarea data-f="text" placeholder="Details, e.g. Next to the information desk, open 24/7" aria-label="Text">${esc(c.text)}</textarea>
+        <div class="acts"><button class="btn ghost sm icon" data-a="up" title="Move up"${i === 0 ? ' disabled' : ''}>↑</button><button class="btn ghost sm icon" data-a="down" title="Move down"${i === CARDS.length - 1 ? ' disabled' : ''}>↓</button><button class="btn danger sm icon" data-a="del" title="Remove">✕</button></div>
+      </div>`).join('') || '<div class="notice">No info cards yet — add a few (restrooms, prayer room, Wi-Fi, transport…).</div>';
+    $('kCards').querySelectorAll('.card-row').forEach(row => {
+      const i = +row.dataset.i;
+      row.querySelectorAll('[data-f]').forEach(inp => inp.oninput = () => { CARDS[i][inp.dataset.f] = inp.value; });
+      row.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+        const a = b.dataset.a;
+        if (a === 'del') CARDS.splice(i, 1);
+        else { const j = a === 'up' ? i - 1 : i + 1; [CARDS[i], CARDS[j]] = [CARDS[j], CARDS[i]]; }
+        renderCards();
+      });
+    });
+  }
+  async function saveKiosk(name) {
+    const body = {
+      zone: $('k_zone').value.trim(), headline: $('k_head').value.trim(), subtitle: $('k_sub').value.trim(),
+      theme: (document.querySelector('input[name=k_theme]:checked') || {}).value || 'lagoon', language: $('k_lang').value,
+      voice: $('k_voice').checked,
+      info: CARDS.map(c => ({ icon: c.icon.trim(), title: c.title.trim(), text: c.text.trim() })).filter(c => c.title || c.text),
+    };
+    await api('/api/kiosks/' + enc(name), jsonBody('PUT', body));
+    toast(`Saved ${name}`);
+    await loadLocations();
+  }
+  $('kCreate').onclick = async () => {
+    const n = $('kNew').value.trim().replace(/\s+/g, '-');
+    if (!n) return toast('Enter a kiosk name', true);
+    if (KIOSKS.some(k => k.name.toLowerCase() === n.toLowerCase())) return toast('A kiosk with that name already exists', true);
+    try { await api('/api/kiosks/' + enc(n), jsonBody('PUT', { zone: n, headline: n })); $('kNew').value = ''; SEL = n; toast(`Created ${n}`); await loadLocations(); } catch (e) { fail(e); }
+  };
+  $('kNew').onkeydown = e => { if (e.key === 'Enter') $('kCreate').click(); };
+
+  function galleryHtml(list, kiosk) {
+    const items = list.map((m, i) => `<div class="media" data-id="${esc(m.id)}">
+        ${(m.mime || '').startsWith('video') ? `<video src="/media/${esc(enc(m.file))}" muted loop playsinline preload="metadata" controls></video>` : `<img src="/media/${esc(enc(m.file))}" alt="${esc(m.caption || '')}" loading="lazy">`}
+        <div class="mb"><input data-cap value="${esc(m.caption || '')}" placeholder="Caption (optional)">
+          <div class="ma"><button class="btn ghost sm icon" data-mv="-1" title="Move earlier"${i === 0 ? ' disabled' : ''}>←</button><button class="btn ghost sm icon" data-mv="1" title="Move later"${i === list.length - 1 ? ' disabled' : ''}>→</button><button class="btn danger sm" data-del>Delete</button></div></div>
+      </div>`).join('');
+    return `<div class="gallery">${items || '<div class="notice" style="grid-column:1/-1">No media yet.</div>'}</div>
+      <div class="upl"><input type="file" data-file accept="image/jpeg,image/png,image/webp,image/gif,video/mp4" multiple><input type="text" data-newcap placeholder="Caption (optional)"><button class="btn sm" data-up>Upload</button></div>
+      <p class="hint">JPG, PNG, WebP, GIF or MP4. Landscape 16:9 looks best.</p>`;
+  }
+  function wireGallery(root, list, kiosk) {
+    root.querySelectorAll('.media').forEach((el, i) => {
+      const m = list[i];
+      el.querySelector('[data-cap]').onchange = async e => {
+        try { await api('/api/media/' + m.id, jsonBody('PUT', { caption: e.target.value.trim(), position: i })); m.caption = e.target.value.trim(); toast('Caption saved'); } catch (err) { fail(err); }
+      };
+      el.querySelector('[data-del]').onclick = async () => {
+        if (!confirm('Delete this ' + ((m.mime || '').startsWith('video') ? 'video' : 'image') + '?')) return;
+        try { await api('/api/media/' + m.id, { method: 'DELETE' }); toast('Deleted'); loadLocations().catch(fail); } catch (err) { fail(err); }
+      };
+      el.querySelectorAll('[data-mv]').forEach(b => b.onclick = async () => {
+        const order = list.slice(), j = i + +b.dataset.mv;
+        [order[i], order[j]] = [order[j], order[i]];
+        try { await Promise.all(order.map((x, p) => api('/api/media/' + x.id, jsonBody('PUT', { caption: x.caption || '', position: p })))); loadLocations().catch(fail); } catch (err) { fail(err); }
+      });
+    });
+    root.querySelector('[data-up]').onclick = async () => {
+      const files = [...root.querySelector('[data-file]').files];
+      if (!files.length) return toast('Choose a file first', true);
+      const cap = root.querySelector('[data-newcap]').value.trim();
+      let ok = 0;
+      for (const f of files) {
+        const fd = new FormData(); fd.append('file', f); fd.append('caption', cap);
+        try { await api(`/api/kiosks/${enc(kiosk)}/media`, { method: 'POST', body: fd }); ok++; } catch (err) { fail(new Error(`${f.name}: ${err.message}`)); }
+      }
+      if (ok) { toast(`Uploaded ${ok} file${ok === 1 ? '' : 's'}`); loadLocations().catch(fail); }
+    };
+  }
+
+  // announcements
+  function annState(a) {
+    const n = new Date();
+    if (a.ends && new Date(a.ends) < n) return '<span class="pill">expired</span>';
+    if (a.starts && new Date(a.starts) > n) return '<span class="pill warn">scheduled</span>';
+    return '<span class="pill ok">live</span>';
+  }
+  function renderAnns(list) {
+    $('aList').innerHTML = list.map(a => `<div class="ann">
+        <div style="font-size:20px">${a.level === 'alert' ? '⚠️' : '📣'}</div>
+        <div class="txt"><div>${esc(a.text)}</div><div class="row" style="margin:6px 0 0;gap:6px">${annState(a)}<span class="chip">${a.kiosk === '*' ? 'All kiosks' : esc(a.kiosk)}</span>${a.level === 'alert' ? '<span class="pill bad plain">alert</span>' : ''}<span class="hint" style="margin:0">${a.starts ? 'from ' + esc(fmtDT(a.starts)) : ''}${a.ends ? ' until ' + esc(fmtDT(a.ends)) : ''}</span></div></div>
+        <button class="btn danger sm" data-a="${esc(a.id)}">Delete</button></div>`).join('') || '<div class="notice">No announcements.</div>';
+    $('aList').querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+      if (!confirm('Delete this announcement?')) return;
+      try { await api('/api/announcements/' + enc(b.dataset.a), { method: 'DELETE' }); toast('Announcement deleted'); const a = await api('/api/announcements'); renderAnns(a.announcements); } catch (e) { fail(e); }
+    });
+  }
+  $('aAdd').onclick = async () => {
+    const text = $('aText').value.trim(); if (!text) return toast('Write a message first', true);
+    const dt = v => v ? (v.length === 16 ? v + ':00' : v) : null;
+    if ($('aStarts').value && $('aEnds').value && $('aEnds').value <= $('aStarts').value) return toast('End must be after start', true);
+    try {
+      await api('/api/announcements', jsonBody('POST', { kiosk: $('aKiosk').value, text, level: $('aLevel').value, starts: dt($('aStarts').value), ends: dt($('aEnds').value) }));
+      $('aText').value = $('aStarts').value = $('aEnds').value = ''; toast('Announcement added');
+      const a = await api('/api/announcements'); renderAnns(a.announcements);
+    } catch (e) { fail(e); }
+  };
+
+  // ---- conversations ----
+  $('cFrom').value = daysAgo(6); $('cTo').value = today();
+  function convoParams() {
+    const p = new URLSearchParams({ from: $('cFrom').value, to: $('cTo').value });
+    const ch = $('cChannel').value;
+    if (ch === 'convo') p.set('talk', '1'); else if (ch) p.set('channel', ch);
+    if ($('cKind').value) p.set('kind', $('cKind').value);
+    if ($('cKiosk').value) p.set('kiosk', $('cKiosk').value);
+    if ($('cPerson').value.trim()) p.set('person', $('cPerson').value.trim());
+    if ($('cQ').value.trim()) p.set('q', $('cQ').value.trim());
+    return p;
+  }
+  async function loadConvos() {
+    if ($('cKiosk').options.length <= 1) {
+      api('/api/kiosks').then(k => { const cur = $('cKiosk').value; $('cKiosk').innerHTML = '<option value="">All kiosks</option>' + k.kiosks.map(x => `<option value="${esc(x.name)}">${esc(x.name)}</option>`).join(''); $('cKiosk').value = cur; }).catch(() => {});
+    }
+    const p = convoParams(); p.set('limit', 400);
+    const j = await api('/api/interactions?' + p);
+    let rows = j.rows;
+    if ($('cChannel').value === 'convo') rows = rows.filter(r => r.channel !== 'greeting');
+    $('cHint').textContent = `${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}` + (j.rows.length >= 400 ? ' (latest 400 — narrow the filters to see more)' : '') + ($('cChannel').value === 'convo' ? ' · greetings hidden' : '');
+    $('cList').innerHTML = rows.map(r => {
+      const who = r.person ? `${avatar(r.person, 'sm')}<b>${esc(r.person)}</b><span class="chip">staff</span>` : `<div class="avatar sm" style="background:var(--surface-2);color:var(--muted);border:1px solid var(--line)">?</div><b>Visitor</b>`;
+      const ch = r.channel === 'voice' ? '🎙 voice' : r.channel === 'greeting' ? '👋 greeting' : '⌨️ text';
+      return `<div class="convo"><div class="convo-h">${who}
+          <span class="chip">📍 ${esc(r.kiosk || '—')}</span><span class="chip">${ch}</span>${r.lang ? `<span class="chip" title="${esc(LANGS[r.lang] || r.lang)}">${esc(r.lang)}</span>` : ''}${r.intent ? `<span class="chip">${esc(r.intent)}</span>` : ''}${r.mood ? mood(r.mood) : ''}
+          <span class="when">${esc(fmtDT(r.ts))}</span></div>
+        ${r.user_text ? `<div class="bubble them" dir="auto">${esc(r.user_text)}</div>` : ''}
+        ${r.reply ? `<div class="bubble aura" dir="auto"><small>Aura${r.engine ? ' · ' + esc(r.engine) : ''}</small>${esc(r.reply)}</div>` : ''}
+      </div>`;
+    }).join('') || '<div class="card empty">No conversations match these filters.</div>';
+  }
+  $('cGo').onclick = () => loadConvos().catch(fail);
+  ['cChannel', 'cKind', 'cKiosk'].forEach(id => $(id).onchange = () => loadConvos().catch(fail));
+  $('cQ').onkeydown = $('cPerson').onkeydown = e => { if (e.key === 'Enter') loadConvos().catch(fail); };
+  $('cCsv').onclick = () => { const p = convoParams(); p.set('pin', PIN); location.href = '/api/interactions.csv?' + p; };
+
+  // ---- setup ----
+  const kioskUrl = () => { const u = kioskLink($('kioskName').value); $('kioskUrl').textContent = u; $('kioskOpen').href = u; };
+  $('kioskName').oninput = kioskUrl; kioskUrl();
+  $('kioskCopy').onclick = () => copy($('kioskUrl').textContent);
+  async function health() {
+    try { const j = await fetch('/api/health').then(r => r.json()); $('health').innerHTML = j.ok ? `<span class="pill ok">Recognizer connected</span> <span class="muted">match threshold ${Math.round(j.threshold * 100)}%</span>` : `<span class="pill bad">Recognizer not reachable</span>`; }
+    catch { $('health').innerHTML = '<span class="pill bad">Server unreachable</span>'; }
+  }
+  const MOOD_MODES = { on: 'Staff (with consent) and anonymous visitors', staff_only: 'Staff with consent only', visitors_only: 'Anonymous visitors only', off: 'Off — no mood is read at all' };
+  async function loadEngines() {
+    api('/api/kiosks').then(k => $('kioskNames').innerHTML = k.kiosks.map(x => `<option value="${esc(x.name)}">`).join('')).catch(() => {});
+    $('engines').innerHTML = '<div class="muted">Checking…</div>';
+    const e = await api('/api/engines');
+    const pill = (cls, txt) => `<span class="pill ${cls}">${esc(txt)}</span>`;
+    const jev = e.jev ? (e.jev_ok ? pill('ok', 'Connected') : pill('warn', 'Key set · unreachable')) : pill('', 'Not configured');
+    const claude = e.claude ? pill('ok', e.llm_model || 'On') : pill('', 'Off');
+    const lst = e.listener && e.listener.status === 'OK' ? pill('ok', 'Running' + (e.listener.model ? ' · ' + e.listener.model : '')) : pill('bad', 'Offline');
+    const emo = !e.recognizer ? pill('bad', 'Recognizer offline') : e.recognizer.emotion ? pill('ok', 'On-device') : pill('', 'Not available');
+    const moodCls = e.mood_tracking === 'off' ? '' : 'acc';
+    const card = (name, status, text) => `<div class="eng"><div class="eh"><b>${name}</b>${status}</div><p>${text}</p></div>`;
+    $('engines').innerHTML = [
+      card('Jev', jev, 'Makes the decisions: intent, sentiment and language for every conversation. Without it Aura falls back to simple keyword templates.'),
+      card('Claude', claude, e.claude ? 'Optional free-form replies for questions the info cards and templates don\'t cover.' : 'Optional free-form replies. To enable, set <code>ANTHROPIC_API_KEY</code> in <code>.env</code> and restart.'),
+      card('Listener', lst, 'Local speech-to-text and spoken-language detection. Voice clips are processed in memory and never stored.'),
+      card('Emotion', emo, 'On-device FER+ model estimates mood from the face at each visit. No face images leave the server.'),
+      card('Mood tracking', pill(moodCls, e.mood_tracking), esc(MOOD_MODES[e.mood_tracking] || e.mood_tracking) + '. Set with <code>MOOD_TRACKING</code> in <code>.env</code>.'),
+      card('Retention', pill('acc', `${e.retention_days} days`), 'Conversations and sightings older than this are deleted automatically. Set with <code>INTERACTION_RETENTION_DAYS</code>.'),
+    ].join('');
+    const li = (ic, html) => `<li><span class="ic">${ic}</span><span>${html}</span></li>`;
+    $('privacy').innerHTML = [
+      li('🔒', '<b>Faces are never stored.</b> Camera frames are processed in memory; only a numeric face vector is kept for enrolled staff.'),
+      li('👤', '<b>Visitors are anonymous.</b> Nobody is identified unless enrolled; a visitor\'s conversation context ends when they walk away.'),
+      li('😊', `<b>Mood tracking:</b> ${esc(MOOD_MODES[e.mood_tracking] || e.mood_tracking)}.`),
+      li('🗓', `<b>Retention:</b> conversations and sightings are kept for ${esc(e.retention_days)} days, then deleted.`),
+      li('✋', '<b>Per-person consent:</b> each staff member can opt out of mood tracking (People → profile). Opting out erases past readings; conversations can be forgotten on request.'),
+    ].join('');
+  }
+  $('engRefresh').onclick = () => loadEngines().catch(fail);
+  const counts = j => Object.entries(j).filter(([k]) => k !== 'ok').map(([k, v]) => `<span class="chip">${esc(k)}: ${esc(v)}</span>`).join(' ');
+  $('demoLoad').onclick = async () => {
+    if (!confirm('Load demo data?\n\nAdds sample staff, kiosks, announcements and 30 days of activity. Existing demo rows are replaced; real data is untouched.')) return;
+    $('demoMsg').textContent = 'Loading…';
+    try { const j = await api('/api/demo', { method: 'POST' }); $('demoMsg').innerHTML = '✓ Demo data loaded ' + counts(j); toast('Demo data loaded'); refreshNames(); }
+    catch (e) { $('demoMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  };
+  $('demoClear').onclick = async () => {
+    if (!confirm('Remove all demo data?\n\nDeletes every demo-tagged person, kiosk, event, sighting and conversation. Real data is untouched.')) return;
+    $('demoMsg').textContent = 'Removing…';
+    try { const j = await api('/api/demo', { method: 'DELETE' }); $('demoMsg').innerHTML = '✓ Demo data removed ' + counts(j); toast('Demo data removed'); refreshNames(); }
+    catch (e) { $('demoMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  };
 })();
 </script>
 </body>

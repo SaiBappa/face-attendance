@@ -31,6 +31,11 @@ else
   warn "Could not detect a LAN IP; iPads on the network may not reach this Mac until it has one."
 fi
 
+# ---- 1b. .env (API keys + settings) ----
+if [[ ! -f .env ]]; then
+  cp .env.example .env && ok "Created .env from .env.example — add your TYPESAFE_API_KEY (and optionally ANTHROPIC_API_KEY)"
+fi
+
 # ---- 2. Docker ----
 export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin:$HOME/Applications/Docker.app/Contents/Resources/bin:/usr/local/bin:/opt/homebrew/bin"
 if ! command -v docker >/dev/null 2>&1; then
@@ -57,7 +62,7 @@ fi
 ok "Docker is running ($(docker --version))"
 
 # ---- 3. Build + start ----
-bold "Building + starting containers (first build downloads the face models, ~2–4 min)…"
+bold "Building + starting containers (first build downloads the face, emotion and speech models, ~4–8 min)…"
 docker compose up -d --build --remove-orphans || die "docker compose failed — scroll up for the error."
 
 echo -n "Waiting for the recognizer to be ready "
@@ -72,7 +77,8 @@ PIN=$(awk -F= '/^ADMIN_PIN/{print $2}' .env 2>/dev/null); PIN=${PIN:-2468}
 echo; bold "── Face Attendance is running ─────────────────────"
 echo "Admin (this Mac):  http://localhost:8181/admin      PIN: $PIN"
 [[ -n "$IP" ]] && echo "Admin (iPads):     https://$IP:8443/admin"
-[[ -n "$IP" ]] && echo "Kiosk (iPads):     https://$IP:8443/?kiosk=Floor-1"
+[[ -n "$IP" ]] && echo "Kiosk (iPads):     https://$IP:8443/?kiosk=Staff-Entrance"
+echo "Insights:          http://localhost:8181/insights"
 echo "Health:            curl http://localhost:8181/api/health"
 echo
 echo "Enrol staff in the Admin → Enrol tab (needs a face in front of the camera)."

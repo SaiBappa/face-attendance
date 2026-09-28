@@ -13,6 +13,11 @@ Implements the subset of CompreFace's /api/v1/recognition/* API that attendance 
 
 Similarity is SFace cosine (0..1); same-person pairs score ~0.4–0.8, different people <~0.3.
 Employee face vectors are stored under /data; raw photos are not kept.
+
+Each recognised face also carries two on-device signals, computed from the same frame and
+then discarded with it:
+  * emotion  — FER+ (ONNX model zoo, 8 classes) on the face crop
+  * attire   — dominant clothing colour from the region below the chin
 """
 import os, uuid, threading, json
 import numpy as np
@@ -28,10 +33,13 @@ os.makedirs(FACES, exist_ok=True)
 
 DET_MODEL = os.environ.get("DET_MODEL", "/models/yunet.onnx")
 REC_MODEL = os.environ.get("REC_MODEL", "/models/sface.onnx")
+EMO_MODEL = os.environ.get("EMO_MODEL", "/models/emotion.onnx")
 
 _lock = threading.Lock()
 _det = cv2.FaceDetectorYN.create(DET_MODEL, "", (320, 320), 0.6, 0.3, 5000)
 _rec = cv2.FaceRecognizerSF.create(REC_MODEL, "")
+_emo = cv2.dnn.readNetFromONNX(EMO_MODEL) if os.path.exists(EMO_MODEL) else None
+EMOTIONS = ("neutral", "happiness", "surprise", "sadness", "anger", "disgust", "fear", "contempt")
 
 # in-memory index: {subject: [(image_id, np.float32[128]), ...]}
 _index: dict = {}
@@ -81,6 +89,71 @@ def _detect_all(img):
     return results
 
 
+def _emotion(img, box):
+    """FER+ on a slightly padded grayscale face crop -> {label, confidence, scores}."""
+    if _emo is None:
+        return None
+    x, y, w, h = [int(v) for v in box]
+    pad = int(0.1 * max(w, h))
+    H, W = img.shape[:2]
+    x0, y0, x1, y1 = max(0, x - pad), max(0, y - pad), min(W, x + w + pad), min(H, y + h + pad)
+    if x1 - x0 < 24 or y1 - y0 < 24:
+        return None
+    gray = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
+    blob = cv2.resize(gray, (64, 64)).astype(np.float32).reshape(1, 1, 64, 64)
+    with _lock:
+        _emo.setInput(blob)
+        logits = _emo.forward().flatten()
+    p = np.exp(logits - logits.max())
+    p /= p.sum()
+    i = int(p.argmax())
+    return {"label": EMOTIONS[i], "confidence": round(float(p[i]), 3),
+            "scores": {e: round(float(v), 3) for e, v in zip(EMOTIONS, p)}}
+
+
+def _colour_name(h, s, v):
+    """OpenCV HSV (h 0..180, s/v 0..255) -> a friendly clothing colour name."""
+    if v < 50:
+        return "black"
+    if s < 40:
+        return "white" if v > 190 else ("light grey" if v > 140 else ("grey" if v > 90 else "charcoal"))
+    if h < 8 or h >= 170:
+        return "maroon" if v < 110 else "red"
+    if h < 20:
+        return "brown" if v < 150 else "orange"
+    if h < 34:
+        return "mustard" if v < 170 else "yellow"
+    if h < 78:
+        return "olive" if v < 110 else "green"
+    if h < 96:
+        return "teal"
+    if h < 130:
+        return "navy" if v < 120 else ("sky blue" if s < 110 else "blue")
+    if h < 150:
+        return "purple"
+    return "pink"
+
+
+def _attire(img, box):
+    """Dominant colour of the chest area just below the face (k-means, k=3)."""
+    x, y, w, h = [int(v) for v in box]
+    H, W = img.shape[:2]
+    x0, x1 = max(0, x - w // 2), min(W, x + w + w // 2)
+    y0, y1 = min(H, y + int(1.35 * h)), min(H, y + int(2.6 * h))
+    if y1 - y0 < 16 or x1 - x0 < 16:
+        return None
+    region = cv2.resize(img[y0:y1, x0:x1], (48, 32), interpolation=cv2.INTER_AREA)
+    px = region.reshape(-1, 3).astype(np.float32)
+    crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    _, labels, centers = cv2.kmeans(px, 3, None, crit, 2, cv2.KMEANS_PP_CENTERS)
+    counts = np.bincount(labels.flatten(), minlength=3)
+    k = int(counts.argmax())
+    b, g, r = [int(c) for c in centers[k]]
+    hh, ss, vv = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0, 0]
+    return {"name": _colour_name(int(hh), int(ss), int(vv)), "hex": f"#{r:02x}{g:02x}{b:02x}",
+            "share": round(float(counts[k] / counts.sum()), 2)}
+
+
 def _cos(a, b) -> float:
     na, nb = np.linalg.norm(a), np.linalg.norm(b)
     if na == 0 or nb == 0:
@@ -101,7 +174,7 @@ def _best_matches(feat, top=1):
 
 # --------------------------------------------------------------------------- routes
 async def healthcheck(request):
-    return JSONResponse({"status": "OK"})
+    return JSONResponse({"status": "OK", "emotion": _emo is not None})
 
 
 async def get_subjects(request):
@@ -153,7 +226,8 @@ async def recognize(request: Request):
     if limit and limit > 0:
         faces = faces[:limit]
     result = []
-    for box, score, feat in faces:
+    H, W = img.shape[:2]
+    for i, (box, score, feat) in enumerate(faces):
         x, y, w, h = box
         subs = [{"subject": s, "similarity": round(max(0.0, min(1.0, sim)), 5)}
                 for s, sim in _best_matches(feat, top=max(1, pred))]
@@ -162,6 +236,10 @@ async def recognize(request: Request):
                     "x_min": int(x), "y_min": int(y),
                     "x_max": int(x + w), "y_max": int(y + h)},
             "subjects": subs,
+            # extra signals for the largest face only (the person standing at the kiosk)
+            "emotion": _emotion(img, box) if i == 0 else None,
+            "attire": _attire(img, box) if i == 0 else None,
+            "size": round(float(w) / W, 3),
         })
     return JSONResponse({"result": result})
 

@@ -10,12 +10,14 @@ RUN sed -i 's#http://deb.debian.org#https://deb.debian.org#g' /etc/apt/sources.l
 
 RUN pip install --no-cache-dir numpy opencv-python-headless starlette "uvicorn[standard]" python-multipart
 
-# ARM-native face models from OpenCV Zoo (git-LFS media endpoint). Downloaded with Python, no curl needed.
+# ARM-native face + emotion models from OpenCV Zoo / ONNX model zoo (git-LFS media endpoint). Downloaded with Python, no curl needed.
 RUN mkdir -p /models && python - <<'PY'
 import urllib.request, time
 files = {
   "/models/yunet.onnx": "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
   "/models/sface.onnx": "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+  # FER+ facial-expression model (8 emotions), ONNX model zoo
+  "/models/emotion.onnx": "https://media.githubusercontent.com/media/onnx/models/main/validated/vision/body_analysis/emotion_ferplus/model/emotion-ferplus-8.onnx",
 }
 for path, url in files.items():
     for attempt in range(5):
@@ -28,6 +30,7 @@ for path, url in files.items():
 import cv2
 cv2.FaceDetectorYN.create("/models/yunet.onnx", "", (320, 320))
 cv2.FaceRecognizerSF.create("/models/sface.onnx", "")
+cv2.dnn.readNetFromONNX("/models/emotion.onnx")
 print("models OK")
 PY
 

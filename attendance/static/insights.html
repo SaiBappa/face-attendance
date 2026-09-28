@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Aura Insights</title>
+<style>
+  /* ------------------------------------------------------------------ tokens
+     Light is the base; dark is its own selected set (not a flip), applied by the
+     OS setting unless the viewer pinned a theme with the toggle (data-theme). */
+  :root {
+    color-scheme: light;
+    --bg:#f3f4f1; --card:#ffffff; --card2:#f8f8f6; --ink:#0d1015; --ink2:#4a4f57; --muted:#80858c;
+    --line:rgba(13,16,21,.09); --grid:#e7e7e2; --axis:#c6c7c0; --hover:rgba(13,16,21,.04);
+    --shadow:0 1px 2px rgba(13,16,21,.04), 0 8px 24px -12px rgba(13,16,21,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s7:#4a3aa7; --bar:#9fb3c8;
+    --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+    --good-ink:#006300; --bad-ink:#b42525; --warn-ink:#8a5a00;
+    --none:#e4e4df; --cell0:#f0f0ec;
+    --brand1:#12b3a6; --brand2:#7c5cff;
+    --glow1:rgba(18,179,166,.10); --glow2:rgba(124,92,255,.09);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg:#08090c; --card:#111419; --card2:#161a20; --ink:#f3f5f7; --ink2:#b8bdc5; --muted:#7f858e;
+      --line:rgba(255,255,255,.08); --grid:#22262d; --axis:#353a43; --hover:rgba(255,255,255,.04);
+      --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 12px 32px -16px rgba(0,0,0,.6);
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s7:#9085e9; --bar:#4a5b70;
+      --good-ink:#2fc22f; --bad-ink:#f07171; --warn-ink:#f5c04a;
+      --none:#262a31; --cell0:#171a1f;
+      --glow1:rgba(18,179,166,.13); --glow2:rgba(124,92,255,.13);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg:#08090c; --card:#111419; --card2:#161a20; --ink:#f3f5f7; --ink2:#b8bdc5; --muted:#7f858e;
+    --line:rgba(255,255,255,.08); --grid:#22262d; --axis:#353a43; --hover:rgba(255,255,255,.04);
+    --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 12px 32px -16px rgba(0,0,0,.6);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s7:#9085e9; --bar:#4a5b70;
+    --good-ink:#2fc22f; --bad-ink:#f07171; --warn-ink:#f5c04a;
+    --none:#262a31; --cell0:#171a1f;
+    --glow1:rgba(18,179,166,.13); --glow2:rgba(124,92,255,.13);
+  }
+
+  /* ------------------------------------------------------------------ base */
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         background:
+           radial-gradient(1100px 480px at 8% -8%, var(--glow1), transparent 60%),
+           radial-gradient(900px 420px at 95% -12%, var(--glow2), transparent 60%),
+           var(--bg);
+         background-attachment:fixed; min-height:100vh; overflow-x:hidden; }
+  button, input, select { font:inherit; color:inherit; }
+  a { color:inherit; }
+  .num, td, .tab-num { font-variant-numeric:tabular-nums; }
+  .muted { color:var(--muted); }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+
+  /* ------------------------------------------------------------------ controls */
+  .btn { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 12px; border-radius:10px;
+         border:1px solid var(--line); background:var(--card); cursor:pointer; font-size:14px; text-decoration:none; white-space:nowrap; }
+  .btn:hover { background:var(--card2); }
+  .btn svg { width:16px; height:16px; }
+  .btn.icon { width:36px; padding:0; justify-content:center; }
+  .btn.primary { background:linear-gradient(135deg,var(--brand1),var(--brand2)); color:#fff; border-color:transparent; }
+  select, input[type=date], input[type=search], input[type=password] {
+    height:36px; padding:0 10px; border-radius:10px; border:1px solid var(--line); background:var(--card); min-width:0; }
+  .seg { display:inline-flex; padding:3px; border-radius:12px; background:var(--card2); border:1px solid var(--line); }
+  .seg button { border:0; background:transparent; height:30px; padding:0 11px; border-radius:9px; cursor:pointer; font-size:13.5px; color:var(--ink2); }
+  .seg button.on { background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12); font-weight:600; }
+  :focus-visible { outline:2px solid var(--brand2); outline-offset:2px; }
+
+  /* ------------------------------------------------------------------ header */
+  header.top { position:sticky; top:0; z-index:20; backdrop-filter:saturate(1.4) blur(14px); -webkit-backdrop-filter:saturate(1.4) blur(14px);
+               background:color-mix(in srgb, var(--bg) 78%, transparent); border-bottom:1px solid var(--line); }
+  .bar { max-width:1440px; margin:0 auto; padding:12px 20px 0; display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; }
+  .brand { display:flex; gap:12px; align-items:center; margin-right:auto; min-width:0; }
+  .brand svg { width:34px; height:34px; flex:none; }
+  .brand h1 { margin:0; font-size:18px; letter-spacing:-.01em; font-weight:700; }
+  .brand p { margin:0; font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ctrls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  #custom { display:flex; gap:6px; align-items:center; }
+  .tabs { max-width:1440px; margin:0 auto; padding:6px 20px 0; display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; }
+  .tabs button { border:0; background:none; padding:10px 12px 11px; cursor:pointer; color:var(--ink2); font-size:14px; font-weight:500; position:relative; white-space:nowrap; }
+  .tabs button.on { color:var(--ink); font-weight:650; }
+  .tabs button.on::after { content:""; position:absolute; left:10px; right:10px; bottom:-1px; height:2px; border-radius:2px; background:linear-gradient(90deg,var(--brand1),var(--brand2)); }
+  .tabs .count { font-size:11.5px; padding:1px 7px; border-radius:99px; background:var(--card2); border:1px solid var(--line); margin-left:6px; color:var(--ink2); }
+
+  /* ------------------------------------------------------------------ layout */
+  main { max-width:1440px; margin:0 auto; padding:18px 20px 80px; transition:opacity .2s; }
+  main.loading { opacity:.55; }
+  .grid { display:grid; gap:16px; margin-bottom:16px; }
+  .grid > * { min-width:0; }
+  .g-hero { grid-template-columns:1.35fr 1fr; }
+  .g-trend { grid-template-columns:2fr 1fr; }
+  .g-2 { grid-template-columns:1fr 1fr; }
+  .g-3 { grid-template-columns:1.2fr 1fr .9fr; }
+  @media (max-width:1100px) { .g-hero, .g-trend, .g-3 { grid-template-columns:1fr 1fr; } .g-trend > :first-child, .g-3 > :last-child { grid-column:1/-1; } }
+  @media (max-width:760px) { .g-hero, .g-trend, .g-2, .g-3 { grid-template-columns:1fr; } .bar { padding:10px 14px 0; } .tabs { padding:4px 10px 0; } main { padding:14px 12px 60px; } }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px 18px 16px; box-shadow:var(--shadow); min-width:0; }
+  .card-h { display:flex; flex-wrap:wrap; align-items:flex-start; gap:6px 14px; margin-bottom:14px; }
+  .card-h h2 { margin:0; font-size:12px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--ink2); }
+  .card-h p { margin:2px 0 0; font-size:13px; color:var(--muted); }
+  .card-h .grow { flex:1; min-width:160px; }
+  .chart { width:100%; min-height:40px; }
+  .chart svg { display:block; width:100%; height:auto; overflow:visible; }
+  .empty { padding:28px 10px; text-align:center; color:var(--muted); font-size:14px; }
+
+  /* legends: rect for bars, line for lines; text always in ink tokens */
+  .legend { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12.5px; color:var(--ink2); }
+  .legend span { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .legend i.ln { width:14px; height:2px; border-radius:2px; }
+
+  /* svg chart chrome */
+  svg .grid { stroke:var(--grid); stroke-width:1; }
+  svg .base { stroke:var(--axis); stroke-width:1; }
+  svg .ref { stroke:var(--axis); stroke-width:1; stroke-dasharray:0; }
+  svg text { font-family:inherit; }
+  svg .ax { fill:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+  svg .pl { fill:var(--ink2); font-size:11.5px; font-weight:600; }
+  svg .lab { fill:var(--ink2); font-size:11.5px; font-weight:600; font-variant-numeric:tabular-nums; }
+  svg .ln { fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  svg .dot { stroke:var(--card); stroke-width:2; }
+  svg .xhair { stroke:var(--ink2); stroke-width:1; opacity:0; pointer-events:none; }
+  svg .hit { fill:transparent; cursor:crosshair; }
+  svg .hit.hot { fill:var(--hover); }
+  svg [data-tip]:not(.hit) { cursor:default; transition:opacity .12s; }
+  svg rect.cell.hot, svg path.hot, svg circle.hot { opacity:.78; }
+
+  /* tooltip: value leads, label follows, line keys */
+  #tip { position:fixed; z-index:60; pointer-events:none; min-width:150px; max-width:280px; padding:9px 11px; border-radius:12px;
+         background:color-mix(in srgb, var(--card) 94%, transparent); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+         border:1px solid var(--line); box-shadow:0 12px 32px -8px rgba(0,0,0,.28); font-size:12.5px; }
+  #tip .tt { font-weight:650; margin-bottom:5px; color:var(--ink); }
+  #tip .tr { display:flex; align-items:center; gap:8px; line-height:1.7; }
+  #tip .tr i { width:12px; height:3px; border-radius:2px; flex:none; }
+  #tip .tr b { font-variant-numeric:tabular-nums; min-width:32px; }
+  #tip .tr span { color:var(--muted); }
+  #tip .tn { margin-top:5px; color:var(--muted); font-size:12px; }
+
+  /* ------------------------------------------------------------------ summary + attention */
+  .summary { position:relative; border:1px solid transparent;
+             background:linear-gradient(var(--card),var(--card)) padding-box, linear-gradient(135deg,var(--brand1),var(--brand2) 60%,var(--line)) border-box; }
+  .summary ul { margin:0; padding:0; list-style:none; display:grid; gap:10px; }
+  .summary li { display:grid; grid-template-columns:22px 1fr; gap:8px; font-size:15px; line-height:1.5; color:var(--ink); }
+  .summary li .ic { font-size:15px; line-height:1.5; text-align:center; }
+  .summary b { font-weight:650; }
+  .summary .meta { margin-top:14px; font-size:12px; color:var(--muted); }
+  .alerts { display:grid; gap:8px; max-height:320px; overflow:auto; margin:-2px -4px 0; padding:2px 4px; }
+  .alert { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; text-align:left; width:100%; padding:10px 12px;
+           border-radius:12px; border:1px solid var(--line); background:var(--card2); cursor:pointer; }
+  .alert:hover { border-color:color-mix(in srgb, var(--ink) 20%, transparent); }
+  .alert .txt { font-size:13.5px; line-height:1.4; }
+  .alert .go { color:var(--muted); font-size:18px; }
+  .sev { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:3px 8px 3px 6px; border-radius:99px; white-space:nowrap; }
+  .sev::before { content:""; width:8px; height:8px; border-radius:50%; background:currentColor; }
+  .sev.high { color:var(--bad-ink); background:color-mix(in srgb, var(--crit) 14%, transparent); }
+  .sev.medium { color:var(--warn-ink); background:color-mix(in srgb, var(--warn) 18%, transparent); }
+  .sev.low { color:var(--ink2); background:var(--hover); border:1px solid var(--line); }
+  .sev.positive { color:var(--good-ink); background:color-mix(in srgb, var(--good) 14%, transparent); }
+  .kudos { padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:var(--card2); }
+  .kudos .txt { font-size:13.5px; margin:6px 0 8px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { border:1px solid var(--line); background:var(--card); border-radius:99px; padding:3px 10px; font-size:12.5px; cursor:pointer; }
+  .chip:hover { background:var(--hover); }
+
+  /* ------------------------------------------------------------------ KPI tiles */
+  .kpis { display:grid; grid-template-columns:repeat(9,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+  @media (max-width:1250px) { .kpis { grid-template-columns:repeat(5,minmax(0,1fr)); } }
+  @media (max-width:760px) { .kpis { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; } }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 14px 12px; box-shadow:var(--shadow); min-width:0; position:relative; overflow:hidden; }
+  .kpi .l { font-size:12.5px; color:var(--ink2); font-weight:500; }
+  .kpi .v { font-size:28px; font-weight:650; letter-spacing:-.02em; margin-top:4px; line-height:1.1; white-space:nowrap; }
+  .kpi .v small { font-size:14px; font-weight:500; color:var(--muted); margin-left:3px; }
+  .kpi .d { font-size:12px; margin-top:6px; color:var(--muted); display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .kpi .spark { display:block; width:100%; height:22px; margin-top:8px; }
+  .kpi.alert-on { border-color:color-mix(in srgb, var(--crit) 45%, var(--line)); }
+  .delta { font-weight:650; font-variant-numeric:tabular-nums; }
+  .delta.up { color:var(--good-ink); } .delta.down { color:var(--bad-ink); } .delta.flat { color:var(--muted); }
+  .gauge { height:4px; border-radius:4px; background:var(--none); margin-top:8px; overflow:hidden; }
+  .gauge i { display:block; height:100%; border-radius:4px; }
+
+  /* ------------------------------------------------------------------ bars (HTML) */
+  .hbars { display:grid; gap:7px; }
+  .hb { display:grid; grid-template-columns:minmax(80px,38%) 1fr 44px; gap:10px; align-items:center; font-size:13px; }
+  .hb .n { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink); }
+  .hb .n small { color:var(--muted); margin-left:5px; }
+  .hb .t { height:14px; }
+  .hb .t i { display:block; height:100%; border-radius:0 4px 4px 0; min-width:2px; }
+  .hb .v { text-align:right; color:var(--ink2); font-variant-numeric:tabular-nums; }
+  .hb:hover .t i { filter:brightness(1.12); }
+  .stack { display:flex; gap:2px; height:22px; border-radius:6px; overflow:hidden; background:var(--card); }
+  .stack span { min-width:2px; }
+  .stack span:hover { filter:brightness(1.12); }
+  .mixrow { margin-bottom:14px; }
+  .mixrow .h { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; gap:10px; }
+  .mixrow .h b { font-weight:600; }
+  .mleg { display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:6px 12px; font-size:12.5px; color:var(--ink2); margin-top:4px; }
+  .mleg span { display:flex; align-items:center; gap:6px; }
+  .mleg i { width:10px; height:10px; border-radius:3px; flex:none; }
+  .mleg em { font-style:normal; margin-left:auto; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .heatleg { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:8px; }
+  .heatleg i { width:18px; height:10px; border-radius:2px; }
+
+  /* ------------------------------------------------------------------ tables */
+  .tbl-wrap { overflow-x:auto; margin:0 -18px; padding:0 18px; }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; position:sticky; top:0; background:var(--card); }
+  th.sortable { cursor:pointer; user-select:none; }
+  th.sortable:hover { color:var(--ink); }
+  th .ar { opacity:.9; margin-left:3px; }
+  td.r, th.r { text-align:right; }
+  tbody tr.click { cursor:pointer; }
+  tbody tr.click:hover { background:var(--hover); }
+  .who { display:flex; align-items:center; gap:10px; }
+  .who b { font-weight:600; display:block; }
+  .who small { color:var(--muted); font-size:12px; }
+  .av { width:30px; height:30px; border-radius:50%; flex:none; display:grid; place-items:center; font-size:11.5px; font-weight:700; color:#fff;
+        background:linear-gradient(135deg,var(--brand1),var(--brand2)); }
+  .mood { display:inline-flex; align-items:center; gap:7px; }
+  .mood .mb { width:46px; height:6px; border-radius:4px; background:var(--none); overflow:hidden; }
+  .mood .mb i { display:block; height:100%; border-radius:0 4px 4px 0; }
+  .mood b { min-width:22px; font-weight:600; text-align:right; }
+  .tr-up { color:var(--good-ink); } .tr-down { color:var(--bad-ink); } .tr-flat { color:var(--muted); }
+  .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11.5px; font-weight:600; border:1px solid var(--line); color:var(--ink2); background:var(--card2); margin-right:4px; }
+  .pill.red { color:var(--bad-ink); background:color-mix(in srgb, var(--crit) 12%, transparent); border-color:transparent; }
+  .pill.amber { color:var(--warn-ink); background:color-mix(in srgb, var(--warn) 16%, transparent); border-color:transparent; }
+  .pill.green { color:var(--good-ink); background:color-mix(in srgb, var(--good) 12%, transparent); border-color:transparent; }
+  .pill.out { font-style:italic; font-weight:500; }
+  .inbar { display:flex; align-items:center; gap:8px; }
+  .inbar .t { width:90px; height:8px; background:var(--none); border-radius:4px; overflow:hidden; flex:none; }
+  .inbar .t i { display:block; height:100%; border-radius:0 4px 4px 0; }
+
+  /* locations */
+  .locs { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; }
+  .loc { border:1px solid var(--line); background:var(--card2); border-radius:14px; padding:14px; position:relative; }
+  .loc h3 { margin:0; font-size:15px; font-weight:650; }
+  .loc .z { font-size:12px; color:var(--muted); }
+  .loc dl { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:12px 0; }
+  .loc dt { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .loc dd { margin:0; font-size:17px; font-weight:650; font-variant-numeric:tabular-nums; }
+  .loc .mm { display:grid; gap:6px; font-size:12.5px; }
+  .loc .mm > div { display:grid; grid-template-columns:62px 1fr 28px; gap:8px; align-items:center; color:var(--ink2); }
+  .loc .mm .t { height:6px; border-radius:4px; background:var(--none); overflow:hidden; }
+  .loc .mm .t i { display:block; height:100%; border-radius:0 4px 4px 0; }
+  .loc .mm b { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink); }
+
+  /* ------------------------------------------------------------------ conversations */
+  .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px; }
+  .filters input[type=search] { flex:1; min-width:180px; }
+  .convs { display:grid; gap:10px; }
+  .conv { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:var(--card2); }
+  .conv .m { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:12px; color:var(--muted); margin-bottom:8px; }
+  .conv .m .p { color:var(--ink); font-weight:600; font-size:13px; }
+  .conv .m button.p { border:0; background:none; padding:0; cursor:pointer; text-decoration:underline; text-decoration-color:var(--axis); text-underline-offset:3px; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:6px; font-size:11px; font-weight:650; letter-spacing:.03em; border:1px solid var(--line); color:var(--ink2); background:var(--card); }
+  .tag.staff { color:var(--s1); } .tag.visitor { color:var(--s2); }
+  .bub { max-width:min(560px,86%); padding:8px 12px; border-radius:14px; font-size:14px; line-height:1.45; margin:4px 0; overflow-wrap:anywhere; }
+  .bub.u { background:var(--card); border:1px solid var(--line); border-bottom-left-radius:4px; }
+  .bub.a { margin-left:auto; color:#fff; border-bottom-right-radius:4px;
+           background:linear-gradient(135deg, color-mix(in srgb,var(--brand1) 88%, #000), color-mix(in srgb,var(--brand2) 88%, #000)); }
+  .bub.a::before { content:"Aura"; display:block; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; opacity:.75; margin-bottom:2px; }
+  .sent { display:inline-flex; align-items:center; gap:5px; }
+  .sent i { width:28px; height:5px; border-radius:3px; background:var(--none); overflow:hidden; display:inline-block; position:relative; }
+  .sent i b { position:absolute; inset:0 auto 0 0; border-radius:3px; }
+  .more { text-align:center; margin-top:12px; font-size:13px; color:var(--muted); }
+
+  /* ------------------------------------------------------------------ drawer */
+  #scrim { position:fixed; inset:0; background:rgba(5,7,10,.42); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s; }
+  #scrim.on { opacity:1; pointer-events:auto; }
+  #drawer { position:fixed; top:0; right:0; bottom:0; width:min(760px,100vw); z-index:50; background:var(--bg); border-left:1px solid var(--line);
+            transform:translateX(102%); transition:transform .26s cubic-bezier(.2,.8,.2,1); overflow-y:auto; overscroll-behavior:contain;
+            box-shadow:-20px 0 60px -20px rgba(0,0,0,.4); }
+  #drawer.on { transform:none; }
+  .dh { position:sticky; top:0; z-index:2; display:flex; gap:14px; align-items:center; padding:16px 18px; background:color-mix(in srgb,var(--bg) 85%, transparent);
+        backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-bottom:1px solid var(--line); }
+  .dh .av { width:46px; height:46px; font-size:16px; }
+  .dh h2 { margin:0; font-size:20px; letter-spacing:-.01em; }
+  .dh p { margin:2px 0 0; font-size:13px; color:var(--muted); }
+  .dh .x { margin-left:auto; }
+  .db { padding:16px 18px 40px; display:grid; gap:14px; }
+  .db .card { padding:14px; border-radius:14px; }
+  .minis { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:10px; }
+  .minis .kpi { padding:11px 12px; border-radius:12px; }
+  .minis .kpi .v { font-size:21px; }
+  .cal { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; max-width:420px; }
+  .cal .hd { font-size:10.5px; color:var(--muted); text-align:center; text-transform:uppercase; letter-spacing:.05em; }
+  .cal .c { aspect-ratio:1; border-radius:6px; background:var(--none); font-size:10.5px; color:rgba(255,255,255,.92); display:grid; place-items:center; font-weight:600; }
+  .cal .c.nd { color:var(--muted); }
+  .cal .c.off { background:transparent; }
+  .sw { display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; box-shadow:0 0 0 1px var(--line) inset, 0 0 0 1px var(--line); }
+  .swatches { display:flex; flex-wrap:wrap; gap:10px; }
+  .swatches > div { display:flex; align-items:center; gap:8px; padding:6px 10px 6px 6px; border:1px solid var(--line); border-radius:10px; background:var(--card2); font-size:13px; }
+  .swatches .sw { width:22px; height:22px; border-radius:6px; }
+  .mem { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
+  .mem li { display:flex; gap:10px; align-items:baseline; font-size:14px; }
+  .mem small { color:var(--muted); margin-left:auto; white-space:nowrap; }
+  .dayhdr { font-size:11.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin:14px 0 6px; }
+  .dayhdr:first-child { margin-top:0; }
+  .notice { font-size:13px; color:var(--ink2); padding:10px 12px; border-radius:10px; background:var(--card2); border:1px dashed var(--axis); }
+
+  /* ------------------------------------------------------------------ gate */
+  #gate { max-width:380px; margin:12vh auto 0; padding:0 16px; text-align:center; }
+  #gate .card { padding:28px 24px; }
+  #gate svg { width:56px; height:56px; }
+  #gate h1 { margin:10px 0 4px; font-size:22px; }
+  #gate input { width:100%; height:52px; font-size:26px; text-align:center; letter-spacing:.35em; margin:18px 0 12px; }
+  #gate .btn { width:100%; justify-content:center; height:44px; }
+  .err { color:var(--bad-ink); font-size:14px; min-height:20px; margin:10px 0 0; }
+
+  @media (max-width:760px) {
+    .brand p { max-width:62vw; }
+    header.top { position:static; }
+    .ctrls { width:100%; }
+    .ctrls select { flex:1 1 140px; min-width:140px; }
+    .kpi .v { font-size:24px; }
+    .hb { grid-template-columns:minmax(70px,40%) 1fr 38px; }
+    .hide-sm { display:none; }
+  }
+
+  /* ------------------------------------------------------------------ print */
+  @media print {
+    :root, :root[data-theme="dark"] { color-scheme:light;
+      --bg:#fff; --card:#fff; --card2:#fafaf8; --ink:#000; --ink2:#333; --muted:#666; --line:#ddd; --grid:#e6e6e6; --axis:#bbb;
+      --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s7:#4a3aa7; --bar:#9fb3c8; --none:#e8e8e8; --cell0:#f3f3f3; --shadow:none;
+      --good-ink:#006300; --bad-ink:#b42525; --warn-ink:#8a5a00; }
+    body { background:#fff; }
+    header.top { position:static; backdrop-filter:none; background:#fff; }
+    .ctrls, .tabs, #drawer, #scrim, #tip, #s-talk, .no-print { display:none !important; }
+    main { padding:0; max-width:none; }
+    section[data-sec] { display:block !important; }
+    .card, .kpi, .loc { break-inside:avoid; box-shadow:none; }
+    .alerts { max-height:none; overflow:visible; }
+    .tbl-wrap { overflow:visible; }
+    #s-people { break-before:page; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Aura mark, reused by the gate and header -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="auraG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#12b3a6"/><stop offset="1" stop-color="#7c5cff"/></linearGradient>
+    <symbol id="aura" viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="17" fill="none" stroke="url(#auraG)" stroke-width="3.2"/>
+      <circle cx="20" cy="20" r="10.5" fill="none" stroke="url(#auraG)" stroke-width="2.2" opacity=".55"/>
+      <circle cx="20" cy="20" r="4.2" fill="url(#auraG)"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="gate" hidden>
+  <div class="card">
+    <svg><use href="#aura"/></svg>
+    <h1>Aura Insights</h1>
+    <p class="muted" style="margin:0">Enter the admin PIN to view analytics</p>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" aria-label="Admin PIN">
+    <button class="btn primary" id="pinGo">Unlock</button>
+    <p id="pinErr" class="err"></p>
+  </div>
+</div>
+
+<div id="app" hidden>
+<header class="top">
+  <div class="bar">
+    <div class="brand">
+      <svg aria-hidden="true"><use href="#aura"/></svg>
+      <div style="min-width:0"><h1>Aura Insights</h1><p id="scope">&nbsp;</p></div>
+    </div>
+    <div class="ctrls">
+      <div class="seg" id="presets" role="group" aria-label="Date range">
+        <button data-p="0">Today</button><button data-p="6">7d</button><button data-p="29" class="on">30d</button><button data-p="89">90d</button><button data-p="custom">Custom</button>
+      </div>
+      <div id="custom" hidden>
+        <input type="date" id="from" aria-label="From"><span class="muted">–</span><input type="date" id="to" aria-label="To">
+        <button class="btn" id="applyRange">Apply</button>
+      </div>
+      <select id="kiosk" aria-label="Location"><option value="">All locations</option></select>
+      <button class="btn icon" id="refresh" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+      <button class="btn icon" id="theme" title="Toggle theme" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></button>
+      <button class="btn" id="print"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg><span class="hide-sm">Print report</span></button>
+      <a class="btn" href="/admin">Admin</a>
+      <button class="btn icon" id="lock" title="Lock" aria-label="Lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="overview" class="on">Overview</button>
+    <button data-tab="people">People <span class="count" id="nPeople">0</span></button>
+    <button data-tab="talk">Conversations <span class="count" id="nTalk">0</span></button>
+  </nav>
+</header>
+
+<main id="main">
+  <!-- ================================================================ OVERVIEW -->
+  <section id="s-overview" data-sec="overview">
+    <div class="grid g-hero">
+      <article class="card summary">
+        <div class="card-h"><div class="grow"><h2>✦ Executive summary</h2><p id="sumSub">Generated from the selected range</p></div></div>
+        <ul id="summary"></ul>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Needs attention</h2><p>Wellbeing, punctuality and kudos — select a person to drill down</p></div></div>
+        <div class="alerts" id="attention"></div>
+      </article>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid g-trend">
+      <article class="card">
+        <div class="card-h">
+          <div class="grow"><h2>Daily trend</h2><p>Mood score (0–100, 50 = calm) and staff present per day</p></div>
+          <div class="legend"><span><i class="ln" style="background:var(--s1)"></i>Staff mood</span><span><i class="ln" style="background:var(--s2)"></i>Visitor mood</span><span><i style="background:var(--bar)"></i>On time / present</span><span><i style="background:var(--warn)"></i>Late</span></div>
+        </div>
+        <div class="chart" id="cTrend"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Mood mix</h2><p>Share of face sightings by expression</p></div></div>
+        <div id="cMix"></div>
+      </article>
+    </div>
+
+    <div class="grid g-2">
+      <article class="card">
+        <div class="card-h">
+          <div class="grow"><h2>Mood by hour of day</h2><p>Average mood score of everyone seen in each hour</p></div>
+          <div class="legend"><span><i class="ln" style="background:var(--s1)"></i>Staff</span><span><i class="ln" style="background:var(--s2)"></i>Visitors</span></div>
+        </div>
+        <div class="chart" id="cHour"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Arrivals heatmap</h2><p>Clock-ins by weekday and hour</p></div></div>
+        <div class="chart" id="cHeat"></div>
+      </article>
+    </div>
+
+    <div class="grid g-2">
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>By weekday</h2><p>On-time arrival and staff mood score</p></div></div>
+        <div class="chart" id="cWeek"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Departments</h2><p>Averages across each team's members</p></div></div>
+        <div class="tbl-wrap" id="cDept"></div>
+      </article>
+    </div>
+
+    <article class="card" style="margin-bottom:16px">
+      <div class="card-h"><div class="grow"><h2>Locations</h2><p>Every kiosk in the selected range</p></div></div>
+      <div class="locs" id="cLocs"></div>
+    </article>
+
+    <div class="grid g-3">
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Top requests</h2><p>Detected intent of each conversation</p></div></div>
+        <div class="hbars" id="cIntents"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Languages</h2><p>Language each conversation was held in</p></div></div>
+        <div class="hbars" id="cLangs"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Reply engine</h2><p>Who wrote Aura's replies</p></div></div>
+        <div id="cEngines"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ================================================================ PEOPLE -->
+  <section id="s-people" data-sec="people" hidden>
+    <article class="card">
+      <div class="card-h">
+        <div class="grow"><h2>People</h2><p>Select a column to sort, a row to open the person's timeline</p></div>
+        <input type="search" id="pq" placeholder="Search name, department, role…" class="no-print" style="width:260px;max-width:100%">
+      </div>
+      <div class="tbl-wrap"><table id="ptable"><thead></thead><tbody></tbody></table></div>
+    </article>
+  </section>
+
+  <!-- ================================================================ CONVERSATIONS -->
+  <section id="s-talk" data-sec="talk" hidden>
+    <article class="card">
+      <div class="card-h"><div class="grow"><h2>Conversations explorer</h2><p>Everything people said to Aura, and how it replied</p></div>
+        <button class="btn" id="csv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>Download CSV</button>
+      </div>
+      <div class="filters">
+        <input type="search" id="tq" placeholder="Search what was said or replied…" aria-label="Search text">
+        <select id="tkind" aria-label="Who"><option value="">Staff + visitors</option><option value="staff">Staff</option><option value="visitor">Visitors</option></select>
+        <select id="tchan" aria-label="Channel"><option value="talk">Voice + text</option><option value="voice">Voice</option><option value="text">Text</option><option value="greeting">Greetings</option><option value="">Everything</option></select>
+        <select id="tlang" aria-label="Language"><option value="">Any language</option></select>
+        <select id="tintent" aria-label="Intent"><option value="">Any intent</option></select>
+      </div>
+      <div class="convs" id="convs"></div>
+      <div class="more" id="tmore"></div>
+    </article>
+  </section>
+</main>
+</div>
+
+<div id="scrim"></div>
+<aside id="drawer" aria-label="Person details" aria-hidden="true"></aside>
+<div id="tip" hidden role="tooltip"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ============================================================== helpers
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  // Everything from the API passes through esc() before it touches innerHTML.
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = (n, d = 0) => n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const score = v => v == null ? null : Math.round((v + 1) * 50);          // valence -1..1 -> mood score 0..100
+  const hrs = h => { if (h == null) return '—'; const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; };
+  const mins = m => m == null ? '—' : m >= 60 ? `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, '0')}m` : `${Math.round(m)}m`;
+  const initials = n => String(n || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  const pctOf = (a, b) => b ? Math.round(100 * a / b) : 0;
+  const sum = xs => xs.reduce((a, b) => a + (b || 0), 0);
+  const avg = xs => { xs = xs.filter(x => x != null); return xs.length ? sum(xs) / xs.length : null; };
+
+  // dates are handled as local YYYY-MM-DD strings
+  const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const WDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const WFULL = { Mon: 'Mondays', Tue: 'Tuesdays', Wed: 'Wednesdays', Thu: 'Thursdays', Fri: 'Fridays', Sat: 'Saturdays', Sun: 'Sundays' };
+  const fmtDay = s => `${MON[+s.slice(5, 7) - 1]} ${+s.slice(8, 10)}`;
+  const fmtDayLong = s => `${WDAY[new Date(s + 'T12:00:00').getDay()]} ${+s.slice(8, 10)} ${MON[+s.slice(5, 7) - 1]}`;
+  const hh = h => String(h).padStart(2, '0') + ':00';
+
+  let langDN = null;
+  try { langDN = new Intl.DisplayNames(['en'], { type: 'language' }); } catch (e) { /* older Safari */ }
+  const langName = c => { if (!c) return '—'; if (c === 'dv') return 'Dhivehi'; try { return langDN ? langDN.of(c) : c; } catch (e) { return c; } };
+
+  // Mood colour scale shared by every mood mark: red → amber → grey (calm) → teal → green.
+  const MSTOPS = [[-1, [201, 58, 58]], [-0.45, [227, 150, 52]], [0, [150, 149, 143]], [0.45, [24, 160, 157]], [1, [30, 152, 78]]];
+  function moodColor(v) {
+    if (v == null) return 'var(--none)';
+    v = Math.max(-1, Math.min(1, v));
+    for (let i = 1; i < MSTOPS.length; i++) {
+      const [b, cb] = MSTOPS[i];
+      if (v <= b) { const [a, ca] = MSTOPS[i - 1]; const t = (v - a) / (b - a); return `rgb(${ca.map((c, j) => Math.round(c + (cb[j] - c) * t)).join(',')})`; }
+    }
+    return 'rgb(30,152,78)';
+  }
+  const scoreColor = s => s == null ? 'var(--none)' : moodColor(s / 50 - 1);
+
+  // Clothing colour names from the recognizer -> approximate swatch colours
+  const ATTIRE = { white: '#f4f4f1', 'light grey': '#c6c8cc', grey: '#8d9096', charcoal: '#3b3f46', black: '#131416', maroon: '#7b1f2c', red: '#d23a3a',
+    brown: '#7a4b2b', orange: '#ef8a25', mustard: '#c9a227', yellow: '#f2cf2b', olive: '#6d7b2b', green: '#2e8b57', teal: '#11898a',
+    navy: '#1f2e5b', 'sky blue': '#7db9e6', blue: '#2a63d4', purple: '#6e3fa7', pink: '#e98ab5' };
+  const MEMICON = { tired: '😴', unwell: '🤒', stressed: '😣', celebrating: '🎉', note: '📝' };
+  const CHANICON = { voice: '🎙️', text: '⌨️', greeting: '👋' };
+  const FLAG = { wellbeing: ['Wellbeing', 'red'], mood_drop: ['Mood drop', 'amber'], late: ['Often late', 'amber'], long_breaks: ['Long breaks', ''], star: ['★ Streak', 'green'] };
+
+  // ============================================================== state + API
+  let PIN = sessionStorage.getItem('pin') || '';
+  const S = { preset: '29', from: '', to: '', kiosk: '', data: null, sort: { k: 'name', dir: 1 }, tab: 'overview', person: null };
+  let meta = {};
+
+  async function api(path) {
+    const r = await fetch(path, { headers: { 'X-Admin-Pin': PIN } });
+    if (r.status === 401) { lock('Wrong PIN'); throw new Error('unauthorised'); }
+    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    return r;
+  }
+  const getJSON = async p => (await api(p)).json();
+  const rangeQS = () => `from=${S.from}&to=${S.to}`;
+
+  // ============================================================== tooltip layer
+  // Charts put a JSON payload in data-tip; it is rendered here with textContent only.
+  // {t: title, r: [[colour, label, value]...], n: note}
+  const tipAttr = o => ` data-tip="${esc(JSON.stringify(o))}"`;
+  const tip = $('#tip');
+  let tipEl = null;
+  function showTip(el, x, y) {
+    let o; try { o = JSON.parse(el.dataset.tip); } catch (e) { return; }
+    tip.replaceChildren();
+    const add = (cls, text, parent = tip) => { const d = document.createElement('div'); d.className = cls; d.textContent = text; parent.append(d); return d; };
+    if (o.t) add('tt', o.t);
+    for (const [c, l, v] of o.r || []) {
+      const row = document.createElement('div'); row.className = 'tr';
+      const k = document.createElement('i'); k.style.background = c || 'transparent';
+      const b = document.createElement('b'); b.textContent = v;
+      const s = document.createElement('span'); s.textContent = l;
+      row.append(k, b, s); tip.append(row);
+    }
+    if (o.n) add('tn', o.n);
+    tip.hidden = false;
+    placeTip(x, y);
+    if (el.dataset.cx) {                                   // crosshair snaps to the hovered X
+      const xh = el.ownerSVGElement && el.ownerSVGElement.querySelector('.xhair');
+      if (xh) { xh.setAttribute('x1', el.dataset.cx); xh.setAttribute('x2', el.dataset.cx); xh.style.opacity = .5; }
+    }
+    el.classList.add('hot');
+  }
+  function placeTip(x, y) {
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let left = x + 16, top = y + 14;
+    if (left + w > innerWidth - 8) left = Math.max(8, x - w - 16);
+    if (top + h > innerHeight - 8) top = Math.max(8, y - h - 14);
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  }
+  function hideTip() {
+    tip.hidden = true;
+    if (tipEl) { tipEl.classList.remove('hot'); const xh = tipEl.ownerSVGElement && tipEl.ownerSVGElement.querySelector('.xhair'); if (xh) xh.style.opacity = 0; }
+    tipEl = null;
+  }
+  document.addEventListener('pointerover', e => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (el === tipEl) return;
+    hideTip();
+    if (el) { tipEl = el; showTip(el, e.clientX, e.clientY); }
+  });
+  document.addEventListener('pointermove', e => { if (tipEl && !tip.hidden) placeTip(e.clientX, e.clientY); });
+  document.addEventListener('pointerleave', hideTip);
+  document.addEventListener('focusin', e => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    hideTip();
+    if (el) { tipEl = el; const r = el.getBoundingClientRect(); showTip(el, r.right, r.top); }
+  });
+  addEventListener('scroll', hideTip, { passive: true, capture: true });
+
+  // ============================================================== SVG primitives
+  const svgWrap = (w, h, inner, label) => `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${inner}</svg>`;
+  // column with a 4px rounded data-end, square at the baseline
+  function colPath(x, y, w, h, r = 4) {
+    if (h <= 0) return '';
+    r = Math.min(r, h, w / 2);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  }
+  // polyline path that breaks across nulls
+  function linePath(pts) {
+    let d = '', pen = false;
+    for (const p of pts) { if (!p) { pen = false; continue; } d += (pen ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1); pen = true; }
+    return d;
+  }
+  // score domain, padded and snapped to tens
+  function scoreDomain(vals) {
+    vals = vals.filter(v => v != null);
+    if (!vals.length) return [0, 100];
+    let lo = Math.max(0, Math.floor((Math.min(...vals) - 4) / 10) * 10), hi = Math.min(100, Math.ceil((Math.max(...vals) + 4) / 10) * 10);
+    if (hi - lo < 20) { lo = Math.max(0, lo - 10); hi = Math.min(100, hi + 10); }
+    return [lo, hi];
+  }
+  const empty = (el, msg) => { el.innerHTML = `<div class="empty">${esc(msg)}</div>`; };
+  const W = el => Math.max(280, Math.floor(el.clientWidth || el.parentElement.clientWidth || 600));
+  const isDark = () => getComputedStyle(document.documentElement).colorScheme.includes('dark');
+
+  // tiny sparkline for KPI tiles
+  function spark(vals, color) {
+    const pts = vals.map((v, i) => v == null ? null : [i, v]).filter(Boolean);
+    if (pts.length < 2) return '';
+    const ys = pts.map(p => p[1]), lo = Math.min(...ys), hi = Math.max(...ys), n = vals.length - 1 || 1;
+    const P = pts.map(([i, v]) => [2 + i / n * 60, 21 - (hi === lo ? 0.5 : (v - lo) / (hi - lo)) * 18]);
+    const last = P[P.length - 1];
+    return `<svg class="spark" viewBox="0 0 64 24" preserveAspectRatio="none" aria-hidden="true"><path d="${linePath(P)}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity=".7"/></svg>`;
+  }
+
+  // ============================================================== chart: daily trend
+  // Two panels on one shared X (mood lines above, attendance columns below) —
+  // never a dual axis. One crosshair + tooltip covers both panels.
+  function drawTrend(el, daily) {
+    if (!daily.length) return empty(el, 'No days in this range');
+    const w = W(el), L = 34, R = 34, T = 10, H1 = 160, G = 38, H2 = 80, B = 24, base = T + H1 + G + H2, H = base + B;
+    const n = daily.length, bw = (w - L - R) / n, X = i => L + bw * (i + .5);
+    const st = daily.map(d => score(d.staff_mood)), vi = daily.map(d => score(d.visitor_mood));
+    const [lo, hi] = scoreDomain([...st, ...vi]);
+    const Y = v => T + H1 - (v - lo) / (hi - lo) * H1;
+    let g = '';
+    const step = hi - lo > 40 ? 20 : 10;
+    for (let v = lo; v <= hi; v += step)
+      g += `<line class="${v === 50 ? 'base' : 'grid'}" x1="${L}" x2="${w - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+    if (lo < 50 && hi > 50 && (50 - lo) % step) g += `<line class="base" x1="${L}" x2="${w - R}" y1="${Y(50)}" y2="${Y(50)}"/>`;
+    if (lo <= 50 && hi >= 50) g += `<text class="ax" x="${w - R + 4}" y="${Y(50) + 4}">calm</text>`;
+    // attendance columns: on-time/other in slate, late stacked on top in amber with a 2px surface gap
+    const maxP = Math.max(1, ...daily.map(d => d.present)), Yb = v => v / maxP * H2, cw = Math.min(24, Math.max(2, bw * .62));
+    g += `<text class="pl" x="${L}" y="${T + H1 + G - 12}">Staff present</text>`;
+    g += `<line class="grid" x1="${L}" x2="${w - R}" y1="${base - H2}" y2="${base - H2}"/><text class="ax" x="${L - 6}" y="${base - H2 + 4}" text-anchor="end">${maxP}</text>`;
+    daily.forEach((d, i) => {
+      const x = X(i) - cw / 2, hp = Yb(d.present), hl = Yb(d.late);
+      if (hl > 0 && hp - hl > 3) {
+        g += `<rect x="${x}" y="${base - (hp - hl) + 1}" width="${cw}" height="${hp - hl - 1}" fill="var(--bar)"/>`;
+        g += `<path d="${colPath(x, base - hp, cw, hl - 1)}" fill="var(--warn)"/>`;
+      } else g += `<path d="${colPath(x, base - hp, cw, hp)}" fill="${hl > 0 ? 'var(--warn)' : 'var(--bar)'}"/>`;
+    });
+    g += `<line class="base" x1="${L}" x2="${w - R}" y1="${base}" y2="${base}"/>`;
+    // mood lines
+    for (const [vals, c] of [[vi, 'var(--s2)'], [st, 'var(--s1)']]) {
+      const pts = vals.map((v, i) => v == null ? null : [X(i), Y(v)]);
+      g += `<path class="ln" d="${linePath(pts)}" stroke="${c}"/>`;
+      pts.forEach((p, i) => { if (p && (n <= 14 || i === pts.length - 1 || !pts[i + 1] && !pts[i - 1])) g += `<circle class="dot" cx="${p[0]}" cy="${p[1]}" r="4" fill="${c}"/>`; });
+    }
+    // x ticks
+    const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor((w - L - R) / 62))));
+    for (let i = 0; i < n; i += every) g += `<text class="ax" x="${X(i)}" y="${base + 16}" text-anchor="middle">${fmtDay(daily[i].day)}</text>`;
+    g += `<line class="xhair" x1="0" x2="0" y1="${T}" y2="${base}"/>`;
+    daily.forEach((d, i) => {
+      g += `<rect class="hit" x="${L + bw * i}" y="${T}" width="${bw}" height="${base - T}" data-cx="${X(i)}"${tipAttr({
+        t: fmtDayLong(d.day),
+        r: [['var(--s1)', 'Staff mood', st[i] ?? '—'], ['var(--s2)', 'Visitor mood', vi[i] ?? '—'], ['var(--bar)', 'Staff present', d.present],
+            ['var(--warn)', 'Late', d.late], ['', 'Avg hours', d.avg_hours == null ? '—' : hrs(d.avg_hours)], ['', 'Conversations', d.interactions]]
+      })}/>`;
+    });
+    el.innerHTML = svgWrap(w, H, g, 'Daily staff and visitor mood score with staff present per day');
+  }
+
+  // ============================================================== chart: mood by hour
+  function drawHour(el, rows) {
+    if (!rows.length) return empty(el, 'No mood readings in this range');
+    const w = W(el), L = 34, R = 16, T = 26, H1 = 200, B = 24, H = T + H1 + B;
+    const h0 = rows[0].hour, h1 = rows[rows.length - 1].hour, span = Math.max(1, h1 - h0);
+    const X = h => L + (h - h0) / span * (w - L - R);
+    const st = rows.map(r => score(r.staff)), vi = rows.map(r => score(r.visitor));
+    const [lo, hi] = scoreDomain([...st, ...vi]);
+    const Y = v => T + H1 - (v - lo) / (hi - lo) * H1;
+    let g = '';
+    const step = hi - lo > 40 ? 20 : 10;
+    for (let v = lo; v <= hi; v += step) g += `<line class="${v === 50 ? 'base' : 'grid'}" x1="${L}" x2="${w - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+    // highlight the afternoon band so the dip reads at a glance
+    if (h1 >= 12 && h0 <= 18) {
+      const a = X(Math.max(12, h0)), b = X(Math.min(18, h1));
+      g += `<rect x="${a}" y="${T}" width="${Math.max(0, b - a)}" height="${H1}" fill="var(--hover)"/><text class="ax" x="${(a + b) / 2}" y="${T - 10}" text-anchor="middle">afternoon</text>`;
+    }
+    for (const [vals, c] of [[vi, 'var(--s2)'], [st, 'var(--s1)']]) {
+      const pts = vals.map((v, i) => v == null ? null : [X(rows[i].hour), Y(v)]);
+      g += `<path class="ln" d="${linePath(pts)}" stroke="${c}"/>`;
+      pts.forEach(p => { if (p) g += `<circle class="dot" cx="${p[0]}" cy="${p[1]}" r="4" fill="${c}"/>`; });
+    }
+    // annotate the staff afternoon low point (the one direct label this chart needs)
+    const aft = rows.map((r, i) => [r.hour, st[i]]).filter(([h, v]) => h >= 12 && h <= 18 && v != null);
+    if (aft.length) {
+      const [dh, dv] = aft.reduce((m, x) => x[1] < m[1] ? x : m);
+      const x = X(dh), y = Y(dv), anchor = x > w - 90 ? 'end' : x < L + 60 ? 'start' : 'middle';
+      g += `<text class="lab" x="${x}" y="${Math.min(T + H1 - 4, y + 22)}" text-anchor="${anchor}">Staff low · ${hh(dh)} · ${dv}</text>`;
+    }
+    const every = span > 12 ? 3 : span > 6 ? 2 : 1;
+    for (let h = h0; h <= h1; h++) if ((h - h0) % every === 0) g += `<text class="ax" x="${X(h)}" y="${T + H1 + 16}" text-anchor="middle">${hh(h)}</text>`;
+    g += `<line class="base" x1="${L}" x2="${w - R}" y1="${T + H1}" y2="${T + H1}"/>`;
+    g += `<line class="xhair" x1="0" x2="0" y1="${T}" y2="${T + H1}"/>`;
+    const cw = (w - L - R) / span;
+    rows.forEach((r, i) => {
+      g += `<rect class="hit" x="${X(r.hour) - cw / 2}" y="${T}" width="${cw}" height="${H1}" data-cx="${X(r.hour)}"${tipAttr({
+        t: `${hh(r.hour)}–${hh((r.hour + 1) % 24)}`, r: [['var(--s1)', 'Staff mood', st[i] ?? '—'], ['var(--s2)', 'Visitor mood', vi[i] ?? '—']], n: `${fmt(r.n)} sightings`
+      })}/>`;
+    });
+    el.innerHTML = svgWrap(w, H, g, 'Mood score by hour of day for staff and visitors');
+  }
+
+  // ============================================================== chart: arrivals heatmap
+  const RAMP = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#6da7ec', '#5598e7', '#3987e5', '#2a78d6', '#256abf', '#1c5cab', '#184f95', '#104281', '#0d366b'];
+  function heatColor(v, max) {
+    if (!v) return 'var(--cell0)';
+    const ramp = isDark() ? [...RAMP].reverse() : RAMP;                 // low values recede toward the surface in both themes
+    return ramp[Math.min(ramp.length - 1, Math.floor(Math.sqrt(v / max) * (ramp.length - 1) + .0001))];
+  }
+  function drawHeat(el, heat) {
+    const max = Math.max(0, ...heat.flat());
+    if (!max) return empty(el, 'No clock-ins in this range');
+    const w = W(el), L = 34, T = 4, B = 22, cw = (w - L) / 24, ch = Math.max(16, Math.min(28, cw * 1.1)), H = T + ch * 7 + B;
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    let g = '';
+    heat.forEach((row, d) => {
+      g += `<text class="ax" x="${L - 6}" y="${T + d * ch + ch / 2 + 4}" text-anchor="end">${days[d]}</text>`;
+      row.forEach((v, h) => {
+        g += `<rect class="cell" x="${L + h * cw + 1}" y="${T + d * ch + 1}" width="${Math.max(1, cw - 2)}" height="${ch - 2}" rx="3" fill="${heatColor(v, max)}"${tipAttr({ t: `${days[d]} ${hh(h)}–${hh((h + 1) % 24)}`, r: [['var(--s1)', 'clock-ins', v]] })}/>`;
+      });
+    });
+    for (let h = 0; h < 24; h += cw < 22 ? 3 : 2) g += `<text class="ax" x="${L + h * cw + cw / 2}" y="${T + ch * 7 + 15}" text-anchor="middle">${String(h).padStart(2, '0')}</text>`;
+    const steps = [0.06, 0.2, 0.4, 0.7, 1].map(f => heatColor(Math.max(1, f * max), max));
+    el.innerHTML = svgWrap(w, H, g, 'Clock-ins by weekday and hour') +
+      `<div class="heatleg">Fewer ${steps.map(c => `<i style="background:${c}"></i>`).join('')} More <span style="margin-left:auto">peak ${fmt(max)} clock-ins</span></div>`;
+  }
+
+  // ============================================================== chart: by weekday
+  // Two dot panels (on-time %, mood score); dots rather than bars because the
+  // useful range is narrow and a bar must start at zero.
+  function drawWeek(el, rows) {
+    if (!rows.some(r => r.on_time_pct != null || r.mood != null)) return empty(el, 'Not enough days for a weekday view');
+    const w = W(el), two = w >= 540, pw = two ? (w - 28) / 2 : w, ph = 170;
+    const panels = [
+      { name: 'On-time %', vals: rows.map(r => r.on_time_pct), color: () => 'var(--s1)', f: v => `${fmt(v, v % 1 ? 1 : 0)}%`, cap: 100 },
+      { name: 'Staff mood score', vals: rows.map(r => score(r.mood)), color: v => scoreColor(v), f: v => String(v), cap: 100 }
+    ];
+    let g = '';
+    panels.forEach((p, k) => {
+      const ox = two ? k * (pw + 28) : 0, oy = two ? 0 : k * (ph + 14), L = 30, R = 8, T = 34, H1 = ph - T - 22;
+      const vs = p.vals.filter(v => v != null);
+      if (!vs.length) return;
+      let lo = Math.floor((Math.min(...vs) - 2) / 5) * 5, hi = Math.min(p.cap, Math.ceil((Math.max(...vs) + 2) / 5) * 5);
+      if (hi - lo < 10) lo = hi - 10;
+      const X = i => ox + L + (i + .5) * (pw - L - R) / 7, Y = v => oy + T + H1 - (v - lo) / (hi - lo) * H1;
+      g += `<text class="pl" x="${ox}" y="${oy + 14}">${esc(p.name)}</text>`;
+      for (const v of [lo, (lo + hi) / 2, hi]) g += `<line class="grid" x1="${ox + L}" x2="${ox + pw - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${ox + L - 6}" y="${Y(v) + 4}" text-anchor="end">${fmt(v)}</text>`;
+      const pts = p.vals.map((v, i) => v == null ? null : [X(i), Y(v)]);
+      g += `<path class="ln" d="${linePath(pts)}" stroke="var(--axis)" stroke-width="1.5"/>`;
+      const mx = Math.max(...vs), mn = Math.min(...vs);
+      p.vals.forEach((v, i) => {
+        g += `<text class="ax" x="${X(i)}" y="${oy + T + H1 + 16}" text-anchor="middle">${rows[i].weekday[0]}${rows[i].weekday.slice(1, 2)}</text>`;
+        if (v == null) return;
+        g += `<circle class="dot" cx="${X(i)}" cy="${Y(v)}" r="5.5" fill="${p.color(v)}"/>`;
+        if ((v === mx || v === mn) && mx !== mn) g += `<text class="lab" x="${X(i)}" y="${v === mx ? Y(v) - 11 : Y(v) + 20}" text-anchor="middle">${p.f(v)}</text>`;
+        // hit target bigger than the mark: an invisible 28px disc
+        g += `<circle cx="${X(i)}" cy="${Y(v)}" r="14" fill="transparent"${tipAttr({ t: WFULL[rows[i].weekday] || rows[i].weekday, r: [[p.color(v), p.name, p.f(v)]] })}/>`;
+      });
+    });
+    const H = two ? ph : ph * 2 + 14;
+    el.innerHTML = svgWrap(w, H, g, 'On-time percentage and staff mood score by weekday');
+  }
+
+  // ============================================================== chart: mood mix (HTML stacked bars)
+  const moodOrder = () => Object.keys(meta).sort((a, b) => meta[b].valence - meta[a].valence);
+  function mixBars(groups) {
+    const order = moodOrder();
+    const rows = groups.filter(g => sum(Object.values(g.mix || {})) > 0);
+    if (!rows.length) return '<div class="empty">No mood readings (or mood tracking is off)</div>';
+    const totals = {};
+    let html = rows.map(g => {
+      const tot = sum(Object.values(g.mix));
+      const pos = pctOf(sum(order.filter(m => meta[m].valence > 0).map(m => g.mix[m])), tot);
+      order.forEach(m => totals[m] = (totals[m] || 0) + (g.mix[m] || 0));
+      return `<div class="mixrow"><div class="h"><span><b>${esc(g.name)}</b> <span class="muted">· ${fmt(tot)} sightings</span></span><span class="muted">${pos}% positive</span></div>
+        <div class="stack">${order.filter(m => g.mix[m]).map(m => `<span style="flex:${g.mix[m]} 1 0;background:${moodColor(meta[m].valence)}"${tipAttr({ t: `${meta[m].emoji} ${meta[m].word}`, r: [[moodColor(meta[m].valence), g.name, `${pctOf(g.mix[m], tot)}%`]], n: `${fmt(g.mix[m])} of ${fmt(tot)} sightings` })}></span>`).join('')}</div></div>`;
+    }).join('');
+    const all = sum(Object.values(totals));
+    html += `<div class="mleg">${order.filter(m => totals[m]).map(m => `<span><i style="background:${moodColor(meta[m].valence)}"></i>${meta[m].emoji} ${esc(meta[m].word)}<em>${pctOf(totals[m], all)}%</em></span>`).join('')}</div>`;
+    return html;
+  }
+
+  // ============================================================== HTML horizontal bars
+  function hbars(items, color = 'var(--s1)') {
+    if (!items.length) return '<div class="empty">No conversations in this range</div>';
+    const max = Math.max(...items.map(i => i.value)), tot = sum(items.map(i => i.value));
+    return items.map(i => `<div class="hb"${tipAttr({ t: i.label, r: [[color, 'conversations', fmt(i.value)]], n: `${pctOf(i.value, tot)}% of total` })}>
+      <span class="n">${esc(i.label)}${i.sub ? `<small>${esc(i.sub)}</small>` : ''}</span>
+      <span class="t"><i style="width:${Math.max(1, 100 * i.value / max)}%;background:${color}"></i></span>
+      <span class="v">${fmt(i.value)}</span></div>`).join('');
+  }
+  const prettyIntent = s => String(s || '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+
+  // ============================================================== overview render
+  function renderScope() {
+    const d = S.data;
+    const range = S.from === S.to ? fmtDayLong(S.from) : `${fmtDay(S.from)} – ${fmtDay(S.to)} ${S.to.slice(0, 4)}`;
+    $('#scope').textContent = `${S.kiosk || 'All locations'} · ${range}`;
+    $('#nPeople').textContent = d ? d.people.length : 0;
+    $('#nTalk').textContent = d ? fmt(d.kpis.conversations) : 0;
+  }
+
+  function renderSummary(d) {
+    const k = d.kpis, out = [];
+    const up = (x, big, small, noun = '') => x >= big ? 'up sharply' : x >= small ? 'up' : x <= -big ? 'down sharply' : x <= -small ? 'down' : 'steady';
+    // 1. punctuality
+    if (k.on_time_pct != null) {
+      let s = `On-time arrival is <b>${fmt(k.on_time_pct, 1)}%</b>`;
+      if (k.on_time_prev != null) { const dd = k.on_time_pct - k.on_time_prev; s += ` (${dd >= 0 ? '+' : '−'}${fmt(Math.abs(dd), 1)} pts vs the previous period)`; }
+      s += ` across ${fmt(k.shifts)} shifts; staff clock in at <b>${esc(k.avg_arrival)}</b> on average and work <b>${hrs(k.avg_hours)}</b>.`;
+      out.push(['⏱', s]);
+    }
+    // 2. staff mood + weakest weekday
+    const sm = score(k.staff_mood), sp = score(k.staff_mood_prev);
+    if (sm != null) {
+      let s = `Staff mood score is <b>${sm}</b>`;
+      s += sp != null ? `, ${up(sm - sp, 8, 3)} vs the previous period (${sp}).` : '.';
+      const wk = d.by_weekday.filter(r => r.mood != null);
+      if (wk.length >= 5) {
+        const worst = wk.reduce((a, b) => b.mood < a.mood ? b : a), best = wk.reduce((a, b) => b.mood > a.mood ? b : a);
+        if (score(best.mood) - score(worst.mood) >= 5) s += ` ${WFULL[worst.weekday]} are the weakest day (${score(worst.mood)} vs ${score(best.mood)} on ${WFULL[best.weekday]}).`;
+      }
+      out.push(['🙂', s]);
+    }
+    // 3. people who need a check-in / are often late
+    const high = [...new Set(d.alerts.filter(a => a.severity === 'high').map(a => a.person))];
+    const late = d.alerts.filter(a => a.type === 'late').map(a => a.person);
+    const drop = d.alerts.filter(a => a.type === 'mood_drop' && !high.includes(a.person)).map(a => a.person);
+    const names = xs => xs.length <= 2 ? xs.map(n => `<b>${esc(n)}</b>`).join(' and ') : `<b>${esc(xs[0])}</b>, <b>${esc(xs[1])}</b> and ${xs.length - 2} more`;
+    if (high.length || drop.length || late.length) {
+      const parts = [];
+      if (high.length) parts.push(`${names(high)} may need a friendly check-in`);
+      if (drop.length) parts.push(`${names(drop)} ${drop.length > 1 ? 'have' : 'has'} dipped this week`);
+      if (late.length) parts.push(`${names(late)} ${late.length > 1 ? 'have' : 'has'} been late on most recent shifts`);
+      out.push(['⚑', parts.join('; ').replace(/^./, c => c.toUpperCase()) + '.']);
+    }
+    // 4. locations: lowest visitor mood
+    const locs = d.locations.filter(l => l.visitor_mood != null);
+    const vh = d.mood_by_hour.filter(r => r.visitor != null);
+    if (locs.length >= 2) {
+      const lo = locs.reduce((a, b) => b.visitor_mood < a.visitor_mood ? b : a), hi = locs.reduce((a, b) => b.visitor_mood > a.visitor_mood ? b : a);
+      let s = `<b>${esc(lo.kiosk)}</b> has the lowest visitor mood (${score(lo.visitor_mood)} vs ${score(hi.visitor_mood)} at ${esc(hi.kiosk)})`;
+      if (vh.length >= 3) { const m = vh.reduce((a, b) => b.visitor < a.visitor ? b : a); s += ` — consider more seating or staff there, especially around <b>${hh(m.hour)}</b> when visitor mood is lowest`; }
+      out.push(['📍', s + '.']);
+    } else if (k.visitor_mood != null) {
+      let s = `Visitor mood score is <b>${score(k.visitor_mood)}</b> across ${fmt(k.visitors)} sightings`;
+      if (vh.length >= 3) { const m = vh.reduce((a, b) => b.visitor < a.visitor ? b : a); s += `, lowest around <b>${hh(m.hour)}</b> (${score(m.visitor)})`; }
+      out.push(['📍', s + '.']);
+    }
+    // 5. afternoon dip
+    const sh = d.mood_by_hour.filter(r => r.staff != null);
+    const morn = avg(sh.filter(r => r.hour >= 6 && r.hour < 12).map(r => r.staff)), aft = sh.filter(r => r.hour >= 12 && r.hour <= 18);
+    if (morn != null && aft.length) {
+      const m = aft.reduce((a, b) => b.staff < a.staff ? b : a);
+      if (score(morn) - score(m.staff) >= 4) out.push(['☕', `Staff mood dips in the afternoon, bottoming out around <b>${hh(m.hour)}</b> (${score(m.staff)} vs ${score(morn)} in the morning) — a good slot for staggered breaks.`]);
+    }
+    // 6. conversations
+    if (k.conversations) {
+      const top = Object.entries(d.intents)[0];
+      out.push(['💬', `Aura held <b>${fmt(k.conversations)}</b> conversations in <b>${k.languages}</b> language${k.languages === 1 ? '' : 's'}${top ? `; the top request was <b>${esc(prettyIntent(top[0]).toLowerCase())}</b> (${pctOf(top[1], k.conversations)}%)` : ''}.`]);
+    }
+    const kudos = d.alerts.filter(a => a.severity === 'positive').length;
+    if (kudos && out.length < 5) out.push(['★', `<b>${kudos}</b> ${kudos === 1 ? 'person is' : 'people are'} on a 10+ shift on-time streak — worth a shout-out.`]);
+    $('#summary').innerHTML = out.length ? out.slice(0, 5).map(([i, s]) => `<li><span class="ic" aria-hidden="true">${i}</span><span>${s}</span></li>`).join('')
+      : '<li><span></span><span class="muted">Not enough data in this range to summarise yet.</span></li>';
+    $('#sumSub').textContent = `${S.kiosk || 'All locations'} · ${fmtDay(S.from)} – ${fmtDay(S.to)} · vs the ${(new Date(S.to) - new Date(S.from)) / 864e5 + 1}-day period before`;
+  }
+
+  function renderAttention(d) {
+    const el = $('#attention');
+    const sevLabel = { high: 'High', medium: 'Medium', low: 'Low', positive: 'Kudos' };
+    const main = d.alerts.filter(a => a.severity !== 'positive');
+    const kudos = d.alerts.filter(a => a.severity === 'positive');
+    let html = main.map(a => `<button class="alert" data-person="${esc(a.person)}"><span class="sev ${esc(a.severity)}">${sevLabel[a.severity] || esc(a.severity)}</span><span class="txt">${esc(a.text)}</span><span class="go" aria-hidden="true">›</span></button>`).join('');
+    if (kudos.length) {
+      html += `<div class="kudos"><span class="sev positive">Kudos</span><div class="txt">${kudos.length} on-time streak${kudos.length > 1 ? 's' : ''} of 10+ shifts — worth a shout-out.</div>
+        <div class="chips">${kudos.map(a => { const m = /(\d+)-shift/.exec(a.text); return `<button class="chip" data-person="${esc(a.person)}">${esc(a.person)}${m ? ` · 🔥${m[1]}` : ''}</button>`; }).join('')}</div></div>`;
+    }
+    el.innerHTML = html || '<div class="empty">All clear — nothing needs attention in this range.</div>';
+  }
+
+  function renderKpis(d) {
+    const k = d.kpis, daily = d.daily;
+    const delta = (x, unit, dp = 1) => {
+      if (x == null || isNaN(x)) return '';
+      const r = Number(x.toFixed(dp)), cls = r > 0 ? 'up' : r < 0 ? 'down' : 'flat', ar = r > 0 ? '▲' : r < 0 ? '▼' : '■';
+      return `<span class="delta ${cls}">${ar} ${r > 0 ? '+' : r < 0 ? '−' : ''}${fmt(Math.abs(r), dp)}${unit}</span><span>vs prev.</span>`;
+    };
+    const sm = score(k.staff_mood), vm = score(k.visitor_mood), sp = score(k.staff_mood_prev);
+    const gauge = s => s == null ? '' : `<div class="gauge"><i style="width:${s}%;background:${scoreColor(s)}"></i></div>`;
+    const tiles = [
+      { l: 'On-time', v: k.on_time_pct == null ? '—' : `${fmt(k.on_time_pct, 1)}<small>%</small>`, d: k.on_time_prev != null && k.on_time_pct != null ? delta(k.on_time_pct - k.on_time_prev, ' pts') : `<span>${fmt(k.shifts)} shifts</span>`,
+        sp: spark(daily.map(x => x.present ? 100 * x.on_time / x.present : null), 'var(--s1)') },
+      { l: 'Avg arrival', v: esc(k.avg_arrival || '—'), d: `<span>${fmt(k.staff_seen)} staff seen</span>` },
+      { l: 'Avg hours / shift', v: hrs(k.avg_hours), d: `<span>${fmt(k.shifts)} shifts</span>`, sp: spark(daily.map(x => x.avg_hours), 'var(--s1)') },
+      { l: 'Avg break', v: mins(k.avg_break), d: '<span>per shift with a break</span>' },
+      { l: 'Staff mood', v: sm ?? '—', d: sm != null && sp != null ? delta(sm - sp, '', 0) : '<span>score 0–100</span>', extra: gauge(sm), sp: spark(daily.map(x => score(x.staff_mood)), 'var(--s1)') },
+      { l: 'Visitor mood', v: vm ?? '—', d: `<span>${fmt(k.visitors)} visitor sightings</span>`, extra: gauge(vm), sp: spark(daily.map(x => score(x.visitor_mood)), 'var(--s2)') },
+      { l: 'Conversations', v: fmt(k.conversations), d: k.sentiment != null ? `<span>sentiment ${Math.round(k.sentiment * 100)}/100</span>` : '', sp: spark(daily.map(x => x.interactions), 'var(--s1)') },
+      { l: 'Languages', v: fmt(k.languages), d: `<span>${esc(Object.keys(d.languages).slice(0, 3).map(langName).join(', '))}</span>` },
+      { l: 'Open alerts', v: fmt(k.alerts), d: k.alerts ? '<span class="delta down">● needs review</span>' : '<span class="delta up">● all clear</span>', cls: k.alerts ? 'alert-on' : '' }
+    ];
+    $('#kpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${t.l}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d || ''}</div>${t.sp || ''}</div>`).join('');
+  }
+
+  function renderDepts(d) {
+    const el = $('#cDept');
+    if (!d.departments.length) return empty(el, 'No departments yet');
+    el.innerHTML = `<table><thead><tr><th>Department</th><th class="r">People</th><th>On-time</th><th>Mood</th><th class="r">Hours</th></tr></thead><tbody>${
+      d.departments.map(r => {
+        const s = score(r.mood);
+        return `<tr><td><b style="font-weight:600">${esc(r.department)}</b></td><td class="r">${r.people}</td>
+          <td><div class="inbar"${tipAttr({ t: r.department, r: [['var(--s1)', 'on-time', `${fmt(r.on_time_pct, 1)}%`]] })}><span class="t"><i style="width:${r.on_time_pct || 0}%;background:var(--s1)"></i></span>${fmt(r.on_time_pct, 0)}%</div></td>
+          <td>${moodCell(r.mood, true)}</td><td class="r">${hrs(r.avg_hours)}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  }
+
+  function renderLocations(d) {
+    const el = $('#cLocs');
+    if (!d.locations.length) return empty(el, 'No kiosk activity in this range');
+    const withV = d.locations.filter(l => l.visitor_mood != null);
+    const worst = withV.length > 1 ? withV.reduce((a, b) => b.visitor_mood < a.visitor_mood ? b : a).kiosk : null;
+    const zones = {};
+    (S.kiosks || []).forEach(k => zones[k.name] = k.zone);
+    const mm = (label, v) => { const s = score(v); return `<div><span>${label}</span><span class="t"><i style="width:${s ?? 0}%;background:${scoreColor(s)}"></i></span><b>${s ?? '—'}</b></div>`; };
+    el.innerHTML = d.locations.map(l => `<div class="loc">
+      <h3>${esc(l.kiosk)}</h3><div class="z">${esc(zones[l.kiosk] || 'Kiosk')}${l.kiosk === worst ? ' <span class="pill amber" style="margin-left:4px">▼ Lowest visitor mood</span>' : ''}</div>
+      <dl><div><dt>Sightings</dt><dd>${fmt(l.sightings)}</dd></div><div><dt>Visitors</dt><dd>${fmt(l.visitors)}</dd></div><div><dt>Chats</dt><dd>${fmt(l.interactions)}</dd></div></dl>
+      <div class="mm">${mm('Staff', l.staff_mood)}${mm('Visitors', l.visitor_mood)}</div></div>`).join('');
+  }
+
+  function renderConvCharts(d) {
+    $('#cIntents').innerHTML = hbars(Object.entries(d.intents).slice(0, 10).map(([k, v]) => ({ label: prettyIntent(k), value: v })));
+    $('#cLangs').innerHTML = hbars(Object.entries(d.languages).slice(0, 10).map(([k, v]) => ({ label: langName(k), sub: k, value: v })), 'var(--s7)');
+    const eng = Object.entries(d.engines).filter(([, v]) => v).sort((a, b) => b[1] - a[1]);
+    const EC = { claude: ['Claude (LLM)', 'var(--s7)'], templates: ['Templates', 'var(--s3)'], jev: ['Jev', 'var(--s1)'] };
+    const tot = sum(eng.map(e => e[1]));
+    $('#cEngines').innerHTML = !tot ? '<div class="empty">No conversations in this range</div> ' :
+      `<div class="stack" style="height:26px">${eng.map(([k, v]) => `<span style="flex:${v} 1 0;background:${(EC[k] || [])[1] || 'var(--axis)'}"${tipAttr({ t: (EC[k] || [k || 'Other'])[0], r: [[(EC[k] || [])[1] || 'var(--axis)', 'replies', `${pctOf(v, tot)}%`]], n: `${fmt(v)} of ${fmt(tot)}` })}></span>`).join('')}</div>
+       <div class="mleg" style="grid-template-columns:1fr;margin-top:12px">${eng.map(([k, v]) => `<span><i style="background:${(EC[k] || [])[1] || 'var(--axis)'}"></i>${esc((EC[k] || [k || 'Other'])[0])}<em>${pctOf(v, tot)}% · ${fmt(v)}</em></span>`).join('')}</div>
+       <p class="muted" style="font-size:12.5px;margin:14px 0 0">Average sentiment of what people said: <b style="color:var(--ink)">${d.kpis.sentiment == null ? '—' : Math.round(d.kpis.sentiment * 100)}</b>/100</p>`;
+  }
+
+  function renderCharts() {
+    const d = S.data;
+    if (!d || S.tab !== 'overview') return;
+    drawTrend($('#cTrend'), d.daily);
+    drawHour($('#cHour'), d.mood_by_hour);
+    drawHeat($('#cHeat'), d.arrivals_heat);
+    drawWeek($('#cWeek'), d.by_weekday);
+  }
+
+  function renderAll() {
+    const d = S.data;
+    meta = d.moods_meta || {};
+    renderScope();
+    renderSummary(d);
+    renderAttention(d);
+    renderKpis(d);
+    $('#cMix').innerHTML = mixBars([{ name: 'Staff', mix: d.mood_mix.staff }, { name: 'Visitors', mix: d.mood_mix.visitor }]);
+    renderDepts(d);
+    renderLocations(d);
+    renderConvCharts(d);
+    renderCharts();
+    renderPeople();
+    fillTalkFilters(d);
+    if (S.tab === 'talk') loadTalk();
+  }
+
+  // ============================================================== people table
+  function moodCell(v, compact) {
+    const s = score(v);
+    if (s == null) return '<span class="muted">—</span>';
+    return `<span class="mood"${tipAttr({ t: 'Mood score', r: [[scoreColor(s), 'of 100', s]] })}><span class="mb"><i style="width:${s}%;background:${scoreColor(s)}"></i></span><b>${s}</b></span>`;
+  }
+  const trendArrow = t => t == null ? '' : t >= 0.05 ? `<span class="tr-up" title="Up vs the week before">▲</span>` : t <= -0.05 ? `<span class="tr-down" title="Down vs the week before">▼</span>` : `<span class="tr-flat" title="Steady">■</span>`;
+  const PCOLS = [
+    { k: 'name', t: 'Person' }, { k: 'department', t: 'Department' }, { k: 'days', t: 'Days', r: 1 }, { k: 'on_time_pct', t: 'On-time', r: 1 },
+    { k: 'avg_in', t: 'Avg in' }, { k: 'avg_out', t: 'Avg out' }, { k: 'avg_hours', t: 'Hours', r: 1 }, { k: 'avg_break', t: 'Break', r: 1 },
+    { k: 'mood', t: 'Mood' }, { k: 'dominant_mood', t: 'Usual' }, { k: 'streak', t: 'Streak', r: 1 }, { k: 'interactions', t: 'Chats', r: 1 }, { k: 'flags', t: 'Flags' }
+  ];
+  function sortVal(p, k) {
+    if (k === 'mood') return p.consent ? p.mood : null;
+    if (k === 'dominant_mood') return p.consent && p.dominant_mood && meta[p.dominant_mood] ? meta[p.dominant_mood].valence : null;
+    if (k === 'flags') return p.flags.filter(f => f !== 'star').length * 10 + p.flags.length || null;
+    const v = p[k];
+    return typeof v === 'string' ? v.toLowerCase() : v;
+  }
+  function renderPeople() {
+    const d = S.data; if (!d) return;
+    const q = $('#pq').value.trim().toLowerCase();
+    const { k, dir } = S.sort;
+    const rows = d.people.filter(p => !q || [p.name, p.department, p.role].some(x => (x || '').toLowerCase().includes(q)))
+      .sort((a, b) => { const x = sortVal(a, k), y = sortVal(b, k); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+    $('#ptable thead').innerHTML = `<tr>${PCOLS.map(c => `<th class="sortable ${c.r ? 'r' : ''}" data-k="${c.k}" aria-sort="${k === c.k ? (dir > 0 ? 'ascending' : 'descending') : 'none'}">${c.t}${k === c.k ? `<span class="ar">${dir > 0 ? '↑' : '↓'}</span>` : ''}</th>`).join('')}</tr>`;
+    $('#ptable tbody').innerHTML = rows.length ? rows.map(p => {
+      const out = !p.consent;
+      const dm = p.dominant_mood && meta[p.dominant_mood];
+      return `<tr class="click" data-person="${esc(p.name)}" tabindex="0">
+        <td><div class="who"><span class="av">${esc(initials(p.name))}</span><div><b>${esc(p.name)}</b><small>${esc(p.role || '')}</small></div></div></td>
+        <td>${esc(p.department || '—')}</td><td class="r">${p.days}</td>
+        <td class="r">${p.on_time_pct == null ? '—' : `${fmt(p.on_time_pct, 0)}%`}</td>
+        <td>${esc(p.avg_in || '—')}</td><td>${esc(p.avg_out || '—')}</td>
+        <td class="r">${hrs(p.avg_hours)}</td><td class="r">${mins(p.avg_break)}</td>
+        <td>${out ? '<span class="pill out">opted out</span>' : `${moodCell(p.mood)} ${trendArrow(p.mood_trend)}`}</td>
+        <td>${out ? '' : dm ? `<span title="${esc(dm.word)}">${dm.emoji}</span>` : ''}</td>
+        <td class="r">${p.streak ? `${p.streak} 🔥` : '<span class="muted">0</span>'}</td>
+        <td class="r">${p.interactions}</td>
+        <td>${p.flags.map(f => `<span class="pill ${(FLAG[f] || [])[1] || ''}">${esc((FLAG[f] || [f])[0])}</span>`).join('')}</td></tr>`;
+    }).join('') : `<tr><td colspan="${PCOLS.length}" class="empty">No one matches “${esc(q)}”</td></tr>`;
+  }
+  $('#ptable').addEventListener('click', e => {
+    const th = e.target.closest('th[data-k]');
+    if (th) { const k = th.dataset.k; S.sort = { k, dir: S.sort.k === k ? -S.sort.dir : (['name', 'department', 'avg_in', 'avg_out'].includes(k) ? 1 : -1) }; return renderPeople(); }
+    const tr = e.target.closest('tr[data-person]');
+    if (tr) openPerson(tr.dataset.person);
+  });
+  $('#ptable').addEventListener('keydown', e => { const tr = e.target.closest('tr[data-person]'); if (tr && e.key === 'Enter') openPerson(tr.dataset.person); });
+  $('#pq').addEventListener('input', renderPeople);
+
+  // ============================================================== conversation bubbles (explorer + drawer)
+  function sentiment(s) {
+    if (s == null) return '';
+    const v = Math.round(s * 100);
+    return `<span class="sent" title="Sentiment ${v}/100">sentiment <i><b style="width:${v}%;background:${moodColor(s * 2 - 1)}"></b></i>${v}</span>`;
+  }
+  function convItem(r, showWho = true) {
+    const who = r.person ? (showWho ? `<button class="p" data-person="${esc(r.person)}">${esc(r.person)}</button>` : '') : (showWho ? '<span class="p">Visitor</span>' : '');
+    return `<div class="conv"><div class="m">${who}
+      <span class="tag ${esc(r.kind)}">${esc(r.kind)}</span>
+      <span title="${esc(r.channel)}">${CHANICON[r.channel] || '•'} ${esc(r.channel)}</span>
+      <span>${esc(fmtDay(r.day))} ${esc((r.ts || '').slice(11, 16))}</span>
+      <span>📍 ${esc(r.kiosk || '—')}</span>
+      ${r.lang ? `<span class="tag" title="${esc(langName(r.lang))}">${esc(r.lang.toUpperCase())}</span>` : ''}
+      ${r.intent ? `<span class="tag">${esc(prettyIntent(r.intent))}</span>` : ''}
+      ${sentiment(r.sentiment)}
+      ${r.mood && meta[r.mood] ? `<span title="Face: ${esc(meta[r.mood].word)}">${meta[r.mood].emoji}</span>` : ''}</div>
+      ${r.user_text ? `<div class="bub u">${esc(r.user_text)}</div>` : ''}
+      ${r.reply ? `<div class="bub a">${esc(r.reply)}</div>` : ''}</div>`;
+  }
+
+  // ============================================================== conversations explorer
+  function fillTalkFilters(d) {
+    const keep = (sel, opts, label) => {
+      const cur = sel.value;
+      sel.innerHTML = `<option value="">${label}</option>` + opts.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('');
+      if (opts.some(([v]) => v === cur)) sel.value = cur;
+    };
+    keep($('#tlang'), Object.keys(d.languages).map(c => [c, `${langName(c)} (${d.languages[c]})`]), 'Any language');
+    keep($('#tintent'), Object.keys(d.intents).map(c => [c, `${prettyIntent(c)} (${d.intents[c]})`]), 'Any intent');
+  }
+  function talkParams() {
+    const p = new URLSearchParams({ from: S.from, to: S.to });
+    if (S.kiosk) p.set('kiosk', S.kiosk);
+    for (const [id, key] of [['tkind', 'kind'], ['tlang', 'lang'], ['tintent', 'intent']]) if ($('#' + id).value) p.set(key, $('#' + id).value);
+    const ch = $('#tchan').value;
+    if (ch && ch !== 'talk') p.set('channel', ch);
+    const q = $('#tq').value.trim();
+    if (q) p.set('q', q);
+    return p;
+  }
+  let talkSeq = 0;
+  async function loadTalk() {
+    const seq = ++talkSeq, p = talkParams(), talkOnly = $('#tchan').value === 'talk', LIMIT = 300;
+    p.set('limit', talkOnly ? 900 : LIMIT);
+    const el = $('#convs');
+    el.style.opacity = .55;
+    try {
+      let rows = (await getJSON('/api/interactions?' + p)).rows;
+      if (seq !== talkSeq) return;
+      if (talkOnly) rows = rows.filter(r => r.channel !== 'greeting');
+      const shown = rows.slice(0, LIMIT);
+      el.innerHTML = shown.length ? shown.map(r => convItem(r)).join('') : '<div class="empty">No conversations match these filters.</div>';
+      $('#tmore').textContent = rows.length > LIMIT ? `Showing the latest ${LIMIT} — narrow the filters or download the CSV for everything.` : shown.length ? `${shown.length} conversation${shown.length > 1 ? 's' : ''}` : '';
+    } catch (e) { if (e.message !== 'unauthorised') el.innerHTML = `<div class="empty">Couldn't load conversations: ${esc(e.message)}</div>`; }
+    el.style.opacity = '';
+  }
+  let tqTimer;
+  $('#tq').addEventListener('input', () => { clearTimeout(tqTimer); tqTimer = setTimeout(loadTalk, 300); });
+  ['#tkind', '#tchan', '#tlang', '#tintent'].forEach(s => $(s).addEventListener('change', loadTalk));
+  $('#convs').addEventListener('click', e => { const b = e.target.closest('[data-person]'); if (b) openPerson(b.dataset.person); });
+  // CSV is fetched with the PIN header (not in the URL) and saved as a blob
+  $('#csv').addEventListener('click', async () => {
+    const btn = $('#csv'); btn.disabled = true;
+    try {
+      const blob = await (await api('/api/interactions.csv?' + talkParams())).blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = `aura_conversations_${S.from}_${S.to}.csv`;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) { if (e.message !== 'unauthorised') alert('CSV download failed: ' + e.message); }
+    btn.disabled = false;
+  });
+
+  // ============================================================== person drill-down
+  const drawer = $('#drawer'), scrim = $('#scrim');
+  function closeDrawer() { drawer.classList.remove('on'); scrim.classList.remove('on'); drawer.setAttribute('aria-hidden', 'true'); S.person = null; hideTip(); }
+  scrim.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.person) closeDrawer(); });
+  document.addEventListener('click', e => { const b = e.target.closest('#attention [data-person]'); if (b) openPerson(b.dataset.person); });
+
+  async function openPerson(name) {
+    S.person = name;
+    const row = S.data && S.data.people.find(p => p.name === name) || {};
+    drawer.innerHTML = `<div class="dh"><span class="av">${esc(initials(name))}</span><div><h2>${esc(name)}</h2><p>Loading…</p></div><button class="btn icon x" aria-label="Close">✕</button></div><div class="db"><div class="empty">Loading timeline…</div></div>`;
+    drawer.classList.add('on'); scrim.classList.add('on'); drawer.setAttribute('aria-hidden', 'false');
+    drawer.scrollTop = 0;
+    $('.x', drawer).onclick = closeDrawer; $('.x', drawer).focus();
+    let p;
+    try { p = await getJSON(`/api/insights/person/${encodeURIComponent(name)}?${rangeQS()}`); }
+    catch (e) { if (S.person === name) $('.db', drawer).innerHTML = `<div class="empty">Couldn't load ${esc(name)}: ${esc(e.message)}</div>`; return; }
+    if (S.person !== name) return;
+    meta = p.moods_meta || meta;
+    renderPerson(p, row);
+  }
+
+  function renderPerson(p, row) {
+    const pr = p.profile || {}, consent = pr.mood_consent !== 0 && row.consent !== false;
+    const sub = [pr.role, pr.department].filter(Boolean).join(' · ') || 'No profile details';
+    const facts = [pr.shift_start && `Shift ${pr.shift_start}`, pr.joined && `Joined ${pr.joined}`, pr.language && `Speaks ${langName(pr.language)}`].filter(Boolean).join(' · ');
+    const moodDays = p.days.filter(d => d.mood != null), avgMood = score(avg(moodDays.map(d => d.mood)));
+    const worked = p.days.filter(d => d.worked_h);
+    const lateDays = p.days.filter(d => d.late_min > 0).length;
+
+    // mood calendar: Mon-first weeks covering the range
+    const byDay = Object.fromEntries(p.days.map(d => [d.day, d]));
+    const startDow = (new Date(S.from + 'T12:00:00').getDay() + 6) % 7;
+    let cal = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(x => `<div class="hd">${x}</div>`).join('') + '<div class="c off"></div>'.repeat(startDow);
+    for (let d = S.from; d <= S.to; d = addDays(d, 1)) {
+      const r = byDay[d], s = consent && r ? score(r.mood) : null;
+      const tipO = { t: fmtDayLong(d), r: r ? [[scoreColor(s), 'mood', consent ? (s ?? '—') : 'opted out'], ['', 'in / out', `${r.in || '—'} / ${r.out || '—'}`]] : [['', 'not seen', '']] };
+      if (r && r.dominant && meta[r.dominant] && consent) tipO.n = `${meta[r.dominant].emoji} mostly ${meta[r.dominant].word}`;
+      cal += `<div class="c ${s == null ? 'nd' : ''}" style="${s != null ? `background:${scoreColor(s)}` : r ? '' : 'background:transparent;border:1px dashed var(--line)'}"${tipAttr(tipO)}>${+d.slice(8)}</div>`;
+    }
+
+    const attire = Object.entries(p.attire_mix || {}).sort((a, b) => b[1] - a[1]);
+    const attTot = sum(attire.map(a => a[1]));
+    const convs = p.interactions || [];
+
+    $('.dh', drawer).innerHTML = `<span class="av">${esc(initials(pr.name || S.person))}</span><div style="min-width:0"><h2>${esc(pr.name || S.person)}</h2><p>${esc(sub)}${facts ? ' · ' + esc(facts) : ''}</p></div><button class="btn icon x" aria-label="Close">✕</button>`;
+    $('.x', drawer).onclick = closeDrawer;
+    $('.db', drawer).innerHTML = `
+      ${consent ? '' : '<div class="notice">This person has opted out of mood tracking — only attendance and conversations are shown.</div>'}
+      <div class="minis">
+        <div class="kpi"><div class="l">Days on shift</div><div class="v">${p.days.filter(d => d.in).length}</div></div>
+        <div class="kpi"><div class="l">On-time</div><div class="v">${row.on_time_pct == null ? '—' : fmt(row.on_time_pct, 0) + '<small>%</small>'}</div><div class="d">${lateDays} late day${lateDays === 1 ? '' : 's'}</div></div>
+        <div class="kpi"><div class="l">Avg worked</div><div class="v">${hrs(avg(worked.map(d => d.worked_h)))}</div></div>
+        <div class="kpi"><div class="l">Mood score</div><div class="v">${consent ? avgMood ?? '—' : '<small>opted out</small>'}</div>${consent && avgMood != null ? `<div class="gauge"><i style="width:${avgMood}%;background:${scoreColor(avgMood)}"></i></div>` : ''}<div class="d">${consent ? trendArrow(row.mood_trend) + ' vs week before' : ''}</div></div>
+        <div class="kpi"><div class="l">Streak</div><div class="v">${row.streak || 0} 🔥</div></div>
+      </div>
+      <div class="card"><div class="card-h"><div class="grow"><h2>Mood calendar</h2><p>${esc(fmtDay(S.from))} – ${esc(fmtDay(S.to))} · colour = daily mood score</p></div></div><div class="cal">${cal}</div></div>
+      ${consent ? `<div class="card"><div class="card-h"><div class="grow"><h2>Mood mix</h2></div></div>${mixBars([{ name: pr.name || S.person, mix: p.mood_mix }])}</div>` : ''}
+      <div class="card"><div class="card-h"><div class="grow"><h2>Daily log</h2></div></div><div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Worked</th><th class="r">Break</th><th class="r">Late</th><th>Mood</th><th>Attire</th></tr></thead>
+        <tbody>${p.days.length ? [...p.days].reverse().map(d => `<tr><td>${esc(fmtDayLong(d.day))}</td><td>${esc(d.in || '—')}</td><td>${esc(d.out || '—')}</td><td>${esc(d.worked || '—')}</td>
+          <td class="r">${d.break_min ? d.break_min + 'm' : '—'}</td><td class="r">${d.late_min > 0 ? `<span class="pill amber">+${d.late_min}m</span>` : '<span class="muted">—</span>'}</td>
+          <td>${consent ? `${moodCell(d.mood)} ${d.dominant && meta[d.dominant] ? meta[d.dominant].emoji : ''}` : '<span class="pill out">opted out</span>'}</td>
+          <td>${d.attire ? `<span class="sw" style="background:${ATTIRE[d.attire] || 'var(--axis)'}"></span> <span class="muted">${esc(d.attire)}</span>` : '<span class="muted">—</span>'}</td></tr>`).join('')
+          : '<tr><td colspan="8" class="empty">No attendance in this range</td></tr>'}</tbody></table></div></div>
+      ${attire.length ? `<div class="card"><div class="card-h"><div class="grow"><h2>Attire colours worn</h2><p>How often each colour was spotted</p></div></div><div class="swatches">${attire.map(([c, n]) => `<div><span class="sw" style="background:${ATTIRE[c] || 'var(--axis)'}"></span>${esc(c)} <span class="muted">${pctOf(n, attTot)}%</span></div>`).join('')}</div></div>` : ''}
+      <div class="card"><div class="card-h"><div class="grow"><h2>What Aura remembers</h2><p>Short facts Aura uses to follow up kindly</p></div></div>
+        ${p.memories.length ? `<ul class="mem">${p.memories.map(m => `<li><span>${MEMICON[m.kind] || '📝'}</span><span>${esc(m.fact)}</span><small>${esc(fmtDay((m.ts || '').slice(0, 10)))}</small></li>`).join('')}</ul>` : '<div class="muted" style="font-size:14px">Nothing remembered yet.</div>'}</div>
+      <div class="card"><div class="card-h"><div class="grow"><h2>Conversation history</h2><p>${convs.length} exchanges in this period</p></div>
+        <label class="muted no-print" style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="hideGreet" checked> Hide greetings</label></div>
+        <div id="pconvs"></div></div>`;
+    // timeline grouped by day; greetings hidden by default so real conversations stand out
+    const drawConvs = () => {
+      const hide = $('#hideGreet').checked, groups = {};
+      convs.filter(r => !hide || r.channel !== 'greeting').forEach(r => (groups[r.day] = groups[r.day] || []).push(r));
+      const days = Object.keys(groups).sort().reverse();
+      $('#pconvs').innerHTML = days.length ? days.map(day => `<div class="dayhdr">${esc(fmtDayLong(day))}</div><div class="convs">${groups[day].map(r => convItem(r, false)).join('')}</div>`).join('')
+        : '<div class="muted" style="font-size:14px">No conversations yet.</div>';
+    };
+    $('#hideGreet').onchange = drawConvs;
+    drawConvs();
+  }
+
+  // ============================================================== data loading + range
+  function setRange(preset) {
+    S.preset = preset;
+    $$('#presets button').forEach(b => b.classList.toggle('on', b.dataset.p === preset));
+    $('#custom').hidden = preset !== 'custom';
+    if (preset !== 'custom') { S.to = iso(new Date()); S.from = addDays(S.to, -Number(preset)); }
+    $('#from').value = S.from; $('#to').value = S.to;
+  }
+  async function load() {
+    $('#main').classList.add('loading');                // charts hold their last render while refetching
+    try {
+      const qs = new URLSearchParams({ from: S.from, to: S.to });
+      if (S.kiosk) qs.set('kiosk', S.kiosk);
+      S.data = await getJSON('/api/insights?' + qs);
+      $('#gate').hidden = true; $('#app').hidden = false;
+      renderAll();
+    } catch (e) {
+      if (e.message !== 'unauthorised') $('#summary').innerHTML = `<li><span>⚠</span><span>Couldn't load insights: ${esc(e.message)}</span></li>`;
+    }
+    $('#main').classList.remove('loading');
+  }
+  async function loadKiosks() {
+    try {
+      S.kiosks = (await getJSON('/api/kiosks')).kiosks || [];
+      $('#kiosk').innerHTML = '<option value="">All locations</option>' + S.kiosks.map(k => `<option value="${esc(k.name)}">${esc(k.name)}</option>`).join('');
+      $('#kiosk').value = S.kiosk;
+    } catch (e) { /* location filter just stays at "All" */ }
+  }
+
+  $('#presets').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    setRange(b.dataset.p);
+    if (b.dataset.p !== 'custom') load();
+  });
+  $('#applyRange').addEventListener('click', () => {
+    let f = $('#from').value, t = $('#to').value;
+    if (!f || !t) return;
+    if (f > t) [f, t] = [t, f];
+    S.from = f; S.to = t; load();
+  });
+  $('#kiosk').addEventListener('change', () => { S.kiosk = $('#kiosk').value; load(); });
+  $('#refresh').addEventListener('click', load);
+  $('#print').addEventListener('click', () => window.print());
+
+  // tabs
+  $('#tabs').addEventListener('click', e => {
+    const b = e.target.closest('button[data-tab]'); if (!b) return;
+    S.tab = b.dataset.tab;
+    $$('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+    $$('section[data-sec]').forEach(s => s.hidden = s.dataset.sec !== S.tab);
+    if (S.tab === 'overview') renderCharts();
+    if (S.tab === 'talk') loadTalk();
+  });
+
+  // theme: OS preference by default; the toggle pins light/dark for this browser
+  const THEME_KEY = 'aura-theme';
+  try { const t = localStorage.getItem(THEME_KEY); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* storage blocked */ }
+  $('#theme').addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ignore */ }
+    renderCharts();
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderCharts);
+
+  // re-measure charts on resize
+  let rsTimer, lastW = innerWidth;
+  addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = innerWidth; clearTimeout(rsTimer); rsTimer = setTimeout(renderCharts, 150); });
+  addEventListener('beforeprint', renderCharts);
+
+  // ============================================================== PIN gate
+  function lock(msg) {
+    PIN = ''; sessionStorage.removeItem('pin');
+    $('#app').hidden = true; $('#gate').hidden = false; closeDrawer();
+    $('#pin').value = ''; $('#pinErr').textContent = msg || ''; $('#pin').focus();
+  }
+  $('#lock').addEventListener('click', () => lock());
+  $('#pinGo').addEventListener('click', async () => {
+    PIN = $('#pin').value.trim(); if (!PIN) return;
+    sessionStorage.setItem('pin', PIN);
+    $('#pinErr').textContent = '';
+    await loadKiosks(); await load();
+  });
+  $('#pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pinGo').click(); });
+
+  setRange('29');
+  if (PIN) { loadKiosks().then(load); } else lock();
+})();
+</script>
+</body>
+</html>

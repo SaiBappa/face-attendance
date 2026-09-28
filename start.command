@@ -28,7 +28,8 @@ echo
 echo "── Face Attendance is running ──────────────────────"
 echo "Admin (this Mac):  http://localhost:8181/admin      PIN: $PIN"
 [[ -n "$IP" ]] && echo "Admin (iPads):     https://$IP:8443/admin"
-[[ -n "$IP" ]] && echo "Kiosk (iPads):     https://$IP:8443/?kiosk=Floor-1"
+[[ -n "$IP" ]] && echo "Kiosk (iPads):     https://$IP:8443/?kiosk=Staff-Entrance"
+echo "Insights:          http://localhost:8181/insights"
 echo "Health check:      curl http://localhost:8181/api/health"
 echo
 echo "Enrol staff and see reports from the Admin page. First enrol needs a face in front of the camera."
