@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Attendance</title>
+<style>
+  :root { --bg:#0b0f14; --fg:#f5f7fa; --muted:#8a94a6; --in:#22c55e; --break:#f59e0b; --back:#3b82f6; --out:#ef4444; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family:-apple-system,system-ui,sans-serif; overflow:hidden; }
+  #stage { position:relative; height:100%; display:grid; grid-template-rows:auto 1fr auto; }
+  header { display:flex; justify-content:space-between; align-items:center; padding:14px 22px; font-size:18px; color:var(--muted); }
+  header b { color:var(--fg); }
+  #clock { font-variant-numeric:tabular-nums; font-size:22px; }
+  #camwrap { position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  video { width:100%; height:100%; object-fit:cover; transform:scaleX(-1); filter:brightness(.95); }
+  #ring { position:absolute; width:min(52vw,52vh); aspect-ratio:3/4; border:4px solid rgba(255,255,255,.35); border-radius:50%/40%; transition:border-color .2s; }
+  #ring.face { border-color:#fff; }
+  #ring.match { border-color:var(--in); box-shadow:0 0 0 12px rgba(34,197,94,.25); }
+  #hint { position:absolute; bottom:18px; left:0; right:0; text-align:center; font-size:22px; color:#fff; text-shadow:0 1px 6px #000; }
+  footer { padding:14px 22px 26px; min-height:120px; }
+  #status { text-align:center; color:var(--muted); font-size:18px; }
+
+  /* result panel */
+  #panel { position:absolute; inset:0; background:rgba(11,15,20,.96); display:none; flex-direction:column; align-items:center; justify-content:center; gap:26px; padding:32px; }
+  #panel.show { display:flex; }
+  #panel h1 { margin:0; font-size:clamp(34px,7vw,64px); text-align:center; }
+  #panel .sub { color:var(--muted); font-size:22px; text-align:center; }
+  .actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; width:min(720px,100%); }
+  .actions button { border:0; border-radius:22px; padding:34px 10px; font-size:34px; font-weight:700; color:#fff; opacity:.55; transform:scale(.97); transition:all .15s; }
+  .actions button.suggest { opacity:1; transform:scale(1); box-shadow:0 0 0 5px rgba(255,255,255,.55); }
+  .actions button:active { transform:scale(.94); }
+  .b-IN{background:var(--in)} .b-BREAK{background:var(--break)} .b-BACK{background:var(--back)} .b-OUT{background:var(--out)}
+  #cancel { background:transparent; color:var(--muted); border:1px solid #333; border-radius:14px; padding:14px 30px; font-size:20px; }
+  #countdown { color:var(--muted); font-size:16px; }
+
+  /* confirmation toast */
+  #done { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; color:#fff; font-size:44px; font-weight:800; }
+  #done.show { display:flex; }
+  #done small { font-size:24px; font-weight:400; opacity:.9; }
+  .err { color:#fca5a5; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <header><div>📍 <b id="kioskName">Kiosk</b></div><div id="clock"></div></header>
+  <div id="camwrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div id="ring"></div>
+    <div id="hint">Look at the camera</div>
+  </div>
+  <footer><div id="status">Starting camera…</div></footer>
+
+  <div id="panel">
+    <h1 id="who">—</h1>
+    <div class="sub" id="last"></div>
+    <div class="actions">
+      <button class="b-IN"    data-a="IN">▶︎ IN</button>
+      <button class="b-BREAK" data-a="BREAK">☕︎ BREAK</button>
+      <button class="b-BACK"  data-a="BACK">↩︎ BACK</button>
+      <button class="b-OUT"   data-a="OUT">■ OUT</button>
+    </div>
+    <button id="cancel">Not me / Cancel</button>
+    <div id="countdown"></div>
+  </div>
+
+  <div id="done"><div id="doneText"></div><small id="doneSub"></small></div>
+</div>
+
+<canvas id="cv" hidden></canvas>
+
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  const KIOSK = q.get('kiosk') || 'Main';
+  const SCAN_EVERY_MS = 900;      // how often a frame is sent while idle
+  const FRAME_W = 640;            // downscale before upload (fast + enough for recognition)
+  const PANEL_TIMEOUT_S = 12;     // auto-return to scanning if nobody taps
+  const COOLDOWN_MS = 4000;       // after an action, ignore the same person briefly
+
+  const $ = id => document.getElementById(id);
+  const video = $('video'), cv = $('cv'), ring = $('ring'), hint = $('hint'), statusEl = $('status');
+  const panel = $('panel'), who = $('who'), last = $('last'), countdown = $('countdown');
+  const done = $('done'), doneText = $('doneText'), doneSub = $('doneSub');
+  $('kioskName').textContent = KIOSK;
+
+  let scanning = false, busy = false, current = null, timer = null, cooldownUntil = 0, cooldownName = null;
+
+  setInterval(() => $('clock').textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}), 500);
+
+  // ---- feedback sounds (WebAudio, no files) ----
+  let actx;
+  function beep(freq = 880, ms = 120, type = 'sine') {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.value = freq; o.connect(g); g.connect(actx.destination);
+      g.gain.setValueAtTime(0.25, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + ms / 1000);
+      o.start(); o.stop(actx.currentTime + ms / 1000);
+    } catch (_) {}
+  }
+
+  // ---- camera ----
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+      video.srcObject = stream;
+      await video.play();
+      statusEl.textContent = 'Ready';
+      scanning = true;
+      loop();
+    } catch (e) {
+      statusEl.innerHTML = `<span class="err">Camera blocked: ${e.message}. Use HTTPS and allow camera in Settings › Safari.</span>`;
+    }
+  }
+
+  function grabFrame() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw) return null;
+    const scale = FRAME_W / vw;
+    cv.width = FRAME_W; cv.height = Math.round(vh * scale);
+    cv.getContext('2d').drawImage(video, 0, 0, cv.width, cv.height);
+    return new Promise(res => cv.toBlob(res, 'image/jpeg', 0.85));
+  }
+
+  async function loop() {
+    while (true) {
+      if (scanning && !busy && !panel.classList.contains('show')) {
+        busy = true;
+        try {
+          const blob = await grabFrame();
+          if (blob) {
+            const fd = new FormData(); fd.append('file', blob, 'frame.jpg');
+            const r = await fetch('/api/recognize', { method: 'POST', body: fd });
+            const j = await r.json();
+            if (j.error) { statusEl.innerHTML = `<span class="err">${j.error}</span>`; }
+            else handleResult(j);
+          }
+        } catch (e) { statusEl.innerHTML = `<span class="err">Server unreachable</span>`; }
+        busy = false;
+      }
+      await new Promise(r => setTimeout(r, SCAN_EVERY_MS));
+    }
+  }
+
+  function handleResult(j) {
+    ring.className = j.face ? 'face' : '';
+    if (!j.face) { hint.textContent = 'Look at the camera'; statusEl.textContent = 'Ready'; return; }
+    if (!j.matched) { hint.textContent = 'Not recognised — step closer'; statusEl.textContent = j.similarity ? `Low match (${Math.round(j.similarity*100)}%)` : 'Face seen, no match'; return; }
+    if (j.employee === cooldownName && Date.now() < cooldownUntil) return;   // just logged, ignore briefly
+    ring.className = 'match';
+    beep(1046, 90);
+    showPanel(j);
+  }
+
+  // ---- result panel ----
+  function showPanel(j) {
+    current = j;
+    who.textContent = j.employee;
+    last.textContent = j.last_action
+      ? `Last today: ${j.last_action} at ${new Date(j.last_ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`
+      : 'No entry yet today';
+    document.querySelectorAll('.actions button').forEach(b => b.classList.toggle('suggest', b.dataset.a === j.suggested));
+    panel.classList.add('show');
+    let left = PANEL_TIMEOUT_S;
+    countdown.textContent = `Returns to camera in ${left}s`;
+    clearInterval(timer);
+    timer = setInterval(() => { left--; countdown.textContent = `Returns to camera in ${left}s`; if (left <= 0) hidePanel(); }, 1000);
+  }
+  function hidePanel() { clearInterval(timer); panel.classList.remove('show'); ring.className = ''; current = null; }
+
+  $('cancel').onclick = () => { hidePanel(); cooldownName = null; };
+
+  document.querySelectorAll('.actions button').forEach(btn => btn.onclick = async () => {
+    if (!current) return;
+    const action = btn.dataset.a, emp = current.employee;
+    clearInterval(timer);
+    try {
+      const r = await fetch('/api/event', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee: emp, action, kiosk: KIOSK, similarity: current.similarity }) });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      hidePanel();
+      cooldownName = emp; cooldownUntil = Date.now() + COOLDOWN_MS;
+      flash(`${emp}`, `${label(action)} · ${new Date(j.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}${j.duplicate ? ' (already recorded)' : ''}`, action);
+      beep(1318, 140); setTimeout(() => beep(1568, 160), 130);
+    } catch (e) {
+      flash('Not saved', e.message, 'OUT'); beep(220, 300, 'square');
+    }
+  });
+
+  const label = a => ({ IN: 'Clocked IN', BREAK: 'On BREAK', BACK: 'BACK from break', OUT: 'Clocked OUT' })[a];
+  function flash(t, s, action) {
+    doneText.textContent = t; doneSub.textContent = s;
+    done.style.background = getComputedStyle(document.documentElement).getPropertyValue(`--${action.toLowerCase()}`);
+    done.classList.add('show');
+    setTimeout(() => done.classList.remove('show'), 2200);
+  }
+
+  // iPadOS pauses media on tab switches; resume when visible again
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && video.paused) video.play().catch(() => {}); });
+
+  startCamera();
+})();
+</script>
+</body>
+</html>

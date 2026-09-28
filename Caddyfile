@@ -1,0 +1,13 @@
+# HTTPS front for the kiosk. `tls internal` = Caddy issues a certificate from its own local CA.
+# Install that CA once on each iPad (see README) and Safari will trust https://<server-ip>.
+#
+# Replace the IP below with your server's LAN IP (or a DNS name if you have one).
+{
+	# iPads connect by IP, so Safari sends no SNI; tell Caddy which certificate to use.
+	default_sni 10.24.8.78
+}
+
+https://10.24.8.78:8443 {
+	tls internal
+	reverse_proxy attendance:8080
+}

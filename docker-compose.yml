@@ -1,0 +1,58 @@
+# Face Attendance stack (ARM-native)
+#  - recognizer : OpenCV YuNet + SFace face recognition (runs natively on Apple Silicon)
+#  - attendance : kiosk page, admin page, attendance log, CSV export
+#  - caddy      : HTTPS in front of attendance (iPad Safari needs HTTPS for the camera)
+#
+# This replaces the earlier CompreFace-based stack: CompreFace ships x86-only ML images that
+# need AVX, which Apple Silicon (Rosetta) doesn't provide, so its core never became healthy.
+
+volumes:
+  attendance-data:
+  recognizer-data:
+  caddy-data:
+  caddy-config:
+
+services:
+  recognizer:
+    build: ./recognizer
+    restart: always
+    container_name: "recognizer"
+    volumes:
+      - recognizer-data:/data
+    expose:
+      - "8000"
+
+  attendance:
+    build: ./attendance
+    restart: always
+    container_name: "attendance"
+    environment:
+      - COMPREFACE_URL=http://recognizer:8000
+      # any value works; the recognizer ignores the key. Kept for compatibility.
+      - COMPREFACE_API_KEY=local
+      # SFace cosine similarity to accept a match (0..1). ~0.35 is a good start for SFace.
+      # Hardcoded here (not from .env) so it matches the recognizer's scale out of the box.
+      - SIMILARITY_THRESHOLD=0.35
+      - DUPLICATE_WINDOW_SECONDS=${DUPLICATE_WINDOW_SECONDS:-60}
+      - ADMIN_PIN=${ADMIN_PIN:-2468}
+      - TZ=${TZ:-Indian/Maldives}
+      - DB_PATH=/data/attendance.db
+    volumes:
+      - attendance-data:/data
+    depends_on:
+      - recognizer
+    ports:
+      - "8181:8080"   # admin from this Mac: http://localhost:8181/admin
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    container_name: "caddy"
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - attendance

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance Admin</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#111827; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --in:#16a34a; --break:#d97706; --back:#2563eb; --out:#dc2626; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,system-ui,sans-serif; font-size:16px; }
+  header { background:#111827; color:#fff; padding:14px 20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0 auto 0 0; }
+  nav button { background:transparent; color:#cbd5e1; border:0; padding:8px 12px; font-size:15px; border-radius:8px; cursor:pointer; }
+  nav button.active { background:#374151; color:#fff; }
+  main { max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
+  section { display:none; } section.active { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; }
+  h2 { font-size:17px; margin:0 0 12px; }
+  table { width:100%; border-collapse:collapse; font-size:15px; }
+  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--muted); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.03em; }
+  .tag { display:inline-block; padding:3px 10px; border-radius:999px; color:#fff; font-size:13px; font-weight:600; }
+  .t-IN{background:var(--in)} .t-BREAK{background:var(--break)} .t-BACK{background:var(--back)} .t-OUT{background:var(--out)}
+  input, select, button.btn { font:inherit; padding:9px 12px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  button.btn { background:var(--accent); color:#fff; border-color:var(--accent); cursor:pointer; }
+  button.btn.ghost { background:#fff; color:var(--fg); }
+  button.btn.danger { background:#fff; color:var(--out); border-color:var(--out); }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .muted { color:var(--muted); font-size:14px; }
+  #gate { max-width:360px; margin:80px auto; text-align:center; }
+  #gate input { font-size:28px; text-align:center; letter-spacing:.3em; width:100%; margin:14px 0; }
+  video, #shot { width:100%; max-width:420px; border-radius:12px; background:#000; transform:scaleX(-1); display:block; }
+  .kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:18px; }
+  .kpi div { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .kpi b { display:block; font-size:28px; }
+  .kpi span { color:var(--muted); font-size:13px; }
+  .err { color:var(--out); }
+</style>
+</head>
+<body>
+<div id="gate">
+  <h2>Attendance Admin</h2>
+  <p class="muted">Enter the admin PIN</p>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off">
+  <button class="btn" id="pinGo">Unlock</button>
+  <p id="pinErr" class="err"></p>
+</div>
+
+<div id="app" hidden>
+<header>
+  <h1>Attendance Admin</h1>
+  <nav>
+    <button data-s="status" class="active">Today</button>
+    <button data-s="log">Log &amp; Export</button>
+    <button data-s="employees">Employees</button>
+    <button data-s="enrol">Enrol</button>
+    <button data-s="setup">Setup</button>
+  </nav>
+  <button class="btn ghost" id="lock" style="padding:6px 12px">Lock</button>
+</header>
+<main>
+
+<section id="s-status" class="active">
+  <div class="row"><input type="date" id="statusDay"><button class="btn ghost" id="statusRefresh">Refresh</button><span class="muted">auto-refreshes every 15 s</span></div>
+  <div class="kpi"><div><b id="kIn">0</b><span>On duty</span></div><div><b id="kBreak">0</b><span>On break</span></div><div><b id="kOut">0</b><span>Clocked out</span></div><div><b id="kTotal">0</b><span>Seen today</span></div></div>
+  <div class="card"><table><thead><tr><th>Employee</th><th>State</th><th>Since</th><th>Kiosk</th></tr></thead><tbody id="statusBody"></tbody></table></div>
+</section>
+
+<section id="s-log">
+  <div class="card">
+    <div class="row">
+      <label>From <input type="date" id="from"></label>
+      <label>To <input type="date" id="to"></label>
+      <input id="empFilter" placeholder="Employee (optional)">
+      <button class="btn" id="logGo">Show</button>
+      <button class="btn ghost" id="csv">⬇︎ Download CSV</button>
+    </div>
+    <table><thead><tr><th>Time</th><th>Employee</th><th>Action</th><th>Kiosk</th><th>Match</th><th></th></tr></thead><tbody id="logBody"></tbody></table>
+  </div>
+</section>
+
+<section id="s-employees">
+  <div class="card">
+    <div class="row"><h2 style="margin:0 auto 0 0">Registered employees</h2><button class="btn ghost" id="empRefresh">Refresh</button></div>
+    <p class="muted">Aim for 3–5 photos per person (front, slight left/right, with/without glasses). Names are what appears on the kiosk.</p>
+    <table><thead><tr><th>Name</th><th>Photos</th><th></th></tr></thead><tbody id="empBody"></tbody></table>
+  </div>
+</section>
+
+<section id="s-enrol">
+  <div class="card">
+    <h2>Enrol / add photos</h2>
+    <div class="row"><input id="enrolName" placeholder="Employee name, e.g. Aishath Ali" list="empList" style="min-width:260px"><datalist id="empList"></datalist></div>
+    <div class="row" style="align-items:flex-start">
+      <div>
+        <video id="ev" autoplay playsinline muted></video>
+        <div class="row" style="margin-top:10px"><button class="btn" id="startCam">Start camera</button><button class="btn" id="snap" disabled>📸 Capture &amp; add</button></div>
+      </div>
+      <div>
+        <p class="muted">…or upload existing photos</p>
+        <input type="file" id="files" accept="image/*" multiple>
+        <button class="btn ghost" id="upload">Upload selected</button>
+      </div>
+    </div>
+    <p id="enrolMsg" class="muted"></p>
+  </div>
+</section>
+
+<section id="s-setup">
+  <div class="card">
+    <h2>Kiosk links</h2>
+    <p class="muted">Open one of these on each iPad, Share → Add to Home Screen, then lock with Guided Access (triple-click top button).</p>
+    <div class="row"><input id="kioskName" placeholder="Kiosk name, e.g. Floor-1" value="Floor-1"><code id="kioskUrl"></code></div>
+    <h2 style="margin-top:20px">Server</h2>
+    <p id="health" class="muted">Checking…</p>
+    <p class="muted">Face recognition runs locally on this Mac (OpenCV YuNet + SFace). Enrol staff in the Enrol tab.</p>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let PIN = sessionStorage.getItem('pin') || '';
+  const api = async (path, opts = {}) => {
+    opts.headers = Object.assign({ 'X-Admin-Pin': PIN }, opts.headers || {});
+    const r = await fetch(path, opts);
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) { lock(); throw new Error('PIN rejected'); }
+    if (j.error) throw new Error(j.error);
+    return j;
+  };
+  const today = () => new Date().toLocaleDateString('sv');           // YYYY-MM-DD local
+  const fmtT = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const fmtDT = ts => new Date(ts).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+  const tag = a => `<span class="tag t-${a}">${a}</span>`;
+
+  // ---- gate ----
+  function unlock() { $('gate').hidden = true; $('app').hidden = false; loadStatus(); health(); }
+  function lock() { PIN = ''; sessionStorage.removeItem('pin'); $('app').hidden = true; $('gate').hidden = false; $('pin').value = ''; }
+  $('pinGo').onclick = async () => {
+    PIN = $('pin').value; sessionStorage.setItem('pin', PIN);
+    try { await api('/api/status'); unlock(); } catch (e) { $('pinErr').textContent = 'Wrong PIN'; }
+  };
+  $('pin').onkeydown = e => { if (e.key === 'Enter') $('pinGo').click(); };
+  $('lock').onclick = lock;
+  if (PIN) api('/api/status').then(unlock).catch(() => {});
+
+  // ---- nav ----
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === 's-' + b.dataset.s));
+    ({ status: loadStatus, log: loadLog, employees: loadEmployees, enrol: loadEmployees, setup: health })[b.dataset.s]();
+  });
+
+  // ---- status ----
+  $('statusDay').value = today();
+  async function loadStatus() {
+    const j = await api('/api/status?day=' + $('statusDay').value);
+    const c = { IN: 0, BREAK: 0, BACK: 0, OUT: 0 };
+    $('statusBody').innerHTML = j.rows.map(r => { c[r.action]++; return `<tr><td>${r.employee}</td><td>${tag(r.action)}</td><td>${fmtT(r.ts)}</td><td>${r.kiosk || ''}</td></tr>`; }).join('') || '<tr><td colspan=4 class="muted">No activity</td></tr>';
+    $('kIn').textContent = c.IN + c.BACK; $('kBreak').textContent = c.BREAK; $('kOut').textContent = c.OUT; $('kTotal').textContent = j.rows.length;
+  }
+  $('statusRefresh').onclick = loadStatus; $('statusDay').onchange = loadStatus;
+  setInterval(() => { if (!$('app').hidden && $('s-status').classList.contains('active')) loadStatus().catch(() => {}); }, 15000);
+
+  // ---- log ----
+  $('from').value = today(); $('to').value = today();
+  async function loadLog() {
+    const p = new URLSearchParams({ from: $('from').value, to: $('to').value });
+    if ($('empFilter').value) p.set('employee', $('empFilter').value);
+    const j = await api('/api/events?' + p);
+    $('logBody').innerHTML = j.rows.map(r => `<tr><td>${fmtDT(r.ts)}</td><td>${r.employee}</td><td>${tag(r.action)}</td><td>${r.kiosk || ''}</td><td class="muted">${r.similarity ? Math.round(r.similarity * 100) + '%' : ''}</td><td><button class="btn danger" style="padding:3px 8px" data-id="${r.id}">✕</button></td></tr>`).join('') || '<tr><td colspan=6 class="muted">No entries</td></tr>';
+    $('logBody').querySelectorAll('button').forEach(b => b.onclick = async () => { if (confirm('Delete this entry?')) { await api('/api/events/' + b.dataset.id, { method: 'DELETE' }); loadLog(); } });
+  }
+  $('logGo').onclick = loadLog;
+  $('csv').onclick = () => location.href = `/api/export.csv?pin=${encodeURIComponent(PIN)}&from=${$('from').value}&to=${$('to').value}`;
+
+  // ---- employees ----
+  async function loadEmployees() {
+    const j = await api('/api/employees');
+    $('empList').innerHTML = j.employees.map(e => `<option value="${e.name}">`).join('');
+    $('empBody').innerHTML = j.employees.map(e => `<tr><td>${e.name}</td><td>${e.photos}${e.photos < 3 ? ' <span class="muted">(add more)</span>' : ''}</td><td style="text-align:right"><button class="btn ghost" data-r="${e.name}">Rename</button> <button class="btn danger" data-d="${e.name}">Delete</button></td></tr>`).join('') || '<tr><td colspan=3 class="muted">Nobody enrolled yet — use the Enrol tab.</td></tr>';
+    $('empBody').querySelectorAll('[data-d]').forEach(b => b.onclick = async () => { if (confirm(`Delete ${b.dataset.d} and all their photos?`)) { await api('/api/employees/' + encodeURIComponent(b.dataset.d), { method: 'DELETE' }); loadEmployees(); } });
+    $('empBody').querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { const n = prompt('New name', b.dataset.r); if (n && n !== b.dataset.r) { await api('/api/employees/' + encodeURIComponent(b.dataset.r), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n }) }); loadEmployees(); } });
+  }
+  $('empRefresh').onclick = loadEmployees;
+
+  // ---- enrol ----
+  const ev = $('ev'); let stream;
+  $('startCam').onclick = async () => {
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } } }); ev.srcObject = stream; $('snap').disabled = false; }
+    catch (e) { $('enrolMsg').innerHTML = `<span class="err">Camera: ${e.message}</span>`; }
+  };
+  async function addPhoto(name, blob, label) {
+    const fd = new FormData(); fd.append('file', blob, 'face.jpg');
+    const j = await api(`/api/employees/${encodeURIComponent(name)}/photo`, { method: 'POST', body: fd });
+    return j;
+  }
+  $('snap').onclick = async () => {
+    const name = $('enrolName').value.trim(); if (!name) return $('enrolMsg').textContent = 'Enter a name first';
+    const c = document.createElement('canvas'); c.width = ev.videoWidth; c.height = ev.videoHeight; c.getContext('2d').drawImage(ev, 0, 0);
+    c.toBlob(async blob => {
+      $('enrolMsg').textContent = 'Saving…';
+      try { await addPhoto(name, blob); $('enrolMsg').textContent = `✓ Photo added for ${name}. Take 2–4 more from slightly different angles.`; }
+      catch (e) { $('enrolMsg').innerHTML = `<span class="err">${e.message}</span>`; }
+    }, 'image/jpeg', 0.92);
+  };
+  $('upload').onclick = async () => {
+    const name = $('enrolName').value.trim(); if (!name) return $('enrolMsg').textContent = 'Enter a name first';
+    const files = [...$('files').files]; if (!files.length) return $('enrolMsg').textContent = 'Choose photos first';
+    let ok = 0, fail = [];
+    for (const f of files) { try { await addPhoto(name, f); ok++; } catch (e) { fail.push(`${f.name}: ${e.message}`); } }
+    $('enrolMsg').innerHTML = `✓ ${ok} photo(s) added for ${name}.` + (fail.length ? `<br><span class="err">${fail.join('<br>')}</span>` : '');
+  };
+
+  // ---- setup ----
+  const kioskUrl = () => $('kioskUrl').textContent = `${location.origin}/?kiosk=${encodeURIComponent($('kioskName').value || 'Main')}`;
+  $('kioskName').oninput = kioskUrl; kioskUrl();
+  async function health() {
+    try { const j = await fetch('/api/health').then(r => r.json()); $('health').innerHTML = j.ok ? `✓ Recognizer connected · match threshold ${Math.round(j.threshold * 100)}%` : `<span class="err">✕ Recognizer not reachable</span>`; }
+    catch { $('health').innerHTML = '<span class="err">Server unreachable</span>'; }
+  }
+})();
+</script>
+</body>
+</html>
