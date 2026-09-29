@@ -12,6 +12,9 @@ SQLite schema for Aura. One file, created/migrated on start-up.
   requests       passenger/staff assistance requests (wheelchair, medical, lost item…) and their SLA
   safety_rules   per-department PPE items + fatigue-check limits (ramp safety pack)
   safety_checks  one row per clock-in safety check: PPE confirmed/missing, hi-vis share, fatigue score
+  shifts         the roster: rostered shifts per person/day (CSV import, HR push or manual)
+  alerts         supervisor alerts (no-show, late, understaffed, …) with ack/resolve state
+  alert_routes   per-department webhook + supervisor for alerts ('*' = default)
 
 Rows produced by the demo generator carry demo=1 so they can be removed in one go.
 """
@@ -166,6 +169,48 @@ CREATE TABLE IF NOT EXISTS safety_checks (
 );
 CREATE INDEX IF NOT EXISTS idx_safety_day ON safety_checks(day);
 CREATE INDEX IF NOT EXISTS idx_safety_person ON safety_checks(person, ts);
+
+CREATE TABLE IF NOT EXISTS shifts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    person     TEXT NOT NULL,
+    day        TEXT NOT NULL,              -- the day the shift starts
+    start      TEXT NOT NULL,              -- HH:MM
+    end        TEXT NOT NULL,              -- HH:MM (earlier than start = ends next day)
+    position   TEXT,
+    location   TEXT,
+    department TEXT,
+    notes      TEXT,
+    source     TEXT,                       -- csv | api | manual | demo
+    demo       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_shifts_day ON shifts(day);
+CREATE INDEX IF NOT EXISTS idx_shifts_person ON shifts(person, day);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    key        TEXT UNIQUE NOT NULL,       -- dedupe: the same condition never alerts twice
+    ts         TEXT NOT NULL,
+    day        TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    severity   TEXT NOT NULL,              -- high | medium | low
+    person     TEXT,
+    department TEXT,
+    kiosk      TEXT,
+    text       TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'new',  -- new | ack | resolved
+    ack_by     TEXT,
+    ack_ts     TEXT,
+    notes      TEXT,
+    notified   INTEGER NOT NULL DEFAULT 0,
+    demo       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status, id);
+
+CREATE TABLE IF NOT EXISTS alert_routes (
+    department TEXT PRIMARY KEY,           -- '*' = default for everything
+    supervisor TEXT,
+    webhook    TEXT
+);
 
 CREATE TABLE IF NOT EXISTS announcements (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
