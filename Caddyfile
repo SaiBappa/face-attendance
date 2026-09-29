@@ -4,10 +4,10 @@
 # Replace the IP below with your server's LAN IP (or a DNS name if you have one).
 {
 	# iPads connect by IP, so Safari sends no SNI; tell Caddy which certificate to use.
-	default_sni 172.16.0.165
+	default_sni 10.24.8.78
 }
 
-https://172.16.0.165:8443 {
+https://10.24.8.78:8443 {
 	tls internal
 	reverse_proxy attendance:8080 {
 		# ride out attendance restarts / Docker DNS hiccups instead of failing the kiosk instantly

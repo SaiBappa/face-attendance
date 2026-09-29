@@ -375,7 +375,7 @@ ATTIRE_LINES = {
 }
 MOOD_LINES = {
     "happiness": ["That smile just brightened the whole terminal.", "Love the energy — keep smiling!"],
-    "neutral": ["Calm and focused — the best way to start.", "Steady and ready. Nice."],
+    "neutral": ["Calm and focused — nice.", "Steady and ready. Nice."],
     "surprise": ["You look like you've got a story to tell!"],
     "sadness": ["If today feels heavy, take it one step at a time — you've got this.",
                 "Sending you a little extra sunshine today ☀️"],
@@ -490,7 +490,7 @@ def greeting_candidates(g: dict) -> dict:
     elif stats.get("next_shift") and action in ("OUT", None):
         chips.append({"icon": "🗓", "text": "Next: " + stats["next_shift"]})
     if stats.get("days_this_month"):
-        chips.append({"icon": "📅", "text": f"{stats['days_this_month']} day{'' if stats['days_this_month'] == 1 else 's'} this month"})
+        chips.append({"icon": "✅", "text": f"{stats['days_this_month']} day{'' if stats['days_this_month'] == 1 else 's'} this month"})
     return {"headline": headline, "special": special, "compliments": compliments, "behaviour": behaviour, "chips": chips}
 
 

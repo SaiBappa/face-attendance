@@ -40,4 +40,7 @@ EXPOSE 8000
 # Several workers so frames from different kiosks are processed in parallel instead of queueing
 # (each worker loads its own models, ~70 MB). Enrolment changes reach every worker via /data/faces/.changed.
 ENV WORKERS=3 CV_THREADS=2
-CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port 8000 --workers ${WORKERS}"]
+# uvicorn kills a worker that misses a 5 s health ping. When the host is swapping, the whole Docker VM can
+# stall that long, and a worker killed mid-frame (then reloading its models) turns a hiccup into
+# "Server unreachable" on the kiosks, so give it 30 s.
+CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port 8000 --workers ${WORKERS} --timeout-worker-healthcheck 30"]

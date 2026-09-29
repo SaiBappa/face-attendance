@@ -65,7 +65,7 @@
   .privacy { margin-top:10px; display:inline-flex; gap:6px; align-items:center; font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:5px 10px; background:var(--glass); }
 
   /* ------------------------------------------------------------------ orb + portal */
-  #center { display:flex; flex-direction:column; align-items:center; gap:clamp(10px,2.2vh,26px); min-height:0; text-align:center; overflow-y:auto; overflow-x:hidden; padding:clamp(8px,2.4vh,36px) 0 8px; container-type:size; }
+  #center { display:flex; flex-direction:column; align-items:center; gap:clamp(10px,2.2vh,26px); min-height:0; text-align:center; overflow-y:auto; overflow-x:hidden; padding:clamp(8px,2.4vh,36px) 6px 8px; container-type:size; }
   /* flexible spacers centre the content but collapse to 0 when it's taller than the screen, so it scrolls from the top instead of being clipped */
   #center::before, #center::after { content:""; flex:1 0 0; }
   #center::before { margin-bottom:calc(clamp(10px,2.2vh,26px) * -1); } #center::after { margin-top:calc(clamp(10px,2.2vh,26px) * -1); }   /* cancel the gap next to each spacer */
@@ -120,11 +120,11 @@
 
   /* ------------------------------------------------------------------ text */
   #say { max-width:min(900px,100%); }
-  #headline { font-size:clamp(26px,min(5.4vw,8vh),64px); font-weight:750; letter-spacing:-.03em; line-height:1.12; margin:0; padding-bottom:.06em;
+  #headline { font-size:clamp(26px,min(5.4vw,8vh),64px); font-weight:750; letter-spacing:-.03em; line-height:1.12; margin:0; padding-bottom:.06em; text-wrap:balance;
     background:linear-gradient(92deg, #fff 10%, var(--a1) 55%, var(--a2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  #sub { margin-top:clamp(4px,1vh,10px); color:var(--muted); font-size:clamp(15px,min(2.2vw,3vh),24px); min-height:1.3em; }
+  #sub { margin-top:clamp(4px,1vh,10px); color:var(--muted); text-wrap:balance; font-size:clamp(15px,min(2.2vw,3vh),24px); min-height:1.3em; }
   #lines { margin:clamp(6px,1.4vh,14px) auto 0; display:grid; gap:8px; max-width:760px; }
-  #lines div { font-size:clamp(15px,min(2.2vw,2.9vh),23px); line-height:1.35; opacity:0; transform:translateY(8px); animation:rise .6s forwards; }
+  #lines div { font-size:clamp(15px,min(2.2vw,2.9vh),23px); line-height:1.35; text-wrap:balance; opacity:0; transform:translateY(8px); animation:rise .6s forwards; }
   @keyframes rise { to { opacity:1; transform:none; } }
   #chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:clamp(8px,1.4vh,14px); }
   .chip { display:inline-flex; align-items:center; gap:7px; padding:8px 14px; border-radius:999px; background:var(--glass); border:1px solid var(--line); font-size:clamp(13px,2vh,16px); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); opacity:0; animation:rise .5s forwards; }
@@ -317,7 +317,8 @@
       gap:clamp(20px,4vw,72px); padding:clamp(8px,2vh,28px) clamp(0px,2vw,40px); overflow:hidden; }
     body.acting:not(.chatting) #center::before, body.acting:not(.chatting) #center::after { display:none; }
     body.acting:not(.chatting) #who, body.acting:not(.chatting) #act { display:flex; flex-direction:column; align-items:center; min-height:0; max-height:100%; }
-    body.acting:not(.chatting) #who { gap:clamp(8px,1.6vh,18px); overflow-y:auto; overflow-x:hidden; padding:4px 0; }
+    /* #who scrolls, which clips: pad it by ~a quarter of the orb so the orb's glow and ripple rings aren't cut off flat */
+    body.acting:not(.chatting) #who { gap:clamp(8px,1.6vh,18px); overflow-y:auto; overflow-x:hidden; padding:calc(min(26vh,300px,32cqh) * .24) 0 4px; }
     body.acting:not(.chatting) #act { gap:clamp(12px,2.4vh,24px); height:100%; justify-content:center; }
     body.acting:not(.chatting) #say { display:block; max-width:100%; }
     body.acting:not(.chatting) #orbWrap { width:min(26vh,300px,32cqh); order:0; }
@@ -326,7 +327,8 @@
     body.acting:not(.chatting) #lines div { font-size:clamp(15px,min(2vw,3vh),32px); }
     body.acting:not(.chatting) .chip { font-size:clamp(13px,2.1vh,22px); padding:.5em 1em; }
     body.acting:not(.chatting) #sub { margin-top:clamp(4px,1vh,10px); }
-    body.acting:not(.chatting) #lines { max-width:none; }
+    body.acting:not(.chatting) #lines { max-width:none; margin-top:clamp(6px,1.4vh,14px); }
+    body.acting:not(.chatting) #chips { margin-top:clamp(6px,1.4vh,14px); }   /* the short-screen rule zeroes both, jamming lines and chips together */
     body.acting:not(.chatting) #actions { grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:1fr; width:100%; flex:0 1 auto; height:min(100%,74vh); min-height:0; gap:clamp(10px,1.8vh,18px); }
     body.acting:not(.chatting) #actions button { justify-content:center; padding:clamp(10px,2vh,24px) 10px; gap:clamp(4px,1vh,10px); border-radius:clamp(18px,3vh,28px);
       font-size:clamp(20px,min(3.2vw,5.4vh),60px); min-height:0; }
@@ -400,8 +402,8 @@
       <button class="a-OUT" data-a="OUT"><span class="ic">■</span>OUT<small>End shift</small></button>
     </div>
     <div id="tools" class="hidden">
-      <button class="pill primary" id="talkBtn">🎙️ Talk to Aura</button>
-      <button class="pill" id="typeBtn">⌨️ Type</button>
+      <button class="pill primary" id="talkBtn"><span aria-hidden="true">🎙️</span>Talk to Aura</button>
+      <button class="pill" id="typeBtn"><span aria-hidden="true">⌨️</span>Type</button>
       <button class="pill ghost" id="notMe">Not me</button>
     </div>
     <div id="countdown" class="hidden"><i></i></div>
@@ -508,14 +510,17 @@
         `last frame           ${ms(last?.capture)}     ${ms(last?.net)}    ${ms(last?.server)}    ${ms(last?.total)}\n` +
         `median (${String(hist.length).padStart(2)} frames)   ${ms(p50('capture'))}     ${ms(p50('net'))}    ${ms(p50('server'))}    ${ms(p50('total'))}\n` +
         `server detail   decode ${ms(s.decode)}  detect ${ms(s.detect)}  embed ${ms(s.embed)}  mood+clothes ${ms(s.extras)}\n` +
+        `capture detail  JPEG encode ${ms(last?.encode)} (median ${ms(p50('encode'))}) · ${Math.round(100 * hist.filter(f => f.early).length / (hist.length || 1))}% pre-captured during the sleep\n` +
         `frame ${last ? Math.round(last.bytes / 1024) : '–'} KB · ${fps.toFixed(1)} fps · next scan ${nextScanMs()} ms · state ${S.state}\n` +
         (walk ? `walk-up → ${walk.label}: ${(walk.ms / 1000).toFixed(2)} s over ${walk.frames} frame${walk.frames === 1 ? '' : 's'}` : 'walk-up → waiting for someone to step up');
     }
     el.textContent = 'LATENCY  waiting for the first frame…';
     return {
-      frame({ capture, rtt, bytes, timing }) {
+      // capture = time the loop waited for its frame (near 0 when it was pre-captured during the sleep);
+      // encode = how long the JPEG encode itself took, wherever it happened
+      frame({ capture, encode, early, rtt, bytes, timing }) {
         const srv = parse(timing), server = srv.total;
-        last = { at: performance.now(), capture, bytes, srv, server,
+        last = { at: performance.now(), capture, encode, early, bytes, srv, server,
                  net: Number.isFinite(server) ? Math.max(0, rtt - server) : rtt, total: capture + rtt };
         hist.push(last); if (hist.length > 30) hist.shift();
         render();
@@ -577,6 +582,8 @@
       S.voiceOn = !!k.voice;
       $('zone').textContent = k.zone || KIOSK;
       $('place').textContent = k.headline || KIOSK;
+      // no zone configured: the eyebrow would just repeat the headline, so show the assistant's name instead
+      if ($('zone').textContent.trim().toLowerCase() === $('place').textContent.trim().toLowerCase()) $('zone').textContent = 'Aura';
       $('subtitle').textContent = k.subtitle || j.airport || '';
       renderSlides(j.media || []);
       renderTicker(j.announcements || []);
@@ -770,7 +777,7 @@
     });
   }
   function addChips(chips) {
-    $('chips').innerHTML = chips.map((c, i) => `<span class="chip" style="animation-delay:${.4 + i * .12}s">${c.color ? `<span class="sw" style="background:${esc(c.color)}"></span>` : esc(c.icon)} ${esc(c.text)}</span>`).join('');
+    $('chips').innerHTML = chips.map((c, i) => `<span class="chip" style="animation-delay:${.4 + i * .12}s">${c.color ? `<span class="sw" style="background:${esc(c.color)}"></span>` : `<span aria-hidden="true">${esc(c.icon)}</span>`}<span>${esc(c.text)}</span></span>`).join('');
   }
 
   // ---- staff recognised
@@ -780,7 +787,8 @@
     const first = j.employee.split(' ')[0];
     clearSay();
     $('headline').textContent = `Hi, ${first}`;
-    const lastTxt = j.last_action ? `Last today: ${j.last_action} at ${new Date(j.last_ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'No entry yet today';
+    const LAST = { IN: 'Clocked in at', BREAK: 'On break since', BACK: 'Back from break at', OUT: 'Clocked out at' };
+    const lastTxt = j.last_action ? `${LAST[j.last_action] || j.last_action} ${new Date(j.last_ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not clocked in yet today';
     $('sub').textContent = lastTxt;
     $('lines').innerHTML = '<div class="shimmer" style="width:70%;opacity:1;animation:sh 1.2s linear infinite"></div><div class="shimmer" style="width:52%;opacity:1;animation:sh 1.2s linear infinite"></div>';
     document.querySelectorAll('#actions button').forEach(b => b.classList.toggle('suggest', b.dataset.a === j.suggested));
@@ -823,13 +831,26 @@
     } catch (e) { status(`Camera blocked: ${e.message}. Use HTTPS and allow the camera.`); }
   }
 
+  // Frame capture. The JPEG encode (toBlob) costs ~20-50 ms whatever the frame size, so the loop starts
+  // it near the end of each sleep (see loop) and the frame is ready when the sleep ends.
+  let cvCtx = null, captureEst = 40;   // running estimate of capture time, ms
+  const FRAME_MAX_AGE_MS = 250;        // a pre-captured frame older than this (e.g. after a pause) is dropped
   function grabFrame() {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw) return null;
-    const scale = FRAME_W / vw;
-    cv.width = FRAME_W; cv.height = Math.round(vh * scale);
-    cv.getContext('2d').drawImage(video, 0, 0, cv.width, cv.height);
-    return new Promise(res => cv.toBlob(res, 'image/jpeg', JPEG_QUALITY));
+    const h = Math.round(vh * FRAME_W / vw);
+    // resizing a canvas reallocates its buffer, so only do it when the camera size changes
+    if (cv.width !== FRAME_W || cv.height !== h || !cvCtx) {
+      cv.width = FRAME_W; cv.height = h;
+      cvCtx = cvCtx || cv.getContext('2d', { alpha: false });
+    }
+    const t0 = performance.now();
+    cvCtx.drawImage(video, 0, 0, FRAME_W, h);
+    return new Promise(res => cv.toBlob(blob => {
+      const at = performance.now(), ms = at - t0;
+      captureEst = captureEst * 0.8 + ms * 0.2;
+      res(blob && { blob, at, ms });
+    }, 'image/jpeg', JPEG_QUALITY));
   }
 
   // how long to wait before the next frame: fast while someone is arriving, slow otherwise
@@ -839,22 +860,26 @@
     return SCAN_VISITOR_MS;
   }
 
+  let pending = null;   // frame captured during the last sleep
   async function loop() {
     while (true) {
       if (!S.paused && !S.busy) {
         S.busy = true;
         try {
           const t0 = performance.now();
-          const blob = await grabFrame();
-          if (blob) {
-            const t1 = performance.now();
+          let shot = pending ? await pending : null;
+          pending = null;
+          const early = !!shot && t0 - shot.at <= FRAME_MAX_AGE_MS;
+          if (!early) shot = await grabFrame();
+          if (shot) {
+            const blob = shot.blob, t1 = performance.now();
             if (!S.encounter) { S.encounter = uid(); S.frames = 0; approachAt = approachAt || Date.now(); }
             S.frames++;
             const fd = new FormData(); fd.append('file', blob, 'frame.jpg'); fd.append('kiosk', KIOSK); fd.append('encounter', S.encounter);
             // a hung request must never freeze the loop, so every frame gets a hard timeout
             const r = await fetch('/api/recognize', { method: 'POST', body: fd, signal: AbortSignal.timeout(RECOGNIZE_TIMEOUT_MS) });
             const j = await r.json().catch(() => ({ error: `Server error (${r.status})` }));
-            dbg.frame({ capture: t1 - t0, rtt: performance.now() - t1, bytes: blob.size, timing: r.headers.get('Server-Timing'), j });
+            dbg.frame({ capture: t1 - t0, encode: shot.ms, early, rtt: performance.now() - t1, bytes: blob.size, timing: r.headers.get('Server-Timing'), j });
             if (j.error) { status(j.error); S.failures++; }
             else { status(''); S.failures = 0; onResult(j); }
           }
@@ -862,7 +887,12 @@
         S.busy = false;
         if (S.failures) { await sleep(Math.min(5000, 500 * S.failures)); continue; }
       }
-      await napScan(nextScanMs());
+      // sleep, but start capturing the next frame about one capture-time before waking, so the
+      // encode overlaps the sleep instead of adding to it (a motion wake-up skips straight ahead)
+      const ms = nextScanMs(), lead = Math.min(ms, Math.round(captureEst));
+      await napScan(ms - lead);
+      if (!S.paused && !S.busy && !S.failures) pending = grabFrame();
+      await napScan(lead);
     }
   }
 
