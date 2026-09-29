@@ -51,6 +51,8 @@
   nav button.active { background:var(--accent-soft); color:var(--accent); }
   .navlink.insights { margin-top:10px; color:#fff; background:linear-gradient(135deg,#6366f1,#0891b2); justify-content:flex-start; box-shadow:0 4px 14px rgba(79,70,229,.25); }
   .navlink.insights:hover { color:#fff; filter:brightness(1.07); background:linear-gradient(135deg,#6366f1,#0891b2); }
+  .navlink.assist { color:#fff; background:linear-gradient(135deg,#f59e0b,#ef4444); box-shadow:0 4px 14px rgba(239,68,68,.22); }
+  .navlink.assist:hover { color:#fff; filter:brightness(1.07); background:linear-gradient(135deg,#f59e0b,#ef4444); }
   .side-foot { margin-top:auto; display:flex; flex-direction:column; gap:6px; }
   .content { flex:1; min-width:0; }
   .topbar { display:flex; align-items:center; gap:12px; padding:22px 28px 6px; }
@@ -198,6 +200,24 @@
   .bubble.aura { margin:8px 0 0 auto; background:linear-gradient(135deg,#6366f1,#0891b2); color:#fff; border-bottom-right-radius:5px; }
   .bubble.aura small { display:block; opacity:.8; font-size:11px; font-weight:600; margin-bottom:2px; }
 
+  /* ---------- safety ---------- */
+  .srules { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+  .srule { border:1px solid var(--line); border-radius:14px; padding:14px; background:var(--surface); display:flex; flex-direction:column; gap:12px; min-width:0; }
+  .srule.on { border-color:color-mix(in srgb, var(--accent) 40%, var(--line)); box-shadow:var(--shadow); }
+  .srule .sh { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .srule .sh b { flex:1; min-width:0; font-size:15px; overflow-wrap:anywhere; }
+  .ppe-opts { display:flex; flex-wrap:wrap; gap:6px; }
+  .ppe-opt { position:relative; cursor:pointer; }
+  .ppe-opt input { position:absolute; opacity:0; }
+  .ppe-opt span { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border:1px solid var(--line); border-radius:999px; font-size:13px; font-weight:600; color:var(--muted); background:var(--surface); }
+  .ppe-opt input:checked + span { color:var(--fg); border-color:var(--accent); background:var(--accent-soft); }
+  .ppe-opt input:focus-visible + span { outline:2px solid var(--accent); outline-offset:2px; }
+  .lims { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 10px; }
+  .lims .field input { padding:7px 10px; }
+  .srule .acts { display:flex; gap:8px; align-items:center; margin-top:auto; }
+  ul.how { margin:0; padding-left:18px; display:grid; gap:6px; font-size:14px; }
+  @media (max-width:520px) { .srules { grid-template-columns:1fr; } }
+
   /* ---------- setup ---------- */
   .engines { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
   .eng { border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--surface-2); }
@@ -271,10 +291,12 @@
     <button data-s="enrol"><svg class="i" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><circle cx="12" cy="10.5" r="2.8"/><path d="M8 17c1-1.5 2.4-2.2 4-2.2s3 .7 4 2.2"/></svg>Enrol</button>
     <button data-s="locations"><svg class="i" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0119 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Locations</button>
     <button data-s="conversations"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Conversations</button>
+    <button data-s="safety"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>Safety</button>
     <button data-s="setup"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>Setup</button>
   </nav>
   <div class="side-foot">
     <a class="navlink insights" href="/insights"><svg class="i" viewBox="0 0 24 24"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg>Insights ↗</a>
+    <a class="navlink assist" href="/assist" target="_blank" rel="noopener"><svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg>Assist board ↗</a>
     <button class="navlink" id="lock" title="Lock"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg><span class="lbl-lock">Lock</span></button>
   </div>
 </aside>
@@ -430,6 +452,25 @@
   <div class="convos" id="cList"></div>
 </section>
 
+<!-- ================= SAFETY ================= -->
+<section id="s-safety">
+  <div class="card">
+    <h2>🦺 How the ramp safety pack works</h2>
+    <ul class="how">
+      <li>At clock-in, staff in the departments below <b>confirm their PPE</b> with one tap per item — the <b>hi-vis vest is auto-detected</b> by the camera.</li>
+      <li>Where the fatigue check is on, they also <b>rate how rested they feel</b> (1–5). Aura shows a <b>fatigue-risk score</b> with its reasons: rest since last shift, hours in the last 24 h / 7 days, consecutive days, night work, recent “tired” remarks and the self-rating.</li>
+      <li>Missing PPE or a <b>HIGH</b> fatigue score is flagged to supervisors (Insights, and <code>SAFETY_WEBHOOK_URL</code> if set) — it <b>never blocks clock-in</b>.</li>
+    </ul>
+    <p class="notice" style="margin:12px 0 0">The fatigue score is a transparent risk indicator to prompt a conversation — not a medical assessment or a certified fatigue risk management system (FRMS).</p>
+  </div>
+  <div class="card">
+    <div class="card-h"><h2>Department rules</h2>
+      <input id="sNew" placeholder="Other department…" list="deptList" style="width:200px"><button class="btn ghost sm" id="sAdd">+ Add</button></div>
+    <p class="muted" style="margin-top:0">Departments without a rule clock in as normal. Limits are used for the fatigue score.</p>
+    <div class="srules" id="sRules"><div class="muted">Loading…</div></div>
+  </div>
+</section>
+
 <!-- ================= SETUP ================= -->
 <section id="s-setup">
   <div class="card">
@@ -530,6 +571,7 @@
     enrol: ['Enrol', 'Add face photos so the kiosk recognises staff', () => refreshNames()],
     locations: ['Locations', 'Kiosk screens, info cards, media and announcements', () => loadLocations()],
     conversations: ['Conversations', 'What people asked Aura, and what Aura replied', () => loadConvos()],
+    safety: ['Safety', 'Ramp safety pack: PPE and fatigue checks at clock-in, per department', () => loadSafety()],
     setup: ['Setup', 'Kiosk links, AI engines, privacy and demo data', () => { health(); loadEngines(); }],
   };
   function show(s) {
@@ -541,6 +583,7 @@
     Promise.resolve().then(PAGES[s][2]).catch(fail);
   }
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => { show(b.dataset.s); window.scrollTo(0, 0); });
+  addEventListener('hashchange', () => { show(location.hash.slice(1)); window.scrollTo(0, 0); });
 
   // shared name list (profiles + enrolled) for datalists
   async function refreshNames() {
@@ -705,6 +748,7 @@
     $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
     $('kList').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { SEL = b.dataset.k; renderKList(); renderEditor(); if (innerWidth < 900) $('kEditor').scrollIntoView({ behavior: 'smooth' }); });
   }
+  const FLIGHT_OPTS = { both: 'Departures + arrivals', departures: 'Departures only', arrivals: 'Arrivals only', off: 'Off — no flight board' };
   function renderEditor() {
     const k = KIOSKS.find(x => x.name === SEL);
     if (!k) { $('kEditor').innerHTML = '<div class="empty">Select or create a kiosk to edit it.</div>'; return; }
@@ -719,6 +763,7 @@
         <label class="field"><span>Headline</span><input id="k_head" value="${esc(k.headline || '')}" placeholder="e.g. Welcome to the Maldives"></label>
         <label class="field"><span>Subtitle</span><input id="k_sub" value="${esc(k.subtitle || '')}" placeholder="Shown under the headline"></label>
         <div class="field span2"><span>Theme</span><div class="themes">${Object.entries(THEMES).map(([v, l]) => `<label class="theme-opt"><input type="radio" name="k_theme" value="${v}"${(k.theme || 'lagoon') === v ? ' checked' : ''}><span><i class="th-${v}"></i>${l}</span></label>`).join('')}</div></div>
+        <label class="field"><span>Flight board</span><select id="k_flights">${Object.entries(FLIGHT_OPTS).map(([v, l]) => `<option value="${v}"${(k.flights || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <div class="field span2"><span>Voice</span><label class="switch"><input type="checkbox" id="k_voice"${+k.voice !== 0 ? ' checked' : ''}><span class="sl"></span><span>Aura speaks replies aloud and listens for questions</span></label></div>
       </div>
       <h3>Info cards</h3>
@@ -761,7 +806,7 @@
     const body = {
       zone: $('k_zone').value.trim(), headline: $('k_head').value.trim(), subtitle: $('k_sub').value.trim(),
       theme: (document.querySelector('input[name=k_theme]:checked') || {}).value || 'lagoon', language: $('k_lang').value,
-      voice: $('k_voice').checked,
+      voice: $('k_voice').checked, flights: $('k_flights').value,
       info: CARDS.map(c => ({ icon: c.icon.trim(), title: c.title.trim(), text: c.text.trim() })).filter(c => c.title || c.text),
     };
     await api('/api/kiosks/' + enc(name), jsonBody('PUT', body));
@@ -889,6 +934,17 @@
     catch { $('health').innerHTML = '<span class="pill bad">Server unreachable</span>'; }
   }
   const MOOD_MODES = { on: 'Staff (with consent) and anonymous visitors', staff_only: 'Staff with consent only', visitors_only: 'Anonymous visitors only', off: 'Off — no mood is read at all' };
+  const FLIGHT_PROV = { demo: 'Demo schedule', aerodatabox: 'AeroDataBox', json: 'JSON feed', off: 'Off' };
+  function flightCard(f, pill) {
+    const prov = f.provider || 'off';
+    const st = prov === 'off' ? pill('', 'Off') : f.error ? pill('warn', (FLIGHT_PROV[prov] || prov) + ' · error') : pill(prov === 'demo' ? 'acc' : 'ok', FLIGHT_PROV[prov] || prov);
+    const facts = prov === 'off' ? '' : `${esc(f.airport || '—')} · ${esc(f.flights ?? 0)} flights${f.updated ? ' · updated ' + esc(ago(f.updated)) : ''}. `;
+    const err = f.error ? `<br><span style="color:var(--bad)">${esc(f.error)}</span>` : '';
+    const note = prov === 'demo' || prov === 'off'
+      ? (prov === 'demo' ? 'Demo schedule — set' : 'Set') + ' <code>AERODATABOX_KEY</code> (api.market or RapidAPI) or <code>FLIGHT_FEED_URL</code> in <code>.env</code> for live data.'
+      : 'Live departures and arrivals shown on kiosk flight boards.';
+    return `<div class="eng"><div class="eh"><b>Flights</b>${st}</div><p>${facts}${note}${err}</p></div>`;
+  }
   async function loadEngines() {
     api('/api/kiosks').then(k => $('kioskNames').innerHTML = k.kiosks.map(x => `<option value="${esc(x.name)}">`).join('')).catch(() => {});
     $('engines').innerHTML = '<div class="muted">Checking…</div>';
@@ -907,6 +963,13 @@
       card('Emotion', emo, 'On-device FER+ model estimates mood from the face at each visit. No face images leave the server.'),
       card('Mood tracking', pill(moodCls, e.mood_tracking), esc(MOOD_MODES[e.mood_tracking] || e.mood_tracking) + '. Set with <code>MOOD_TRACKING</code> in <code>.env</code>.'),
       card('Retention', pill('acc', `${e.retention_days} days`), 'Conversations and sightings older than this are deleted automatically. Set with <code>INTERACTION_RETENTION_DAYS</code>.'),
+      flightCard(e.flights || {}, pill),
+      card('Safety alerts', e.safety_webhook ? pill('ok', 'Webhook on') : pill('', 'Insights only'),
+        (e.safety_webhook ? 'Flagged clock-in checks (missing PPE or HIGH fatigue risk) are pushed to your supervisors\' chat webhook.'
+          : 'Flagged clock-in checks show in Insights. Set <code>SAFETY_WEBHOOK_URL</code> in <code>.env</code> to push them to supervisors on Slack/Teams/WhatsApp.') + ' Rules are set in the <a href="#safety">Safety</a> tab.'),
+      card('Assist alerts', e.assist_webhook ? pill('ok', 'Webhook on') : pill('', 'Board only'),
+        (e.assist_webhook ? 'New assistance requests are pushed to your chat webhook as well as the <a href="/assist" target="_blank" rel="noopener">Assist board</a>.'
+          : 'New requests appear on the <a href="/assist" target="_blank" rel="noopener">Assist board</a>. Set <code>ASSIST_WEBHOOK_URL</code> in <code>.env</code> to push new requests to Slack/Teams/WhatsApp.')),
     ].join('');
     const li = (ic, html) => `<li><span class="ic">${ic}</span><span>${html}</span></li>`;
     $('privacy').innerHTML = [
@@ -917,6 +980,54 @@
       li('✋', '<b>Per-person consent:</b> each staff member can opt out of mood tracking (People → profile). Opting out erases past readings; conversations can be forgotten on request.'),
     ].join('');
   }
+  // ---- safety rules ----
+  const SDEF = { ppe: [], fatigue: 0, min_rest_h: 10, max_24h_h: 12, max_7d_h: 60, max_days: 6 };
+  let SAFE = { rules: [], departments: [], catalog: {} }, SEXTRA = [];
+  async function loadSafety() {
+    SAFE = await api('/api/safety/rules');
+    renderSafety();
+  }
+  function renderSafety() {
+    const byDept = Object.fromEntries(SAFE.rules.map(r => [r.department, r]));
+    const depts = [...new Set([...SAFE.rules.map(r => r.department), ...SAFE.departments, ...SEXTRA])]
+      .sort((a, b) => (byDept[b] ? 1 : 0) - (byDept[a] ? 1 : 0) || a.localeCompare(b));
+    const num = (i, f, label, step, v) => `<label class="field"><span>${label}</span><input type="number" min="0" step="${step}" data-f="${f}" value="${esc(v)}" aria-label="${label}"></label>`;
+    $('sRules').innerHTML = depts.map((d, i) => {
+      const r = byDept[d], v = { ...SDEF, ...(r || {}) };
+      const fat = +v.fatigue === 1;
+      return `<div class="srule${r ? ' on' : ''}" data-d="${esc(d)}">
+        <div class="sh"><b>${esc(d)}</b>${r ? (r.ppe.length || fat ? '<span class="pill ok">Checks on</span>' : '<span class="pill">Rule saved · no checks</span>') : '<span class="pill">No rule</span>'}</div>
+        <div class="field"><span>PPE to confirm</span><div class="ppe-opts">${Object.entries(SAFE.catalog).map(([k, c]) => `<label class="ppe-opt"><input type="checkbox" data-ppe="${esc(k)}"${v.ppe.includes(k) ? ' checked' : ''}><span>${esc(c.icon)} ${esc(c.label)}${k === 'hi_vis' ? ' <small class="muted">· auto</small>' : ''}</span></label>`).join('')}</div></div>
+        <label class="switch"><input type="checkbox" data-f="fatigue"${fat ? ' checked' : ''}><span class="sl"></span><span>Fatigue check (rested rating + risk score)</span></label>
+        <div class="lims"${fat ? '' : ' hidden'}>${num(i, 'min_rest_h', 'Min rest between shifts (h)', '0.5', v.min_rest_h)}${num(i, 'max_24h_h', 'Max hours in 24 h', '0.5', v.max_24h_h)}${num(i, 'max_7d_h', 'Max hours in 7 days', '1', v.max_7d_h)}${num(i, 'max_days', 'Max consecutive days', '1', v.max_days)}</div>
+        <div class="acts"><button class="btn sm" data-a="save">Save</button>${r ? '<button class="btn danger sm" data-a="del">Remove rule</button>' : ''}</div>
+      </div>`;
+    }).join('') || '<div class="empty">No departments yet — add departments to staff profiles, or add one above.</div>';
+    $('sRules').querySelectorAll('.srule').forEach(card => {
+      const d = card.dataset.d;
+      card.querySelector('[data-f=fatigue]').onchange = e => { card.querySelector('.lims').hidden = !e.target.checked; };
+      card.querySelector('[data-a=save]').onclick = async () => {
+        const f = k => Number(card.querySelector(`[data-f=${k}]`).value) || SDEF[k];
+        const body = { ppe: [...card.querySelectorAll('[data-ppe]:checked')].map(x => x.dataset.ppe), fatigue: card.querySelector('[data-f=fatigue]').checked,
+                       min_rest_h: f('min_rest_h'), max_24h_h: f('max_24h_h'), max_7d_h: f('max_7d_h'), max_days: Math.round(f('max_days')) };
+        try { await api('/api/safety/rules/' + enc(d), jsonBody('PUT', body)); toast(`Saved safety rule for ${d}`); await loadSafety(); } catch (e) { fail(e); }
+      };
+      const del = card.querySelector('[data-a=del]');
+      if (del) del.onclick = async () => {
+        if (!confirm(`Remove the safety rule for ${d}?\n\nStaff in ${d} will clock in without PPE or fatigue checks.`)) return;
+        try { await api('/api/safety/rules/' + enc(d), { method: 'DELETE' }); toast(`Removed rule for ${d}`); await loadSafety(); } catch (e) { fail(e); }
+      };
+    });
+  }
+  $('sAdd').onclick = () => {
+    const d = $('sNew').value.trim(); if (!d) return;
+    if (!SEXTRA.includes(d)) SEXTRA.push(d);
+    $('sNew').value = ''; renderSafety();
+    const c = [...$('sRules').querySelectorAll('.srule')].find(x => x.dataset.d === d);
+    if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.querySelector('input').focus(); }
+  };
+  $('sNew').onkeydown = e => { if (e.key === 'Enter') $('sAdd').click(); };
+
   $('engRefresh').onclick = () => loadEngines().catch(fail);
   const counts = j => Object.entries(j).filter(([k]) => k !== 'ok').map(([k, v]) => `<span class="chip">${esc(k)}: ${esc(v)}</span>`).join(' ');
   $('demoLoad').onclick = async () => {

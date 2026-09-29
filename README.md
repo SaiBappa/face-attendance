@@ -46,6 +46,27 @@ text), and which info card answers the question. Replies come from Claude when
 built-in templates in 11 languages. Every exchange is stored per person (or per anonymous
 visitor encounter), and wellbeing signals become short-lived *memories* Aura follows up on.
 
+**Live flights** — each kiosk can show a departures/arrivals board (per location: both, departures,
+arrivals or off), and Aura answers "is EK653 on time?", "my flight to Istanbul?" or "when does the
+Doha flight land?" in the passenger's language, with gate, check-in desks or baggage belt. Data comes
+from AeroDataBox (key from api.market or RapidAPI), your own FIDS JSON feed, or a realistic demo
+schedule when no key is set.
+
+**Assistance requests** — "🙋 Get help" on the kiosk (wheelchair, medical, lost item, lost child,
+porter, security, talk to staff), or Aura offers a "call a team member" button when a conversation
+shows someone needs help. The traveller sees live status ("Fathimath is on the way"). Staff work
+requests on the **Assist board** (`/assist`, its own `ASSIST_PIN`) with SLA timers and a chime; new
+requests can also be pushed to Slack/Teams/a WhatsApp gateway via `ASSIST_WEBHOOK_URL`.
+
+**Ramp safety pack** — departments with safety rules (Admin → Setup; demo: Ground Handling, Security,
+Facilities) get a checklist when they clock IN: PPE items (the camera auto-detects a hi-vis vest)
+and "how rested do you feel?". A transparent fatigue-risk score (rest since last shift, hours in
+24 h / 7 days, consecutive days, night work, recently telling Aura they were tired, the self-rating)
+is shown to the worker with its reasons. Missing PPE or HIGH fatigue is flagged to supervisors
+(`SAFETY_WEBHOOK_URL`, defaults to the assist webhook) and in Insights. It never blocks clocking in —
+it's a prompt and a record, not a gate. The score is a rule-of-thumb risk indicator, not a medical
+or regulatory fatigue-risk-management system.
+
 **Insights (`/insights`)** — on-time %, arrival times, hours, breaks, staff & visitor mood trends,
 mood by hour/weekday/location/department, arrivals heatmap, conversation intents & languages,
 per-person drill-down (daily timeline, mood calendar, outfits, memories, full chat history) and
@@ -64,6 +85,15 @@ and kudos for on-time streaks.
 | `WEEKEND_DAYS` | `fri,sat` | For day-of-week greetings |
 | `MOOD_TRACKING` | `on` | `on` · `staff_only` · `visitors_only` · `off` |
 | `INTERACTION_RETENTION_DAYS` | `365` | Conversations and mood readings older than this are purged on start |
+| `FLIGHT_PROVIDER` | auto | `aerodatabox` · `json` · `demo` · `off`; empty = AeroDataBox if a key is set, else `json` if a URL is set, else demo |
+| `FLIGHT_AIRPORT` | `MLE` | IATA code of the airport |
+| `AERODATABOX_KEY` / `AERODATABOX_RAPIDAPI_KEY` | — | AeroDataBox FIDS via api.market or RapidAPI (paid tiers; check coverage for your airport) |
+| `FLIGHT_FEED_URL` | — | Your own feed returning `{"flights": [...]}` in the shape `/api/flights` returns |
+| `ASSIST_PIN` | = `ADMIN_PIN` | PIN for the `/assist` board, so desk agents don't need the admin PIN |
+| `ASSIST_WEBHOOK_URL` | — | POSTs `{"text", "request"}` for each new assistance request |
+| `ASSIST_SLA_MINUTES` | `5` | Response-time target shown on the board and in Insights |
+| `SAFETY_WEBHOOK_URL` | = assist webhook | POSTs flagged safety checks (missing PPE / high fatigue) |
+| `HIVIS_MIN_SHARE` | `0.12` | Share of fluorescent torso pixels that counts as "hi-vis seen" |
 
 Per-location content (headline, theme, info cards, images/videos, announcements, voice on/off)
 is managed in **Admin → Locations**. Load **demo data** from Admin → Setup to show the system to

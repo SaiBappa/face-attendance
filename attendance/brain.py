@@ -21,6 +21,7 @@ from typing import Optional
 
 import httpx
 
+import flights as flightdata
 import phrases
 
 JEV_URL = os.environ.get("JEV_URL", "https://api.typesafe.ai/v1").rstrip("/")
@@ -136,8 +137,13 @@ KEYWORDS = [  # used only when Jev is not reachable
 ]
 
 
-async def understand(text: str, who: str, location: str, lang_hint: Optional[str], cards: list) -> dict:
-    """Intent, sentiment, wellbeing flags, language and (optionally) the matching info card."""
+FLIGHT_WORDS_RX = r"(flight|fly|plane|gate|board|delay|depart|arriv|land|check.?in|рейс|вылет|航班|登机|رحلة|flug|volo|vol\b|vuelo|उड़ान|फ़्लाइट|便)"
+
+
+async def understand(text: str, who: str, location: str, lang_hint: Optional[str], cards: list,
+                     flight_list: Optional[list] = None) -> dict:
+    """Intent, sentiment, wellbeing flags, language, the matching info card, the flight asked
+    about, and whether the person needs a staff member (assistance request)."""
     script = script_language(text)
     q = {
         "intent": {"type": "choice", "instructions": "What does the speaker want from the airport kiosk assistant?",
@@ -157,6 +163,21 @@ async def understand(text: str, who: str, location: str, lang_hint: Optional[str
         crit["none"] = "none of these answers the question"
         q["card"] = {"type": "choice", "instructions": "Which information card best answers the speaker?",
                      "criteria": crit}
+    q["assist"] = {"type": "choice", "instructions": "Does the speaker need a staff member to physically come and help? If so, with what?",
+                   "criteria": {**{k: v[1] for k, v in phrases.ASSIST_KINDS.items() if k != "other"},
+                                "other": "needs a staff member for something else", "none": "no staff member needed"}}
+    # which flight? a flight number is matched directly; otherwise let Jev pick from the board
+    flight = flightdata.find_by_number(text, flight_list or [])
+    cands = []
+    if not flight and flight_list and re.search(FLIGHT_WORDS_RX, text.lower()):
+        cands = flightdata.upcoming_for_choice(flight_list)
+        if cands:
+            crit = {f"f{i}": f"{f['number']} {f.get('airline') or ''} {'to' if f['dir'] == 'dep' else 'from'} {f.get('city')} ({f.get('city_iata')}) at {(f.get('scheduled') or '')[11:16]}"
+                    for i, f in enumerate(cands)}
+            crit["none"] = "no specific flight can be identified from what they said"
+            q["flight"] = {"type": "choice", "criteria": crit, "instructions": (
+                "Which flight is the speaker asking about? If they name a destination ('to X') pick the departing flight to X; "
+                "if they name an origin ('from X') pick the arriving flight from X. Choose none only if no city, airline or number is given.")}
     state = f"A {who} is talking to the wall-mounted assistant at {location}, {AIRPORT}.\nThey said: \"{text}\""
     a = await jev(state, q)
 
@@ -168,6 +189,14 @@ async def understand(text: str, who: str, location: str, lang_hint: Optional[str
         out["flags"] = {k: round(float(a[k]["noul"]), 2) for k in ("tired", "unwell", "stressed", "celebrating")}
         if "lang" in a:
             out["lang"] = a["lang"]["choice"]
+        if "flight" in a:
+            # accept the leading flight if it clearly beats the other flights, even when "none" edges ahead
+            probs = sorted(((k, v) for k, v in a["flight"]["probabilities"].items() if k != "none"), key=lambda kv: -kv[1])
+            if probs and probs[0][1] >= 0.3 and (len(probs) == 1 or probs[0][1] >= 2 * probs[1][1]):
+                flight = cands[int(probs[0][0][1:])]
+        ch = a["assist"]["choice"]
+        if ch != "none" and (a["assist"]["probabilities"].get(ch) or 0) >= 0.5:
+            out["assist"] = ch
         # info cards only answer questions, never social chat ("I'm tired" is not a canteen query)
         if ("card" in a and a["card"]["choice"] != "none" and out["intent"] in INFO_INTENTS
                 and (a["card"].get("confidence") or 0) > 0.3):
@@ -176,6 +205,12 @@ async def understand(text: str, who: str, location: str, lang_hint: Optional[str
         low = text.lower()
         out["intent"] = next((i for i, rx in KEYWORDS if re.search(rx, low)), "other")
         out["sentiment"] = {"share_bad": 0.2, "complaint": 0.25, "share_good": 0.85, "thanks": 0.8}.get(out["intent"], 0.5)
+    if flight:
+        out["flight"] = flight
+        if out["intent"] in ("other", "directions", "greeting"):
+            out["intent"] = "flight"
+    if out["intent"] == "lost" and not out.get("assist"):
+        out["assist"] = "lost_item"
     out["lang"] = out["lang"] or "en"
     return out
 
@@ -203,7 +238,7 @@ Always reply in the language with ISO code "{lang}" ({phrases.LANGUAGE_NAMES.get
 Be kind and uplifting. Compliment effort, style choices (e.g. outfit colour), punctuality and attitude.
 Never comment on body shape, weight, skin, age, attractiveness or other physical traits; never guess
 health conditions. If someone seems unwell or distressed, be supportive and suggest a supervisor or
-first-aid point. You cannot see live flight data; point people to flight screens or airline counters.
+first-aid point. Flight facts: use only the live flight data given below; never guess gates or times.
 Only state facts about the airport that appear in the kiosk info below.
 
 Kiosk info:
@@ -219,6 +254,12 @@ Local time: {ctx['now']}"""
             about += "\nThings you remember about them: " + "; ".join(m["fact"] for m in ctx["memories"])
         if ctx.get("history"):
             about += "\nRecent conversations:\n" + _history_text(ctx["history"])
+    if u.get("flight"):
+        about += f"\nLive data for the flight they mean: {json.dumps(u['flight'], ensure_ascii=False)}"
+    elif u["intent"] == "flight":
+        about += "\nNo flight identified yet: ask for the flight number (it is on the boarding pass)."
+    if u.get("assist"):
+        about += f"\nThey may need staff help ({u['assist']}); the screen will show a 'call a team member' button — mention it."
     if ctx.get("mood"):
         about += f"\nTheir facial expression right now looks {MOODS.get(ctx['mood'], (0, ctx['mood']))[1]}."
     signals = f"Detected intent: {u['intent']}; sentiment {u.get('sentiment')} (0=very negative, 1=very positive); flags {u.get('flags')}"
@@ -257,7 +298,7 @@ Local time: {ctx['now']}"""
 async def reply(text: str, ctx: dict) -> dict:
     """ctx: location, person, profile, cards, attendance_text, memories, history, mood, lang_hint, now."""
     who = "staff member" if ctx.get("person") else "traveller"
-    u = await understand(text, who, ctx["location"], ctx.get("lang_hint"), ctx.get("cards") or [])
+    u = await understand(text, who, ctx["location"], ctx.get("lang_hint"), ctx.get("cards") or [], ctx.get("flights"))
     lang = u["lang"]
 
     remember = ""
@@ -280,6 +321,16 @@ async def reply(text: str, ctx: dict) -> dict:
             intent, lang, name_part=f", {first}" if first else "", location=ctx["location"],
             airport=AIRPORT, wifi=WIFI, time=ctx["now"], card=card_text or "",
         )
+        if u["intent"] == "flight":
+            if u.get("flight"):
+                text_out, used = phrases.render_flight(u["flight"], lang)
+            elif ctx.get("flights") and not card_text:
+                used = lang if lang in phrases.FLIGHT_ASK else "en"
+                text_out = phrases.FLIGHT_ASK[used]
+        # offer the "call a team member" button, except for plain venting ("I'm tired") at a staff kiosk
+        if u.get("assist") and intent != "lost" and (intent != "share_bad" or u["assist"] == "medical"):
+            offer = phrases.ASSIST_OFFER[used if used in phrases.ASSIST_OFFER else "en"]
+            text_out = offer if intent in ("other", "greeting") else f"{text_out} {offer}"
         engine = f"{u['engine']}+templates"
 
     # wellbeing memories: remembered for a few days, used in the next greeting
@@ -296,6 +347,7 @@ async def reply(text: str, ctx: dict) -> dict:
         "reply": text_out, "lang": used, "locale": phrases.LOCALES.get(used, "en-GB"),
         "intent": u["intent"], "sentiment": u.get("sentiment"), "flags": u.get("flags"),
         "engine": engine, "facts": facts,
+        "flight": u.get("flight"), "assist": u.get("assist"),
     }
 
 

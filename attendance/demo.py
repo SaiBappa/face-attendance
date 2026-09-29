@@ -7,6 +7,7 @@ import json
 import random
 from datetime import date, datetime, timedelta
 
+import safety
 from brain import MOODS
 from store import db
 
@@ -116,6 +117,11 @@ def seed(days: int = 60) -> dict:
         for name, zone, headline, subtitle, theme, info in KIOSKS:
             conn.execute("INSERT OR IGNORE INTO kiosks (name, zone, headline, subtitle, theme, info, demo) VALUES (?,?,?,?,?,?,1)",
                          (name, zone, headline, subtitle, theme, json.dumps(info, ensure_ascii=False)))
+        # ramp safety pack: department rules (kept when demo data is removed — they suit real teams too)
+        for dept, ppe, fat in (("Ground Handling", ["hi_vis", "id_badge", "ear", "shoes", "gloves"], 1),
+                               ("Security", ["id_badge"], 1), ("Facilities", ["shoes", "gloves"], 0)):
+            if not conn.execute("SELECT 1 FROM safety_rules WHERE department=?", (dept,)).fetchone():
+                safety.save_rule(conn, dept, {"ppe": ppe, "fatigue": fat})
         conn.execute("INSERT INTO announcements (kiosk, text, level, created) VALUES ('*', ?, 'info', ?)",
                      ("Staff townhall on Thursday 14:00 in the training room — snacks provided! (demo)", datetime.now().isoformat(timespec="seconds")))
         for i, (name, dept, role, shift, lang) in enumerate(STAFF):
@@ -131,8 +137,9 @@ def seed(days: int = 60) -> dict:
             wd = day.weekday()  # Mon=0
             for i, (name, dept, role, shift, lang) in enumerate(STAFF):
                 # personalities: 0 = always early star, 5 = chronically late, 7 = mood sliding in the last week
-                if rng.random() < (0.12 if wd in (4, 5) else 0.06):
-                    continue  # day off
+                # two rest days a week (staggered), plus the odd sick/leave day; Ali (6) skips rest lately
+                if (wd in (i % 7, (i + 1) % 7) and not (i == 6 and d <= 10)) or rng.random() < 0.04:
+                    continue
                 sh, sm = int(shift[:2]), int(shift[3:])
                 offset = rng.gauss(-6, 5)
                 if i == 0:
@@ -156,7 +163,8 @@ def seed(days: int = 60) -> dict:
                 brk_len = rng.gauss(45, 10) if i != 13 else rng.gauss(85, 10)
                 seq.append(("BREAK", brk))
                 seq.append(("BACK", brk + timedelta(minutes=max(10, brk_len))))
-                t_out = t_in + timedelta(hours=rng.gauss(9.1, 0.5) + (1.3 if i == 1 and rng.random() < 0.4 else 0))
+                t_out = t_in + timedelta(hours=rng.gauss(9.1, 0.5) + (1.3 if i == 1 and rng.random() < 0.4 else 0)
+                                         + (4.5 if i == 6 and d <= 8 and rng.random() < 0.6 else 0))   # Ali: double shifts lately
                 seq.append(("OUT", t_out))
                 for action, ts in seq:
                     if ts > datetime.now():
@@ -176,6 +184,14 @@ def seed(days: int = 60) -> dict:
                          round(rng.uniform(0.5, 0.95), 2), attire))
                     counts["events"] += 1
                     counts["sightings"] += 1
+                    rules = safety.rules_for(conn, dept)
+                    if action == "IN" and (rules["ppe"] or rules["fatigue"]):
+                        items = {k: ("missing" if rng.random() < {"ear": 0.08, "gloves": 0.05}.get(k, 0.01) else "ok") for k in rules["ppe"]}
+                        rested = rng.choice([2, 2, 3]) if (i == 6 and d <= 8) else rng.choice([3, 4, 4, 5])
+                        safety.record(conn, name, {"department": dept}, kiosk, items,
+                                      round(rng.uniform(0.18, 0.4), 3) if "hi_vis" in rules["ppe"] else None,
+                                      rested if rules["fatigue"] else None, demo=1, now=ts + timedelta(seconds=30))
+                        counts["safety_checks"] = counts.get("safety_checks", 0) + 1
                     if action == "IN":
                         conn.execute(
                             "INSERT INTO interactions (ts, day, kiosk, person, kind, channel, lang, reply, intent, mood, engine, demo) VALUES (?,?,?,?,?,?,?,?,?,?,?,1)",
@@ -198,6 +214,31 @@ def seed(days: int = 60) -> dict:
                         "INSERT INTO sightings (ts, day, hour, kiosk, kind, mood, valence, confidence, demo) VALUES (?,?,?,?,?,?,?,?,1)",
                         (ts.isoformat(timespec="seconds"), ts.date().isoformat(), h, kiosk, "visitor", mood, MOODS[mood][0], round(rng.uniform(0.5, 0.95), 2)))
                     counts["sightings"] += 1
+            # assistance requests at the public kiosks
+            helpers = [n for n, dept, *_ in STAFF if dept == "Customer Service"]
+            for _ in range(rng.randint(3, 9)):
+                h = min(23, max(5, int(rng.gauss(rng.choice((10, 14, 20)), 3))))
+                ts = datetime(day.year, day.month, day.day, h, rng.randint(0, 59), rng.randint(0, 59))
+                if ts > datetime.now():
+                    continue
+                kind = rng.choices(["wheelchair", "porter", "lost_item", "medical", "other", "lost_person", "security"],
+                                   [30, 22, 18, 8, 15, 3, 4])[0]
+                ack = ts + timedelta(minutes=max(0.5, rng.gauss(3.5 if h < 20 else 6, 2)))
+                done = ack + timedelta(minutes=max(2, rng.gauss(14, 6)))
+                status = "done" if done < datetime.now() else "acknowledged" if ack < datetime.now() else "open"
+                if rng.random() < 0.04:
+                    status = "cancelled"
+                conn.execute(
+                    """INSERT INTO requests (ts, day, kiosk, kind, details, lang, encounter, source, status, assigned_to, ack_ts, done_ts, demo)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)""",
+                    (ts.isoformat(timespec="seconds"), day.isoformat(), rng.choice(["Arrivals-Hall", "Departures-Gate-3"]), kind,
+                     rng.choice([None, None, "Blue suitcase left near belt 2", "Elderly passenger, 2 bags", "Needs help to transfer desk"]),
+                     rng.choice(["en", "ru", "zh", "it", "de", "ar"]), f"demo-{rng.getrandbits(32):x}",
+                     rng.choice(["button", "button", "conversation"]), status,
+                     rng.choice(helpers) if status in ("acknowledged", "done") else None,
+                     ack.isoformat(timespec="seconds") if status in ("acknowledged", "done") else None,
+                     done.isoformat(timespec="seconds") if status in ("done", "cancelled") else None))
+                counts["requests"] = counts.get("requests", 0) + 1
             # conversations
             for _ in range(rng.randint(8, 22)):
                 kind, lang, text, intent, senti = rng.choice(CONVERSATIONS)
@@ -230,7 +271,7 @@ def clear(conn=None) -> dict:
     conn = conn or db()
     try:
         n = 0
-        for t in ("events", "sightings", "interactions", "memories", "people", "kiosks"):
+        for t in ("events", "sightings", "interactions", "memories", "people", "kiosks", "requests", "safety_checks"):
             n += conn.execute(f"DELETE FROM {t} WHERE demo=1").rowcount
         conn.execute("DELETE FROM announcements WHERE text LIKE '%(demo)'")
         if own:

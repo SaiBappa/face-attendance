@@ -9,6 +9,9 @@ SQLite schema for Aura. One file, created/migrated on start-up.
   kiosks         per-location screen config: zone, headline, theme, info cards
   media          images/videos shown on a kiosk's ambient screen ('*' = every kiosk)
   announcements  ticker messages per kiosk ('*' = every kiosk)
+  requests       passenger/staff assistance requests (wheelchair, medical, lost item…) and their SLA
+  safety_rules   per-department PPE items + fatigue-check limits (ramp safety pack)
+  safety_checks  one row per clock-in safety check: PPE confirmed/missing, hi-vis share, fatigue score
 
 Rows produced by the demo generator carry demo=1 so they can be removed in one go.
 """
@@ -116,6 +119,54 @@ CREATE TABLE IF NOT EXISTS media (
     created  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS requests (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts          TEXT NOT NULL,
+    day         TEXT NOT NULL,
+    kiosk       TEXT,
+    kind        TEXT NOT NULL,              -- wheelchair | medical | lost_item | porter | security | other
+    details     TEXT,
+    lang        TEXT,
+    person      TEXT,                       -- staff member who raised it, NULL for travellers
+    encounter   TEXT,
+    source      TEXT,                       -- button | conversation
+    status      TEXT NOT NULL DEFAULT 'open',   -- open | acknowledged | done | cancelled
+    assigned_to TEXT,
+    ack_ts      TEXT,
+    done_ts     TEXT,
+    notes       TEXT,
+    demo        INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_req_status ON requests(status, id);
+CREATE INDEX IF NOT EXISTS idx_req_day ON requests(day);
+
+CREATE TABLE IF NOT EXISTS safety_rules (
+    department TEXT PRIMARY KEY,
+    ppe        TEXT DEFAULT '[]',          -- JSON list of PPE keys (safety.PPE)
+    fatigue    INTEGER NOT NULL DEFAULT 0, -- run the fatigue check at clock-in
+    min_rest_h REAL, max_24h_h REAL, max_7d_h REAL, max_days INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS safety_checks (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts            TEXT NOT NULL,
+    day           TEXT NOT NULL,
+    person        TEXT NOT NULL,
+    department    TEXT,
+    kiosk         TEXT,
+    items         TEXT,                    -- JSON {key: ok|missing}
+    missing       TEXT,                    -- comma list, NULL when complete
+    hivis         REAL,                    -- fluorescent share seen by the camera
+    rested        INTEGER,                 -- self-rating 1..5
+    fatigue_score INTEGER,
+    fatigue_level TEXT,                    -- low | moderate | high
+    factors       TEXT,                    -- JSON list explaining the score
+    result        TEXT NOT NULL,           -- pass | flagged
+    demo          INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_safety_day ON safety_checks(day);
+CREATE INDEX IF NOT EXISTS idx_safety_person ON safety_checks(person, ts);
+
 CREATE TABLE IF NOT EXISTS announcements (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     kiosk   TEXT NOT NULL DEFAULT '*',
@@ -130,6 +181,8 @@ CREATE TABLE IF NOT EXISTS announcements (
 # columns added to pre-existing tables (original install only had `events`)
 MIGRATIONS = {
     "events": {"mood": "TEXT", "attire": "TEXT", "demo": "INTEGER NOT NULL DEFAULT 0"},
+    # flight board on the ambient screen: departures | arrivals | both | off
+    "kiosks": {"flights": "TEXT DEFAULT 'both'"},
 }
 
 

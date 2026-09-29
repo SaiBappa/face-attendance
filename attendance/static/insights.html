@@ -171,7 +171,7 @@
   .chip:hover { background:var(--hover); }
 
   /* ------------------------------------------------------------------ KPI tiles */
-  .kpis { display:grid; grid-template-columns:repeat(9,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+  .kpis { display:grid; grid-template-columns:repeat(10,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
   @media (max-width:1250px) { .kpis { grid-template-columns:repeat(5,minmax(0,1fr)); } }
   @media (max-width:760px) { .kpis { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; } }
   .kpi { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 14px 12px; box-shadow:var(--shadow); min-width:0; position:relative; overflow:hidden; }
@@ -235,8 +235,42 @@
   .pill.green { color:var(--good-ink); background:color-mix(in srgb, var(--good) 12%, transparent); border-color:transparent; }
   .pill.out { font-style:italic; font-weight:500; }
   .inbar { display:flex; align-items:center; gap:8px; }
+  .inbar.sm .t { width:56px; }
   .inbar .t { width:90px; height:8px; background:var(--none); border-radius:4px; overflow:hidden; flex:none; }
   .inbar .t i { display:block; height:100%; border-radius:0 4px 4px 0; }
+
+  /* assistance */
+  .asec-h { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 14px; margin:26px 0 12px; }
+  .asec-h h2 { margin:0; font-size:19px; letter-spacing:-.01em; font-weight:700; }
+  .asec-h p { margin:2px 0 0; font-size:13px; color:var(--muted); }
+  .asec-h .grow { flex:1; min-width:200px; }
+  .aminis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+  @media (max-width:760px) { .aminis { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } .aminis > :first-child { grid-column:1/-1; } }
+  .hb .n .ki { display:inline-block; width:1.4em; text-align:center; margin-right:4px; }
+  .lb { width:100%; border-collapse:collapse; }
+  .lb td { padding:8px 6px; }
+  .lb .rk { width:26px; color:var(--muted); font-weight:650; text-align:center; }
+  .lb .av { width:26px; height:26px; font-size:10.5px; }
+
+  /* safety */
+  .slist { display:grid; gap:8px; max-height:360px; overflow:auto; margin:-2px -4px 0; padding:2px 4px; }
+  .sitem { display:grid; grid-template-columns:auto 1fr auto; gap:4px 10px; align-items:start; text-align:left; width:100%; padding:10px 12px;
+           border-radius:12px; border:1px solid var(--line); background:var(--card2); cursor:pointer; }
+  .sitem:hover { border-color:color-mix(in srgb, var(--ink) 20%, transparent); }
+  .sitem .who b { font-size:14px; }
+  .sitem .when { font-size:12px; color:var(--muted); white-space:nowrap; }
+  .sitem ul { grid-column:2 / -1; margin:2px 0 0; padding-left:16px; font-size:12.5px; color:var(--ink2); }
+  .sitem .miss { grid-column:2 / -1; display:flex; flex-wrap:wrap; gap:4px; }
+  .fscore { display:inline-grid; place-items:center; min-width:40px; height:26px; padding:0 8px; border-radius:8px; font-weight:700; font-size:13px; font-variant-numeric:tabular-nums; }
+  .fscore.high { color:#fff; background:var(--crit); }
+  .fscore.moderate { color:#3a2600; background:var(--warn); }
+  .fscore.low { color:#fff; background:var(--good); }
+  .schk { display:grid; grid-template-columns:auto 1fr auto; gap:4px 12px; align-items:start; padding:10px 0; border-bottom:1px solid var(--line); }
+  .schk:last-child { border-bottom:0; }
+  .schk .rs { font-size:22px; line-height:1; }
+  .schk .t { font-size:13.5px; }
+  .schk .t small { color:var(--muted); }
+  .schk ul { margin:4px 0 0; padding-left:16px; font-size:12.5px; color:var(--ink2); }
 
   /* locations */
   .locs { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; }
@@ -459,6 +493,67 @@
       <div class="locs" id="cLocs"></div>
     </article>
 
+    <!-- assistance requests raised from the kiosks -->
+    <div class="asec-h" id="assist">
+      <div class="grow"><h2>🛎 Assistance</h2><p>Help requests raised at the kiosks — how fast the team responded and where help is needed</p></div>
+      <a class="btn no-print" href="/assist" target="_blank" rel="noopener">Open Assist board ↗</a>
+    </div>
+    <div class="aminis" id="aKpis"></div>
+    <div class="grid g-2">
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Requests by hour</h2><p>When travellers ask for help — plan desk cover around the peaks</p></div></div>
+        <div class="chart" id="aHour"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>What people need</h2><p>Requests by type</p></div></div>
+        <div class="hbars" id="aKind"></div>
+      </article>
+    </div>
+    <div class="grid g-3">
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>By location</h2><p>Kiosk the request was raised from</p></div></div>
+        <div class="hbars" id="aLoc"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Responders</h2><p>Requests handled and median time to respond</p></div></div>
+        <div id="aResp"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>How it was raised</h2><p>Help button vs. asked in conversation</p></div></div>
+        <div id="aSrc"></div>
+      </article>
+    </div>
+
+    <!-- ramp safety pack: PPE + fatigue checks at clock-in -->
+    <div class="asec-h" id="safety">
+      <div class="grow"><h2>🦺 Safety</h2><p>PPE and fatigue checks at clock-in for departments with safety rules — a risk indicator, not a medical assessment</p></div>
+    </div>
+    <div class="aminis" id="sKpis"></div>
+    <div class="grid g-3">
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Missing PPE</h2><p>Items not confirmed at clock-in</p></div></div>
+        <div class="hbars" id="sMiss"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Fatigue risk</h2><p>Share of checks by fatigue level</p></div></div>
+        <div id="sLevels"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>By department</h2><p>PPE compliance and high-fatigue check-ins</p></div></div>
+        <div class="tbl-wrap" id="sDept"></div>
+      </article>
+    </div>
+    <div class="grid g-2">
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>High fatigue</h2><p>Latest HIGH-risk clock-in per person, with the reasons — select to drill down</p></div></div>
+        <div class="slist" id="sHigh"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Recent flags</h2><p>Checks flagged to supervisors (missing PPE or high fatigue)</p></div></div>
+        <div class="slist" id="sFlags"></div>
+      </article>
+    </div>
+
     <div class="grid g-3">
       <article class="card">
         <div class="card-h"><div class="grow"><h2>Top requests</h2><p>Detected intent of each conversation</p></div></div>
@@ -561,7 +656,7 @@
     navy: '#1f2e5b', 'sky blue': '#7db9e6', blue: '#2a63d4', purple: '#6e3fa7', pink: '#e98ab5' };
   const MEMICON = { tired: '😴', unwell: '🤒', stressed: '😣', celebrating: '🎉', note: '📝' };
   const CHANICON = { voice: '🎙️', text: '⌨️', greeting: '👋' };
-  const FLAG = { wellbeing: ['Wellbeing', 'red'], mood_drop: ['Mood drop', 'amber'], late: ['Often late', 'amber'], long_breaks: ['Long breaks', ''], star: ['★ Streak', 'green'] };
+  const FLAG = { wellbeing: ['Wellbeing', 'red'], mood_drop: ['Mood drop', 'amber'], late: ['Often late', 'amber'], long_breaks: ['Long breaks', ''], star: ['★ Streak', 'green'], fatigue: ['Fatigue risk', 'red'] };
 
   // ============================================================== state + API
   let PIN = sessionStorage.getItem('pin') || '';
@@ -838,11 +933,11 @@
   }
 
   // ============================================================== HTML horizontal bars
-  function hbars(items, color = 'var(--s1)') {
-    if (!items.length) return '<div class="empty">No conversations in this range</div>';
+  function hbars(items, color = 'var(--s1)', unit = 'conversations') {
+    if (!items.length) return `<div class="empty">No ${esc(unit)} in this range</div>`;
     const max = Math.max(...items.map(i => i.value)), tot = sum(items.map(i => i.value));
-    return items.map(i => `<div class="hb"${tipAttr({ t: i.label, r: [[color, 'conversations', fmt(i.value)]], n: `${pctOf(i.value, tot)}% of total` })}>
-      <span class="n">${esc(i.label)}${i.sub ? `<small>${esc(i.sub)}</small>` : ''}</span>
+    return items.map(i => `<div class="hb"${tipAttr({ t: i.label, r: [[color, unit, fmt(i.value)]], n: i.note || `${pctOf(i.value, tot)}% of total` })}>
+      <span class="n">${i.icon ? `<span class="ki" aria-hidden="true">${esc(i.icon)}</span>` : ''}${esc(i.label)}${i.sub ? `<small>${esc(i.sub)}</small>` : ''}</span>
       <span class="t"><i style="width:${Math.max(1, 100 * i.value / max)}%;background:${color}"></i></span>
       <span class="v">${fmt(i.value)}</span></div>`).join('');
   }
@@ -916,9 +1011,28 @@
       const top = Object.entries(d.intents)[0];
       out.push(['💬', `Aura held <b>${fmt(k.conversations)}</b> conversations in <b>${k.languages}</b> language${k.languages === 1 ? '' : 's'}${top ? `; the top request was <b>${esc(prettyIntent(top[0]).toLowerCase())}</b> (${pctOf(top[1], k.conversations)}%)` : ''}.`]);
     }
+    // 7. assistance
+    const as = d.assist;
+    if (as && as.total) {
+      const peak = as.by_hour.indexOf(Math.max(...as.by_hour));
+      const topKind = Object.entries(as.by_kind)[0];
+      let s = `<b>${fmt(as.total)}</b> assistance request${as.total === 1 ? '' : 's'}${topKind ? `, mostly <b>${esc(AKIND[topKind[0]] ? AKIND[topKind[0]][1].toLowerCase() : topKind[0])}</b>` : ''}, peaking around <b>${hh(peak)}</b>`;
+      if (as.median_response_min != null) s += `; the team responded in <b>${amins(as.median_response_min)}</b> (median) with <b>${fmt(as.within_sla_pct, 0)}%</b> inside the ${as.sla_min}-minute target`;
+      if (as.open) s += ` — <b>${as.open}</b> still open`;
+      out.push(['🛎', s + '.']);
+    }
+    // 8. safety
+    const sf = d.safety;
+    if (sf && sf.checks) {
+      const topMiss = Object.values(sf.missing_items || {})[0];
+      const highN = (sf.fatigue_levels || {}).high || 0, hp = [...new Set((sf.high_fatigue || []).map(h => h.person))];
+      let s = `<b>${fmt(sf.ppe_compliance_pct, 1)}%</b> of ${fmt(sf.checks)} safety checks had full PPE${topMiss ? ` (most often missing: <b>${esc(topMiss.label.toLowerCase())}</b>)` : ''}`;
+      s += highN ? `; <b>${highN}</b> clock-in${highN === 1 ? '' : 's'} carried HIGH fatigue risk${hp.length ? ` — ${names(hp)} worth a conversation before the next shift` : ''}.` : '; no HIGH fatigue-risk clock-ins.';
+      out.push(['🦺', s]);
+    }
     const kudos = d.alerts.filter(a => a.severity === 'positive').length;
-    if (kudos && out.length < 5) out.push(['★', `<b>${kudos}</b> ${kudos === 1 ? 'person is' : 'people are'} on a 10+ shift on-time streak — worth a shout-out.`]);
-    $('#summary').innerHTML = out.length ? out.slice(0, 5).map(([i, s]) => `<li><span class="ic" aria-hidden="true">${i}</span><span>${s}</span></li>`).join('')
+    if (kudos && out.length < 7) out.push(['★', `<b>${kudos}</b> ${kudos === 1 ? 'person is' : 'people are'} on a 10+ shift on-time streak — worth a shout-out.`]);
+    $('#summary').innerHTML = out.length ? out.slice(0, 7).map(([i, s]) => `<li><span class="ic" aria-hidden="true">${i}</span><span>${s}</span></li>`).join('')
       : '<li><span></span><span class="muted">Not enough data in this range to summarise yet.</span></li>';
     $('#sumSub').textContent = `${S.kiosk || 'All locations'} · ${fmtDay(S.from)} – ${fmtDay(S.to)} · vs the ${(new Date(S.to) - new Date(S.from)) / 864e5 + 1}-day period before`;
   }
@@ -928,7 +1042,7 @@
     const sevLabel = { high: 'High', medium: 'Medium', low: 'Low', positive: 'Kudos' };
     const main = d.alerts.filter(a => a.severity !== 'positive');
     const kudos = d.alerts.filter(a => a.severity === 'positive');
-    let html = main.map(a => `<button class="alert" data-person="${esc(a.person)}"><span class="sev ${esc(a.severity)}">${sevLabel[a.severity] || esc(a.severity)}</span><span class="txt">${esc(a.text)}</span><span class="go" aria-hidden="true">›</span></button>`).join('');
+    let html = main.map(a => `<button class="alert" data-person="${esc(a.person)}"><span class="sev ${esc(a.severity)}">${a.type === 'fatigue' ? '🦺 Fatigue' : sevLabel[a.severity] || esc(a.severity)}</span><span class="txt">${esc(a.text)}</span><span class="go" aria-hidden="true">›</span></button>`).join('');
     if (kudos.length) {
       html += `<div class="kudos"><span class="sev positive">Kudos</span><div class="txt">${kudos.length} on-time streak${kudos.length > 1 ? 's' : ''} of 10+ shifts — worth a shout-out.</div>
         <div class="chips">${kudos.map(a => { const m = /(\d+)-shift/.exec(a.text); return `<button class="chip" data-person="${esc(a.person)}">${esc(a.person)}${m ? ` · 🔥${m[1]}` : ''}</button>`; }).join('')}</div></div>`;
@@ -955,6 +1069,7 @@
       { l: 'Visitor mood', v: vm ?? '—', d: `<span>${fmt(k.visitors)} visitor sightings</span>`, extra: gauge(vm), sp: spark(daily.map(x => score(x.visitor_mood)), 'var(--s2)') },
       { l: 'Conversations', v: fmt(k.conversations), d: k.sentiment != null ? `<span>sentiment ${Math.round(k.sentiment * 100)}/100</span>` : '', sp: spark(daily.map(x => x.interactions), 'var(--s1)') },
       { l: 'Languages', v: fmt(k.languages), d: `<span>${esc(Object.keys(d.languages).slice(0, 3).map(langName).join(', '))}</span>` },
+      { l: 'Assist requests', v: fmt(d.assist ? d.assist.total : null), d: d.assist && d.assist.median_response_min != null ? `<span>median response ${amins(d.assist.median_response_min)}</span>` : '<span>none in range</span>', sp: '' },
       { l: 'Open alerts', v: fmt(k.alerts), d: k.alerts ? '<span class="delta down">● needs review</span>' : '<span class="delta up">● all clear</span>', cls: k.alerts ? 'alert-on' : '' }
     ];
     $('#kpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${t.l}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d || ''}</div>${t.sp || ''}</div>`).join('');
@@ -998,9 +1113,127 @@
        <p class="muted" style="font-size:12.5px;margin:14px 0 0">Average sentiment of what people said: <b style="color:var(--ink)">${d.kpis.sentiment == null ? '—' : Math.round(d.kpis.sentiment * 100)}</b>/100</p>`;
   }
 
+  // ============================================================== assistance
+  const AKIND = { wheelchair: ['♿', 'Wheelchair'], medical: ['🩺', 'Medical'], lost_item: ['🧳', 'Lost item'], lost_person: ['🧒', 'Lost person'],
+    porter: ['🛄', 'Porter'], security: ['🛡️', 'Security'], other: ['💬', 'Other'] };
+  const ASRC = { button: ['Help button', 'var(--s1)'], conversation: ['In conversation', 'var(--s7)'] };
+  const amins = m => m == null ? '—' : m < 10 ? `${fmt(m, m % 1 ? 1 : 0)}m` : mins(m);   // keep the decimal on short times
+  function renderAssist(d) {
+    const a = d.assist || { total: 0, by_hour: [], by_kind: {}, by_kiosk: {}, by_source: {}, responders: [] };
+    const slaCol = a.within_sla_pct == null ? 'var(--none)' : a.within_sla_pct >= 90 ? 'var(--good)' : a.within_sla_pct >= 70 ? 'var(--warn)' : 'var(--crit)';
+    const tiles = [
+      { l: 'Requests', v: fmt(a.total), d: `<span>${fmt(a.done)} done · ${fmt(a.cancelled)} cancelled</span>` },
+      { l: 'Open now', v: fmt(a.open), d: a.open ? '<span class="delta down">● awaiting staff</span>' : '<span class="delta up">● all handled</span>', cls: a.open ? 'alert-on' : '' },
+      { l: 'Median response', v: amins(a.median_response_min), d: '<span>request → staff on it</span>' },
+      { l: 'Median resolution', v: amins(a.median_resolution_min), d: '<span>request → done</span>' },
+      { l: `Within ${a.sla_min || 5}-min SLA`, v: a.within_sla_pct == null ? '—' : `${fmt(a.within_sla_pct, 0)}<small>%</small>`, extra: a.within_sla_pct == null ? '' : `<div class="gauge"><i style="width:${a.within_sla_pct}%;background:${slaCol}"></i></div>`, d: '<span>of acknowledged requests</span>' }
+    ];
+    $('#aKpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${esc(t.l)}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d}</div></div>`).join('');
+    const tot = a.total || 0;
+    $('#aKind').innerHTML = hbars(Object.entries(a.by_kind).map(([k, v]) => ({ icon: (AKIND[k] || ['💬'])[0], label: (AKIND[k] || [0, prettyIntent(k)])[1], value: v })), 'var(--s2)', 'requests');
+    $('#aLoc').innerHTML = hbars(Object.entries(a.by_kiosk).slice(0, 10).map(([k, v]) => ({ label: k, value: v })), 'var(--s1)', 'requests');
+    $('#aResp').innerHTML = a.responders.length ? `<div class="tbl-wrap"><table class="lb"><tbody>${a.responders.map((r, i) => `<tr>
+        <td class="rk">${i + 1}</td><td><div class="who"><span class="av">${esc(initials(r.name))}</span><b>${esc(r.name)}</b></div></td>
+        <td class="r"><b>${fmt(r.handled)}</b> <span class="muted">handled</span></td>
+        <td class="r"><span class="pill ${r.median_response_min <= (a.sla_min || 5) ? 'green' : r.median_response_min <= 2 * (a.sla_min || 5) ? 'amber' : 'red'}">${amins(r.median_response_min)}</span></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">No one has picked up a request in this range</div>';
+    const src = Object.entries(a.by_source).filter(([, v]) => v).sort((x, y) => y[1] - x[1]), stot = sum(src.map(x => x[1]));
+    const sc = k => (ASRC[k] || [])[1] || 'var(--axis)', sl = k => (ASRC[k] || [prettyIntent(k || 'other')])[0];
+    $('#aSrc').innerHTML = !stot ? '<div class="empty">No requests in this range</div>' :
+      `<div class="stack" style="height:26px">${src.map(([k, v]) => `<span style="flex:${v} 1 0;background:${sc(k)}"${tipAttr({ t: sl(k), r: [[sc(k), 'requests', `${pctOf(v, stot)}%`]], n: `${fmt(v)} of ${fmt(stot)}` })}></span>`).join('')}</div>
+       <div class="mleg" style="grid-template-columns:1fr;margin-top:12px">${src.map(([k, v]) => `<span><i style="background:${sc(k)}"></i>${esc(sl(k))}<em>${pctOf(v, stot)}% · ${fmt(v)}</em></span>`).join('')}</div>
+       <p class="muted" style="font-size:12.5px;margin:14px 0 0">${tot ? `${pctOf(a.cancelled, tot)}% were cancelled before anyone arrived.` : ''}</p>`;
+  }
+  // ============================================================== safety
+  const FLEVEL = { low: ['Low', 'var(--good)'], moderate: ['Moderate', 'var(--warn)'], high: ['High', 'var(--crit)'] };
+  const RESTED = { 1: ['😫', 'Exhausted'], 2: ['😴', 'Tired'], 3: ['😐', 'OK'], 4: ['🙂', 'Rested'], 5: ['😄', 'Very rested'] };
+  const ppeOf = k => ((S.data && S.data.safety && S.data.safety.catalog) || {})[k] || { icon: '•', label: k };
+  const whenOf = ts => ts ? `${fmtDay(ts.slice(0, 10))} · ${ts.slice(11, 16)}` : '';
+  const jparse = (x, dflt) => { if (x == null) return dflt; if (typeof x !== 'string') return x; try { return JSON.parse(x); } catch (e) { return dflt; } };
+  function renderSafety(d) {
+    const s = d.safety;
+    const sec = [$('#safety'), $('#sKpis'), ...[$('#sMiss'), $('#sHigh')].map(el => el.closest('.grid'))];
+    sec.forEach(el => el.hidden = !s);
+    if (!s) return;
+    const pctCol = v => v == null ? 'var(--none)' : v >= 95 ? 'var(--good)' : v >= 85 ? 'var(--warn)' : 'var(--crit)';
+    const af = s.avg_fatigue, afLvl = af == null ? null : af >= 60 ? 'high' : af >= 30 ? 'moderate' : 'low';
+    const tiles = [
+      { l: 'Safety checks', v: fmt(s.checks), d: `<span>${fmt((s.by_department || []).length)} department${(s.by_department || []).length === 1 ? '' : 's'} with rules</span>` },
+      { l: 'PPE compliance', v: s.ppe_compliance_pct == null ? '—' : `${fmt(s.ppe_compliance_pct, 1)}<small>%</small>`, extra: s.ppe_compliance_pct == null ? '' : `<div class="gauge"><i style="width:${s.ppe_compliance_pct}%;background:${pctCol(s.ppe_compliance_pct)}"></i></div>`, d: '<span>checks with every item confirmed</span>' },
+      { l: 'Flagged', v: fmt(s.flagged), d: s.flagged ? '<span class="delta down">● sent to supervisors</span>' : '<span class="delta up">● none</span>', cls: s.flagged ? 'alert-on' : '' },
+      { l: 'Avg fatigue score', v: af == null ? '—' : `${fmt(af, 0)}<small>/100</small>`, extra: af == null ? '' : `<div class="gauge"><i style="width:${Math.max(2, af)}%;background:${FLEVEL[afLvl][1]}"></i></div>`, d: '<span>30+ moderate · 60+ high</span>' },
+      { l: 'Hi-vis auto-detected', v: s.hivis_auto_pct == null ? '—' : `${fmt(s.hivis_auto_pct, 0)}<small>%</small>`, d: '<span>of checks requiring hi-vis</span>' }
+    ];
+    $('#sKpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${esc(t.l)}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d}</div></div>`).join('');
+    $('#sMiss').innerHTML = Object.keys(s.missing_items || {}).length
+      ? hbars(Object.entries(s.missing_items).map(([k, m]) => ({ icon: m.icon, label: m.label, value: m.count })), 'var(--crit)', 'checks missing it')
+      : '<div class="empty">✓ Every check had full PPE</div>';
+    const lv = s.fatigue_levels || {}, ltot = sum(Object.values(lv));
+    $('#sLevels').innerHTML = !ltot ? '<div class="empty">No fatigue checks in this range</div>' :
+      `<div class="stack" style="height:26px">${['low', 'moderate', 'high'].filter(k => lv[k]).map(k => `<span style="flex:${lv[k]} 1 0;background:${FLEVEL[k][1]}"${tipAttr({ t: `${FLEVEL[k][0]} fatigue risk`, r: [[FLEVEL[k][1], 'of checks', `${pctOf(lv[k], ltot)}%`]], n: `${fmt(lv[k])} of ${fmt(ltot)} checks` })}></span>`).join('')}</div>
+       <div class="mleg" style="grid-template-columns:1fr;margin-top:12px">${['low', 'moderate', 'high'].map(k => `<span><i style="background:${FLEVEL[k][1]}"></i>${FLEVEL[k][0]}<em>${pctOf(lv[k] || 0, ltot)}% · ${fmt(lv[k] || 0)}</em></span>`).join('')}</div>
+       <p class="muted" style="font-size:12.5px;margin:14px 0 0">Score 0–100 from rest, hours, consecutive days, night work, remarks and self-rating. Average <b style="color:var(--ink)">${af == null ? '—' : fmt(af, 0)}</b>.</p>`;
+    $('#sDept').innerHTML = (s.by_department || []).length ? `<table><thead><tr><th>Department</th><th class="r">Checks</th><th>PPE ok</th><th class="r" title="High fatigue-risk check-ins">High risk</th></tr></thead><tbody>${
+      s.by_department.map(r => `<tr><td><b style="font-weight:600">${esc(r.department)}</b></td><td class="r">${fmt(r.checks)}</td>
+        <td><div class="inbar sm"${tipAttr({ t: r.department, r: [[pctCol(r.ppe_compliance_pct), 'PPE compliance', `${fmt(r.ppe_compliance_pct, 1)}%`]] })}><span class="t"><i style="width:${r.ppe_compliance_pct || 0}%;background:${pctCol(r.ppe_compliance_pct)}"></i></span>${fmt(r.ppe_compliance_pct, 0)}%</div></td>
+        <td class="r">${r.high_fatigue ? `<span class="pill red">${r.high_fatigue}</span>` : '<span class="muted">0</span>'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No checks in this range</div>';
+    $('#sHigh').innerHTML = (s.high_fatigue || []).length ? s.high_fatigue.map(h => `<button class="sitem" data-person="${esc(h.person)}">
+        <span class="fscore high" title="Fatigue risk score">${esc(h.score)}</span>
+        <span class="who"><b>${esc(h.person)}</b></span><span class="when">${esc(whenOf(h.ts))}</span>
+        <ul>${(h.factors || []).map(f => `<li>${esc(f.text)} <span class="muted">+${esc(f.points)}</span></li>`).join('')}</ul></button>`).join('')
+      : '<div class="empty">No HIGH fatigue-risk clock-ins in this range</div>';
+    $('#sFlags').innerHTML = (s.recent_flags || []).length ? s.recent_flags.map(f => {
+      const miss = (f.missing || '').split(',').filter(Boolean);
+      return `<button class="sitem" data-person="${esc(f.person)}">
+        <span>${f.fatigue ? `<span class="fscore ${esc(f.fatigue)}" title="Fatigue level">${esc(FLEVEL[f.fatigue] ? FLEVEL[f.fatigue][0][0] : '?')}</span>` : '<span class="fscore" style="background:var(--hover)">—</span>'}</span>
+        <span class="who"><b>${esc(f.person)}</b> <span class="muted" style="font-size:12px">${esc(f.kiosk || '')}</span></span><span class="when">${esc(whenOf(f.ts))}</span>
+        <span class="miss">${miss.map(m => `<span class="pill red">${esc(ppeOf(m).icon)} ${esc(ppeOf(m).label)}</span>`).join('')}${f.fatigue === 'high' ? '<span class="pill red">HIGH fatigue</span>' : ''}</span></button>`;
+    }).join('') : '<div class="empty">No flagged checks in this range</div>';
+  }
+  document.addEventListener('click', e => { const b = e.target.closest('#sHigh [data-person], #sFlags [data-person]'); if (b) openPerson(b.dataset.person); });
+  function safetyCard(checks) {
+    if (!checks || !checks.length) return '';
+    const flagged = checks.filter(c => c.result === 'flagged').length;
+    return `<div class="card"><div class="card-h"><div class="grow"><h2>Safety checks</h2><p>${checks.length} clock-in check${checks.length === 1 ? '' : 's'} · ${flagged} flagged</p></div></div>
+      ${checks.map(c => {
+        const miss = (c.missing || '').split(',').filter(Boolean), items = jparse(c.items, {}), factors = jparse(c.factors, []);
+        const nItems = Object.keys(items).length, rs = RESTED[c.rested];
+        const ppe = !nItems ? '<span class="muted">No PPE required</span>' : miss.length
+          ? miss.map(m => `<span class="pill red">${esc(ppeOf(m).icon)} missing ${esc(ppeOf(m).label.toLowerCase())}</span>`).join('')
+          : `<span class="pill green">✓ PPE ok · ${nItems} item${nItems === 1 ? '' : 's'}</span>`;
+        const hv = c.hivis != null && items.hi_vis ? ` <small>🦺 hi-vis ${Math.round(c.hivis * 100)}% seen</small>` : '';
+        return `<div class="schk">
+          <span class="rs" title="${esc(rs ? 'Felt: ' + rs[1] : 'No rested rating')}">${rs ? rs[0] : '·'}</span>
+          <div class="t"><b>${esc(whenOf(c.ts))}</b> <small>· ${esc(c.kiosk || '')}${rs ? ` · felt ${esc(rs[1].toLowerCase())}` : ''}</small><div style="margin-top:4px">${ppe}${hv}</div>
+            ${factors.length ? `<ul>${factors.map(f => `<li>${esc(f.text)} <span class="muted">+${esc(f.points)}</span></li>`).join('')}</ul>` : ''}</div>
+          ${c.fatigue_level ? `<span class="fscore ${esc(c.fatigue_level)}" title="${esc((FLEVEL[c.fatigue_level] || [c.fatigue_level])[0])} fatigue risk">${esc(c.fatigue_score)}</span>` : '<span></span>'}
+        </div>`;
+      }).join('')}</div>`;
+  }
+
+  function drawAssistHour(el, hours) {
+    const max = Math.max(0, ...(hours || []));
+    if (!max) return empty(el, 'No assistance requests in this range');
+    const w = W(el), L = 30, R = 8, T = 22, H1 = 170, B = 22, H = T + H1 + B, bw = (w - L - R) / 24, cw = Math.max(3, bw * .64);
+    const peak = hours.indexOf(max), Y = v => v / max * H1, tot = sum(hours);
+    let g = '';
+    for (const v of [Math.round(max / 2), max]) if (v) g += `<line class="grid" x1="${L}" x2="${w - R}" y1="${T + H1 - Y(v)}" y2="${T + H1 - Y(v)}"/><text class="ax" x="${L - 6}" y="${T + H1 - Y(v) + 4}" text-anchor="end">${v}</text>`;
+    hours.forEach((v, h) => {
+      const x = L + bw * h + (bw - cw) / 2;
+      g += `<path d="${colPath(x, T + H1 - Y(v), cw, Y(v))}" fill="${v === max ? 'var(--s2)' : 'var(--bar)'}"/>`;
+    });
+    const px = L + bw * peak + bw / 2, anchor = px > w - 70 ? 'end' : px < L + 50 ? 'start' : 'middle';
+    g += `<text class="lab" x="${px}" y="${T + H1 - Y(max) - 8}" text-anchor="${anchor}">Peak ${hh(peak)} · ${max}</text>`;
+    g += `<line class="base" x1="${L}" x2="${w - R}" y1="${T + H1}" y2="${T + H1}"/>`;
+    for (let h = 0; h < 24; h += bw < 26 ? 3 : 2) g += `<text class="ax" x="${L + bw * h + bw / 2}" y="${T + H1 + 16}" text-anchor="middle">${String(h).padStart(2, '0')}</text>`;
+    hours.forEach((v, h) => { g += `<rect class="hit" x="${L + bw * h}" y="${T}" width="${bw}" height="${H1}"${tipAttr({ t: `${hh(h)}–${hh((h + 1) % 24)}`, r: [[v === max ? 'var(--s2)' : 'var(--bar)', 'requests', v]], n: `${pctOf(v, tot)}% of all requests` })}/>`; });
+    el.innerHTML = svgWrap(w, H, g, 'Assistance requests by hour of day');
+  }
+
   function renderCharts() {
     const d = S.data;
     if (!d || S.tab !== 'overview') return;
+    drawAssistHour($('#aHour'), (d.assist || {}).by_hour);
     drawTrend($('#cTrend'), d.daily);
     drawHour($('#cHour'), d.mood_by_hour);
     drawHeat($('#cHeat'), d.arrivals_heat);
@@ -1018,6 +1251,8 @@
     renderDepts(d);
     renderLocations(d);
     renderConvCharts(d);
+    renderAssist(d);
+    renderSafety(d);
     renderCharts();
     renderPeople();
     fillTalkFilters(d);
@@ -1206,6 +1441,7 @@
       </div>
       <div class="card"><div class="card-h"><div class="grow"><h2>Mood calendar</h2><p>${esc(fmtDay(S.from))} – ${esc(fmtDay(S.to))} · colour = daily mood score</p></div></div><div class="cal">${cal}</div></div>
       ${consent ? `<div class="card"><div class="card-h"><div class="grow"><h2>Mood mix</h2></div></div>${mixBars([{ name: pr.name || S.person, mix: p.mood_mix }])}</div>` : ''}
+      ${safetyCard(p.safety_checks)}
       <div class="card"><div class="card-h"><div class="grow"><h2>Daily log</h2></div></div><div class="tbl-wrap"><table>
         <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Worked</th><th class="r">Break</th><th class="r">Late</th><th>Mood</th><th>Attire</th></tr></thead>
         <tbody>${p.days.length ? [...p.days].reverse().map(d => `<tr><td>${esc(fmtDayLong(d.day))}</td><td>${esc(d.in || '—')}</td><td>${esc(d.out || '—')}</td><td>${esc(d.worked || '—')}</td>

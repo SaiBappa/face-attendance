@@ -17,7 +17,8 @@ Employee face vectors are stored under /data; raw photos are not kept.
 Each recognised face also carries two on-device signals, computed from the same frame and
 then discarded with it:
   * emotion  — FER+ (ONNX model zoo, 8 classes) on the face crop
-  * attire   — dominant clothing colour from the region below the chin
+  * attire   — dominant clothing colour from the region below the chin, plus `hivis`: the share
+               of fluorescent yellow/lime/orange pixels (a high-visibility vest) in the torso area
 """
 import os, uuid, threading, json
 import numpy as np
@@ -151,7 +152,23 @@ def _attire(img, box):
     b, g, r = [int(c) for c in centers[k]]
     hh, ss, vv = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0, 0]
     return {"name": _colour_name(int(hh), int(ss), int(vv)), "hex": f"#{r:02x}{g:02x}{b:02x}",
-            "share": round(float(counts[k] / counts.sum()), 2)}
+            "share": round(float(counts[k] / counts.sum()), 2), "hivis": _hivis(img, box)}
+
+
+def _hivis(img, box) -> float:
+    """Share of fluorescent (hi-vis) pixels on the torso: a wider/taller region than attire,
+    because vests are often open at the front. Fluorescent yellow-lime is very saturated and
+    bright at hue ~25-45 (OpenCV scale); fluorescent orange at ~5-18."""
+    x, y, w, h = [int(v) for v in box]
+    H, W = img.shape[:2]
+    x0, x1 = max(0, x - w), min(W, x + 2 * w)
+    y0, y1 = min(H, y + int(1.2 * h)), min(H, y + int(3.2 * h))
+    if y1 - y0 < 16 or x1 - x0 < 16:
+        return 0.0
+    hsv = cv2.cvtColor(cv2.resize(img[y0:y1, x0:x1], (64, 48), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2HSV)
+    lime = cv2.inRange(hsv, (24, 110, 150), (45, 255, 255))
+    orange = cv2.inRange(hsv, (4, 150, 170), (18, 255, 255))
+    return round(float(((lime > 0) | (orange > 0)).mean()), 3)
 
 
 def _cos(a, b) -> float:

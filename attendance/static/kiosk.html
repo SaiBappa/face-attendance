@@ -53,6 +53,7 @@
   /* ------------------------------------------------------------------ layout */
   #stage { position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr auto auto; padding:calc(18px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left)); }
   header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+  .where { min-width:0; } .when { flex:none; }
   .where .zone { display:inline-flex; align-items:center; gap:8px; font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--a1); font-weight:600; }
   .where .zone i { width:8px; height:8px; border-radius:50%; background:var(--a1); box-shadow:0 0 12px var(--a1); animation:pulse 2.4s infinite; }
   @keyframes pulse { 50% { opacity:.35; } }
@@ -64,7 +65,8 @@
   .privacy { margin-top:10px; display:inline-flex; gap:6px; align-items:center; font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:5px 10px; background:var(--glass); }
 
   /* ------------------------------------------------------------------ orb + portal */
-  #center { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:clamp(14px,2.4vh,26px); min-height:0; text-align:center; }
+  #center { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:clamp(14px,2.4vh,26px); min-height:0; text-align:center; overflow-y:auto; overflow-x:hidden; }
+  #center > :first-child { margin-top:auto; } #center > :last-child { margin-bottom:auto; }   /* centred, but scrolls instead of overflowing */
   #orbWrap { position:relative; width:min(38vmin,300px); aspect-ratio:1; transition:width .6s cubic-bezier(.2,.8,.2,1); flex:none; }
   body[data-state=ambient] #orbWrap { width:min(30vmin,240px); }
   body[data-state=staff] #orbWrap, body[data-state=visitor] #orbWrap { width:min(24vmin,190px); }
@@ -132,7 +134,7 @@
   #countdown i { display:block; height:100%; width:100%; background:var(--orb); transform-origin:left; }
 
   /* ------------------------------------------------------------------ ambient bottom */
-  #ambient { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:end; margin-bottom:10px; transition:opacity .5s; }
+  #ambient { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:end; margin-bottom:10px; transition:opacity .5s; }
   body:not([data-state=ambient]) #ambient { opacity:0; pointer-events:none; }
   #infoCard { max-width:520px; padding:18px 20px; border-radius:22px; background:var(--glass); border:1px solid var(--line); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); display:flex; gap:14px; align-items:flex-start; min-height:84px; }
   #infoCard .ico { font-size:30px; line-height:1; }
@@ -140,7 +142,35 @@
   #infoCard span { color:var(--muted); font-size:15px; line-height:1.4; }
   #infoCard.swap { animation:swap .7s; }
   @keyframes swap { 0% { opacity:0; transform:translateY(10px); } 100% { opacity:1; transform:none; } }
-  #pulse { display:flex; gap:10px; }
+  #pulse { display:flex; gap:10px; justify-content:flex-end; }
+  #right { display:flex; flex-direction:column; gap:12px; align-items:flex-end; }
+  /* flight board */
+  #board { width:min(560px,46vw); border-radius:22px; background:rgba(0,0,0,.28); border:1px solid var(--line); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); padding:12px 14px 8px; }
+  #board .bh { display:flex; justify-content:space-between; align-items:center; font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--a1); font-weight:700; margin:0 4px 6px; }
+  #board .bh span { color:var(--muted); letter-spacing:.04em; font-weight:500; text-transform:none; }
+  #board table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  #board td { padding:7px 4px; font-size:16px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; }
+  #board table { table-layout:fixed; }
+  #board col.c-t { width:21%; } #board col.c-n { width:17%; } #board col.c-w { width:14%; } #board col.c-s { width:22%; }
+  @media (max-width: 520px) { #board col.c-w { width:0; } #board col.c-t { width:24%; } #board col.c-s { width:26%; } #board td { font-size:13px; } }
+  #board td { overflow:hidden; text-overflow:ellipsis; }
+  #board td.t s { color:var(--muted); font-size:13px; margin-right:4px; }
+  #board tr.swap td { animation:rise .5s both; }
+  .fst { display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:700; letter-spacing:.03em; background:rgba(255,255,255,.1); }
+  .fst.boarding { background:#16a34a; color:#fff; animation:pulse 1.6s infinite; } .fst.delayed { background:#f59e0b; color:#1a1200; }
+  .fst.cancelled, .fst.gate_closed, .fst.diverted { background:#ef4444; color:#fff; } .fst.checkin, .fst.approaching { background:rgba(46,230,214,.25); color:#bff9f3; }
+  .fst.departed, .fst.landed { opacity:.6; }
+  /* chat extras: flight card, help grid, ticket */
+  .fcard { margin-top:10px; padding:10px 12px; border-radius:14px; background:rgba(0,0,0,.25); display:grid; grid-template-columns:auto 1fr auto; gap:4px 12px; align-items:center; font-size:15px; }
+  .fcard b { font-size:20px; } .fcard .big { font-size:26px; font-weight:750; font-variant-numeric:tabular-nums; }
+  .helpbtn { margin-top:10px; display:inline-flex; gap:8px; align-items:center; border:0; border-radius:14px; padding:12px 16px; font-weight:700; font-size:16px; background:linear-gradient(135deg,#ff8a5b,#ff5d8f); color:#fff; }
+  .helpgrid { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+  .helpgrid button { border:1px solid var(--line); background:rgba(255,255,255,.08); border-radius:14px; padding:14px 10px; font-size:15px; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .helpgrid button i { font-style:normal; font-size:28px; }
+  .ticket { align-self:stretch; max-width:none; border-radius:18px; padding:14px 16px; background:linear-gradient(135deg, rgba(255,138,91,.22), rgba(255,93,143,.18)); border:1px solid rgba(255,138,91,.5); display:flex; gap:14px; align-items:center; }
+  .ticket .ti { font-size:34px; } .ticket b { display:block; font-size:18px; } .ticket small { color:var(--muted); }
+  .ticket.ack { background:linear-gradient(135deg, rgba(34,197,94,.25), rgba(46,230,214,.18)); border-color:rgba(34,197,94,.6); }
+  .ticket button { margin-left:auto; }
   #pulse div { padding:12px 16px; border-radius:18px; background:var(--glass); border:1px solid var(--line); text-align:center; min-width:96px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
   #pulse b { display:block; font-size:24px; font-weight:650; font-variant-numeric:tabular-nums; }
   #pulse span { font-size:12px; color:var(--muted); letter-spacing:.04em; }
@@ -185,6 +215,27 @@
   @keyframes pop { from { transform:scale(.4); } }
   #done h2 { font-size:clamp(34px,6vw,64px); margin:0; letter-spacing:-.02em; }
   #done p { font-size:clamp(18px,2.6vw,26px); margin:12px 24px 0; opacity:.95; }
+  /* safety check sheet */
+  #safety { position:fixed; inset:0; z-index:25; display:grid; place-items:center; background:rgba(4,10,18,.86); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); opacity:0; pointer-events:none; transition:opacity .3s; padding:20px; }
+  #safety.show { opacity:1; pointer-events:auto; }
+  #safety .sheet { width:min(820px,100%); max-height:100%; overflow:auto; }
+  #safety h2 { margin:0 0 4px; font-size:clamp(26px,4vw,40px); letter-spacing:-.02em; }
+  #safety .sub { color:var(--muted); font-size:17px; margin-bottom:18px; }
+  #safety h3 { margin:20px 0 10px; font-size:14px; letter-spacing:.12em; text-transform:uppercase; color:var(--a1); }
+  .ppe { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+  .ppe button { position:relative; border:2px solid var(--line); background:var(--glass); border-radius:18px; padding:16px 12px; display:flex; flex-direction:column; align-items:center; gap:6px; font-size:16px; font-weight:600; }
+  .ppe button i { font-style:normal; font-size:34px; }
+  .ppe button small { font-weight:500; font-size:12px; color:var(--muted); }
+  .ppe button.on { border-color:#22c55e; background:rgba(34,197,94,.16); }
+  .ppe button.on::after { content:"✓"; position:absolute; top:8px; right:12px; color:#22c55e; font-size:20px; font-weight:800; }
+  .ppe button.warn { border-color:#f59e0b; } .ppe button.warn small { color:#fbbf24; }
+  .rest { display:flex; gap:10px; flex-wrap:wrap; }
+  .rest button { flex:1; min-width:90px; border:2px solid var(--line); background:var(--glass); border-radius:16px; padding:12px 6px; font-size:14px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .rest button i { font-style:normal; font-size:30px; } .rest button.on { border-color:var(--a1); background:rgba(46,230,214,.16); }
+  .risk { margin-top:12px; padding:12px 14px; border-radius:14px; font-size:15px; background:var(--glass); border:1px solid var(--line); }
+  .risk b.low { color:#4ade80; } .risk b.moderate { color:#fbbf24; } .risk b.high { color:#f87171; }
+  .risk ul { margin:6px 0 0; padding-left:20px; color:var(--muted); }
+  #safety .go { margin-top:22px; display:flex; gap:12px; justify-content:flex-end; flex-wrap:wrap; }
   #start { position:fixed; inset:0; z-index:40; display:grid; place-items:center; text-align:center; background:radial-gradient(circle at 50% 40%, var(--bg2), var(--bg1)); }
   #start .orb { position:relative; width:180px; height:180px; margin:0 auto 30px; }
   #start h2 { font-size:34px; margin:0 0 8px; letter-spacing:-.02em; }
@@ -194,8 +245,14 @@
   /* ------------------------------------------------------------------ portrait / small */
   @media (max-aspect-ratio: 4/5) {
     #actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    #ambient { grid-template-columns:1fr; }
+    #ambient { grid-template-columns:minmax(0,1fr); }
     #pulse { justify-content:flex-start; }
+    #right { align-items:stretch; }
+    #board { width:100%; }
+  }
+  @media (max-width: 820px) {
+    #clock { font-size:44px; }
+    #board td { font-size:14px; padding:6px 3px; }
   }
   @media (max-width: 640px) {
     #pulse div { min-width:0; padding:10px; }
@@ -259,7 +316,7 @@
       <div id="infoCard" class="hidden"><div class="ico"></div><div><b></b><span></span></div></div>
       <div id="hint" style="margin-top:14px"></div>
     </div>
-    <div id="pulse"></div>
+    <div id="right"><div id="board" class="hidden"></div><div id="pulse"></div></div>
   </section>
   <div id="ticker"><div class="track" id="track"></div></div>
 </div>
@@ -278,6 +335,7 @@
   </div>
 </div>
 
+<div id="safety"><div class="sheet"></div></div>
 <div id="done"><div><div class="check">✓</div><h2 id="doneT"></h2><p id="doneS"></p></div></div>
 <div id="start"><div><div class="orb"></div><h2>Tap to wake Aura</h2><p>Enables camera, microphone and voice on this screen.</p></div></div>
 <div id="status"></div>
@@ -424,9 +482,89 @@
   function renderPrompts() {
     const cards = (S.cfg?.kiosk?.info || []).slice(0, 4);
     const items = cards.map(c => [`${c.icon || ''} ${c.title}`, `Where is the ${c.title}?`]);
+    if (S.cfg?.features?.flights) items.unshift(['✈️ My flight', 'Check my flight']);
     items.push(['📶 Wi-Fi', 'What is the Wi-Fi?'], ['😄 Tell me a joke', 'Tell me a joke']);
-    $('prompts').innerHTML = items.map(([label, qtext]) => `<button data-q="${esc(qtext)}">${esc(label)}</button>`).join('');
-    $('prompts').querySelectorAll('button').forEach(b => b.onclick = () => { openChat(); send(b.dataset.q); });
+    $('prompts').innerHTML = `<button data-help="1" style="background:linear-gradient(135deg,#ff8a5b,#ff5d8f);border:0;color:#fff;font-weight:700">🙋 Get help</button>` +
+      items.map(([label, qtext]) => `<button data-q="${esc(qtext)}">${esc(label)}</button>`).join('');
+    $('prompts').querySelectorAll('button[data-q]').forEach(b => b.onclick = () => { openChat(); send(b.dataset.q); });
+    $('prompts').querySelector('[data-help]').onclick = () => { openChat(); showHelp(); };
+  }
+
+  // ================================================================ flight board
+  const FST = { scheduled: 'On time', expected: 'On time', checkin: 'Check-in', boarding: 'Boarding', gate_closed: 'Gate closed',
+                departed: 'Departed', delayed: 'Delayed', cancelled: 'Cancelled', approaching: 'Landing', landed: 'Landed', diverted: 'Diverted' };
+  const hm = iso => (iso || '').slice(11, 16);
+  let boardData = null, boardSide = 'dep';
+  async function loadBoard() {
+    try { boardData = await fetch('/api/flights?kiosk=' + encodeURIComponent(KIOSK) + '&limit=6').then(r => r.json()); renderBoard(); } catch (_) {}
+  }
+  function renderBoard() {
+    const el = $('board'), d = boardData;
+    if (!d || d.off || (!d.departures.length && !d.arrivals.length)) { el.classList.add('hidden'); return; }
+    if (!d.departures.length) boardSide = 'arr'; else if (!d.arrivals.length) boardSide = 'dep';
+    const list = boardSide === 'dep' ? d.departures : d.arrivals;
+    el.classList.remove('hidden');
+    el.innerHTML = `<div class="bh">${boardSide === 'dep' ? '🛫 Departures' : '🛬 Arrivals'}<span>${d.provider === 'demo' ? 'demo schedule' : 'live'}</span></div><table>` +
+      `<colgroup><col class="c-t"><col class="c-n"><col><col class="c-w"><col class="c-s"></colgroup>` + list.map((f, i) => {
+        const late = f.estimated && f.estimated !== f.scheduled;
+        const where = boardSide === 'dep' ? (f.gate ? `Gate ${esc(f.gate)}` : '') : (f.belt ? `Belt ${esc(f.belt)}` : '');
+        return `<tr class="swap" style="animation-delay:${i * 60}ms"><td class="t">${late ? `<s>${hm(f.scheduled)}</s>` : ''}<b>${hm(f.estimated || f.scheduled)}</b></td>` +
+          `<td><b>${esc(f.number)}</b></td><td class="city">${esc(f.city || f.city_iata || '')}</td><td>${where}</td>` +
+          `<td><span class="fst ${esc(f.status)}">${esc(FST[f.status] || f.status)}</span></td></tr>`;
+      }).join('') + '</table>';
+  }
+  setInterval(() => { if (boardData?.departures?.length && boardData?.arrivals?.length) { boardSide = boardSide === 'dep' ? 'arr' : 'dep'; renderBoard(); } }, 12000);
+  setInterval(loadBoard, 60000);
+
+  // ================================================================ assistance requests
+  const HELP = { wheelchair: ['♿', 'Wheelchair'], medical: ['🩺', 'Medical help'], lost_item: ['🧳', 'Lost item'], lost_person: ['🧒', 'Lost child / person'],
+                 porter: ['🛄', 'Porter / bags'], security: ['🛡️', 'Security'], other: ['💬', 'Talk to staff'] };
+  S.ticket = null;
+  function showHelp() {
+    const b = addMsg('aura', 'How can the team help? Tap one and someone will come to you here.');
+    const g = document.createElement('div'); g.className = 'helpgrid';
+    g.innerHTML = Object.entries(HELP).map(([k, [i, l]]) => `<button data-k="${k}"><i>${i}</i>${esc(l)}</button>`).join('');
+    g.querySelectorAll('button').forEach(x => x.onclick = () => { g.remove(); requestHelp(x.dataset.k, null, 'button'); });
+    b.appendChild(g); $('msgs').scrollTop = 1e6;
+  }
+  async function requestHelp(kind, details, source) {
+    touch();
+    try {
+      const t = await post('/api/assist', { kiosk: KIOSK, kind, details, lang: S.lang, encounter: S.encounter, employee: S.current?.employee, source });
+      const el = document.createElement('div'); el.className = 'msg ticket'; el.style.opacity = 1;
+      $('msgs').appendChild(el);
+      S.ticket = { id: t.id, el, kind, status: t.status };
+      renderTicket(t); chime();
+      speak(t.status === 'acknowledged' ? 'A team member is on the way.' : 'I have called the team. Please wait here.', 'en-GB');
+      pollTicket();
+    } catch (e) { addMsg('aura', 'Sorry, I could not reach the team. Please ask at the nearest information desk.'); }
+  }
+  function renderTicket(t) {
+    const [icon, label] = HELP[t.kind] || HELP.other;
+    const el = S.ticket.el;
+    el.classList.toggle('ack', t.status === 'acknowledged' || t.status === 'done');
+    const line = t.status === 'open' ? 'Waiting for a team member… please stay here'
+      : t.status === 'acknowledged' ? `${t.assigned ? esc(t.assigned) : 'A team member'} is on the way 🏃`
+      : t.status === 'done' ? 'Resolved — have a wonderful journey!' : 'Request cancelled';
+    el.innerHTML = `<span class="ti">${icon}</span><div><b>${esc(label)} · request #${t.id}</b><small>${line}</small></div>` +
+      (t.status === 'open' ? '<button class="pill ghost" data-c>Cancel</button>' : '');
+    const c = el.querySelector('[data-c]');
+    if (c) c.onclick = async () => { await post(`/api/assist/${t.id}/cancel`, {}); t.status = 'cancelled'; renderTicket(t); S.ticket = null; };
+  }
+  async function pollTicket() {
+    while (S.ticket && S.chatting) {
+      await sleep(4000);
+      if (!S.ticket) return;
+      try {
+        const t = await fetch('/api/assist/' + S.ticket.id).then(r => r.json());
+        if (t.status !== S.ticket.status) {
+          S.ticket.status = t.status; renderTicket(t);
+          if (t.status === 'acknowledged') { chime(); speak(`${t.assigned || 'A team member'} is on the way.`, 'en-GB'); }
+        }
+        touch();   // keep the screen with the traveller while help is coming
+        if (t.status === 'done' || t.status === 'cancelled') { S.ticket = null; return; }
+      } catch (_) {}
+    }
   }
 
   // ================================================================ screen states
@@ -452,7 +590,7 @@
     S.deadline = Date.now() + seconds * 1000; S.window = seconds * 1000;
   }
   setInterval(() => {
-    if (S.chatting && !rec && Date.now() - S.lastActivity > 60000) return toAmbient();   // walked away mid-chat
+    if (S.chatting && !rec && !S.ticket && Date.now() - S.lastActivity > 60000) return toAmbient();   // walked away mid-chat
     if (!S.deadline) return;
     const left = S.deadline - Date.now();
     $('countdown').querySelector('i').style.transform = `scaleX(${Math.max(0, left / S.window)})`;
@@ -588,6 +726,16 @@
     const j = S.current; if (!j) return;
     const action = btn.dataset.a;
     S.deadline = 0;
+    let safetyOut = null;
+    if (action === 'IN') {
+      try {
+        const pre = await post('/api/safety/precheck', { employee: j.employee, hivis: j.attire?.hivis ?? null });
+        if (pre.required) {
+          safetyOut = await safetySheet(j, pre);
+          if (!safetyOut) { startCountdown(STAFF_TIMEOUT_S); return; }   // cancelled
+        }
+      } catch (_) { /* safety service unavailable: never block clocking in */ }
+    }
     try {
       const r = await post('/api/event', { employee: j.employee, action, kiosk: KIOSK, similarity: j.similarity, mood: j.emotion?.label, attire: j.attire?.name });
       const time = new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -598,8 +746,18 @@
           line = (g.lines || []).find(l => /early|time|streak|break|back|shift|rest|late|mile/i.test(l)) || g.lines[0] || '';
         } catch (_) {}
       }
-      flash(`${LABEL[action]} · ${time}`, line, COLOR[action]);
-      chime(); speak(`${LABEL[action]}, ${j.employee.split(' ')[0]}. ${line}`);
+      if (safetyOut && safetyOut.result === 'flagged') {
+        const bits = [];
+        if (safetyOut.missing.length) bits.push(`Missing: ${safetyOut.missing.map(k => S.ppeLabels[k] || k).join(', ')} — please collect before going airside.`);
+        if (safetyOut.fatigue?.level === 'high') bits.push('Fatigue risk is HIGH — your supervisor has been told. Look after yourself today.');
+        line = bits.join(' ') + ' Supervisor notified.';
+        flash(`${LABEL[action]} · ${time}`, line, '#d97706');
+        beep(440, 200, 'triangle'); speak(`${LABEL[action]}. ${line}`);
+      } else {
+        if (safetyOut) line = `Safety check passed ✓ ${line}`;
+        flash(`${LABEL[action]} · ${time}`, line, COLOR[action]);
+        chime(); speak(`${LABEL[action]}, ${j.employee.split(' ')[0]}. ${line}`);
+      }
       S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
       setTimeout(toAmbient, 3600);
     } catch (e) {
@@ -607,6 +765,49 @@
       setTimeout(toAmbient, 3000);
     }
   });
+
+  // ---- ramp safety pack: PPE checklist + restedness, resolves with the recorded check (or null if cancelled)
+  S.ppeLabels = {};
+  function safetySheet(j, pre) {
+    return new Promise(resolve => {
+      const el = $('safety'), sheet = el.querySelector('.sheet');
+      const items = {}; let rested = null;
+      pre.items.forEach(it => { S.ppeLabels[it.key] = it.label; items[it.key] = it.auto === true ? 'ok' : 'missing'; });
+      const fat = pre.fatigue;
+      const faces = [[1, '😫', 'Exhausted'], [2, '😴', 'Tired'], [3, '😐', 'OK'], [4, '🙂', 'Rested'], [5, '😄', 'Very rested']];
+      sheet.innerHTML = `<h2>Safety check</h2><div class="sub">${esc(j.employee.split(' ')[0])} · ${esc(pre.department || '')} — confirm before going airside</div>` +
+        (pre.items.length ? `<h3>Your PPE</h3><div class="ppe">${pre.items.map(it => `<button data-k="${esc(it.key)}" class="${it.auto === true ? 'on' : it.auto === false ? 'warn' : ''}"><i>${it.icon}</i>${esc(it.label)}` +
+          `<small>${it.auto === true ? 'seen by camera' : it.auto === false ? 'not seen — please put it on' : 'tap to confirm'}</small></button>`).join('')}</div>` : '') +
+        (pre.ask_rested ? `<h3>How rested do you feel?</h3><div class="rest">${faces.map(([v, e, l]) => `<button data-r="${v}"><i>${e}</i>${l}</button>`).join('')}</div>` : '') +
+        (fat ? `<div class="risk">Fatigue risk from your roster: <b class="${fat.level}">${fat.level.toUpperCase()}</b>${fat.factors.length ? `<ul>${fat.factors.map(f => `<li>${esc(f.text)}</li>`).join('')}</ul>` : ' — well rested, nice.'}</div>` : '') +
+        `<div class="go"><button class="pill ghost" data-x>Cancel</button><button class="pill primary" data-ok>Confirm &amp; clock in</button></div>`;
+      const okBtn = sheet.querySelector('[data-ok]');
+      const refresh = () => {
+        const missing = Object.values(items).filter(v => v !== 'ok').length;
+        okBtn.disabled = pre.ask_rested && rested == null;
+        okBtn.style.opacity = okBtn.disabled ? .5 : 1;
+        okBtn.textContent = missing ? `Clock in · report ${missing} missing` : 'Confirm & clock in';
+      };
+      sheet.querySelectorAll('.ppe button').forEach(b => b.onclick = () => {
+        touch(); const k = b.dataset.k; items[k] = items[k] === 'ok' ? 'missing' : 'ok';
+        b.classList.toggle('on', items[k] === 'ok'); b.classList.remove('warn'); refresh();
+      });
+      sheet.querySelectorAll('.rest button').forEach(b => b.onclick = () => {
+        touch(); rested = +b.dataset.r; sheet.querySelectorAll('.rest button').forEach(x => x.classList.toggle('on', x === b)); refresh();
+      });
+      const close = v => { el.classList.remove('show'); clearTimeout(idle); resolve(v); };
+      sheet.querySelector('[data-x]').onclick = () => close(null);
+      okBtn.onclick = async () => {
+        if (okBtn.disabled) return;
+        okBtn.disabled = true;
+        try { close(await post('/api/safety/check', { employee: j.employee, kiosk: KIOSK, items, hivis: j.attire?.hivis ?? null, rested })); }
+        catch (_) { close({ result: 'pass', missing: [], fatigue: null }); }
+      };
+      const idle = setTimeout(() => close(null), 90000);
+      refresh(); el.classList.add('show');
+      speak(pre.items.length ? 'Quick safety check. Confirm your P P E.' : 'Quick check: how rested do you feel?');
+    });
+  }
 
   function flash(t, s, color) {
     $('doneT').textContent = t; $('doneS').textContent = s;
@@ -627,7 +828,7 @@
     }
   }
   function closeChat() {
-    S.chatting = false; document.body.classList.remove('chatting'); stopRec(true);
+    S.chatting = false; document.body.classList.remove('chatting'); stopRec(true); S.ticket = null;
     $('msgs').innerHTML = '';
     if (S.state === 'staff') startCountdown(STAFF_TIMEOUT_S);
     else if (S.state === 'visitor') startCountdown(VISITOR_TIMEOUT_S);
@@ -658,6 +859,7 @@
     text = (text || '').trim(); if (!text) return;
     touch();
     if (!viaVoice) addMsg('me', esc(text));
+    S.lastText = text;
     $('text').value = '';
     const bubble = addMsg('aura', '<span class="typing"><i></i><i></i><i></i></span>');
     const prev = S.state; setState('thinking');
@@ -671,9 +873,24 @@
     const span = document.createElement('span'); bubble.innerHTML = ''; bubble.appendChild(span);
     speak(r.reply, r.locale);
     await typeInto(span, r.reply);
+    if (r.flight) {
+      const f = r.flight, fc = document.createElement('div'); fc.className = 'fcard';
+      fc.innerHTML = `<b>${f.dir === 'dep' ? '🛫' : '🛬'} ${esc(f.number)}</b><span>${esc(f.airline || '')} · ${f.dir === 'dep' ? 'to' : 'from'} ${esc(f.city || '')}</span>` +
+        `<span class="fst ${esc(f.status)}">${esc(FST[f.status] || f.status)}</span>` +
+        `<span class="big">${hm(f.estimated || f.scheduled)}</span><span>${f.estimated && f.estimated !== f.scheduled ? `was ${hm(f.scheduled)}` : 'scheduled'}</span>` +
+        `<span>${f.dir === 'dep' ? (f.gate ? `Gate <b>${esc(f.gate)}</b>` : '') : (f.belt ? `Belt <b>${esc(f.belt)}</b>` : '')}</span>`;
+      bubble.appendChild(fc);
+    }
+    if (r.assist && !S.ticket) {
+      const [icon, label] = HELP[r.assist] || HELP.other;
+      const hb = document.createElement('button'); hb.className = 'helpbtn'; hb.innerHTML = `📣 Call a team member · ${icon} ${esc(label)}`;
+      hb.onclick = () => { hb.remove(); requestHelp(r.assist, r.heard || S.lastText, 'conversation'); };
+      bubble.appendChild(hb);
+    }
     const m = document.createElement('span'); m.className = 'meta'; m.textContent = `${(r.lang || '').toUpperCase()} · ${r.intent || ''}`;
     bubble.appendChild(m);
     S.lang = r.lang || S.lang;
+    $('msgs').scrollTop = 1e6;
   }
   $('send').onclick = () => send($('text').value);
   $('text').onkeydown = e => { if (e.key === 'Enter') send($('text').value); };
@@ -725,7 +942,7 @@
         if (r.error) throw new Error(r.error);
         if (!r.transcript) { mine.remove(); addMsg('aura', 'I didn’t quite catch that — could you say it again?'); }
         else {
-          mine.textContent = r.transcript;
+          mine.textContent = r.transcript; S.lastText = r.transcript;
           const b = addMsg('aura', '<span class="typing"><i></i><i></i><i></i></span>');
           await answer(b, r);
         }
@@ -757,6 +974,7 @@
 
   toAmbient();
   loadConfig(); setInterval(loadConfig, 60000);
+  loadBoard();
 })();
 </script>
 </body>

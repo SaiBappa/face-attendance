@@ -12,6 +12,12 @@ Kiosk (no PIN, LAN only):
   POST /api/talk             text -> reply in the speaker's language (stored per person)
   POST /api/listen           voice clip -> transcript + reply
   GET  /api/kiosk/{name}     screen config, images, announcements, live pulse
+  GET  /api/flights          departures/arrivals board (live feed or demo)
+  POST /api/assist           raise an assistance request; GET /api/assist/{id} its live status
+  POST /api/safety/precheck  PPE items + fatigue risk for a worker about to clock in
+  POST /api/safety/check     record the confirmed checklist + self-rated restedness
+Assist desk (X-Admin-Pin = ASSIST_PIN or ADMIN_PIN):
+  /assist page, GET /api/requests, PUT /api/requests/{id}
 Admin (X-Admin-Pin):
   /api/status, /api/events, /api/export.csv, /api/employees…   (original attendance admin)
   /api/people…, /api/kiosks…, /api/media…, /api/announcements…
@@ -20,6 +26,7 @@ Admin (X-Admin-Pin):
 Camera frames and voice clips are processed in memory and discarded. Only face vectors
 (recognizer), names, timestamps, derived mood labels and conversation text are stored.
 """
+import asyncio
 import csv
 import io
 import json
@@ -38,7 +45,10 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 import brain
+import flights
 import insights
+import phrases
+import safety
 from store import db, init_db
 
 COMPREFACE_URL = os.environ.get("COMPREFACE_URL", "http://localhost:8000").rstrip("/")
@@ -47,6 +57,9 @@ LISTENER_URL = os.environ.get("LISTENER_URL", "http://localhost:8001").rstrip("/
 THRESHOLD = float(os.environ.get("SIMILARITY_THRESHOLD", "0.90"))
 DUP_WINDOW = int(os.environ.get("DUPLICATE_WINDOW_SECONDS", "60"))
 ADMIN_PIN = os.environ.get("ADMIN_PIN", "2468")
+ASSIST_PIN = os.environ.get("ASSIST_PIN") or ADMIN_PIN   # for service-desk agents who shouldn't see admin
+ASSIST_WEBHOOK_URL = os.environ.get("ASSIST_WEBHOOK_URL", "")
+SAFETY_WEBHOOK_URL = os.environ.get("SAFETY_WEBHOOK_URL") or ASSIST_WEBHOOK_URL
 MEDIA_DIR = os.environ.get("MEDIA_DIR", os.path.join(os.path.dirname(os.environ.get("DB_PATH", "./attendance.db")) or ".", "media"))
 # on = staff (with consent) + anonymous visitors; staff_only; visitors_only; off
 MOOD_TRACKING = os.environ.get("MOOD_TRACKING", "on").lower()
@@ -121,6 +134,12 @@ def require_pin(request: Request):
         raise HTTPException(401, "Invalid admin PIN")
 
 
+def require_staff(request: Request):
+    pin = request.headers.get("x-admin-pin") or request.query_params.get("pin")
+    if pin not in (ADMIN_PIN, ASSIST_PIN):
+        raise HTTPException(401, "Invalid PIN")
+
+
 def cf_headers() -> dict:
     if not API_KEY or API_KEY.startswith("PASTE"):
         raise HTTPException(503, "COMPREFACE_API_KEY is not configured on the server")
@@ -166,6 +185,10 @@ async def kiosk_page(request):
 
 async def admin_page(request):
     return FileResponse(os.path.join(STATIC, "admin.html"))
+
+
+async def assist_page(request):
+    return FileResponse(os.path.join(STATIC, "assist.html"))
 
 
 async def insights_page(request):
@@ -339,8 +362,9 @@ async def _converse(text: str, p: dict) -> dict:
     today = date.today()
     with db() as conn:
         k = kiosk_row(conn, kiosk)
-        ctx = {"location": k.get("headline") or k.get("zone") or kiosk, "cards": k["info"], "now": now().strftime("%A %H:%M"),
-               "person": employee, "mood": p.get("mood"), "lang_hint": p.get("lang_hint")}
+        ctx = {"location": k.get("zone") or k.get("headline") or kiosk, "cards": k["info"], "now": now().strftime("%A %H:%M"),
+               "person": employee, "mood": p.get("mood"), "lang_hint": p.get("lang_hint"),
+               "flights": await flights.all_flights()}
         if employee:
             ctx["profile"] = profile(conn, employee)
             ctx["attendance_text"] = insights.attendance_text(conn, employee, today)
@@ -414,8 +438,201 @@ async def kiosk_config(request: Request):
     return JSONResponse({
         "kiosk": k, "media": media, "announcements": ann, "airport": brain.AIRPORT, "wifi": brain.WIFI,
         "pulse": {"on_duty": on_duty, "visitor_mood": vis[0], "visitors_today": vis[1], "mood_today": allv, "chats_today": chats},
-        "features": {"listener": True, "mood": MOOD_TRACKING != "off"},
+        "features": {"listener": True, "mood": MOOD_TRACKING != "off", "flights": flights.PROVIDER != "off",
+                     "assist": list(phrases.ASSIST_KINDS)},
     })
+
+
+async def flight_board(request: Request):
+    kiosk = request.query_params.get("kiosk")
+    direction = request.query_params.get("direction") or "both"
+    if kiosk:
+        with db() as conn:
+            direction = kiosk_row(conn, kiosk).get("flights") or "both"
+    if direction == "off":
+        return JSONResponse({"departures": [], "arrivals": [], "off": True})
+    return JSONResponse(await flights.board(direction, int(request.query_params.get("limit", 8))))
+
+
+# ---- assistance requests
+_bg: set = set()  # keeps webhook tasks referenced until they finish
+
+def _request_public(r) -> dict:
+    return {"id": r["id"], "kind": r["kind"], "status": r["status"], "ts": r["ts"], "ack_ts": r["ack_ts"],
+            "assigned": (r["assigned_to"] or "").split(" ")[0] or None}
+
+
+async def _notify(req: dict):
+    if not ASSIST_WEBHOOK_URL:
+        return
+    icon, label = phrases.ASSIST_KINDS.get(req["kind"], ("💬", req["kind"]))
+    text = f"{icon} Assistance #{req['id']} — {label} at {req['kiosk']}" + (f": {req['details']}" if req.get("details") else "")
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            await client.post(ASSIST_WEBHOOK_URL, json={"text": text, "request": req})
+    except httpx.HTTPError as e:
+        print("assist webhook failed", e.__class__.__name__)
+
+
+async def assist_create(request: Request):
+    p = await request.json()
+    kind = p.get("kind") or "other"
+    if kind not in phrases.ASSIST_KINDS:
+        raise HTTPException(400, f"kind must be one of {list(phrases.ASSIST_KINDS)}")
+    ts = now()
+    kiosk = (p.get("kiosk") or "Main").strip()
+    with db() as conn:
+        k = kiosk_row(conn, kiosk)
+        # one open request per approach and kind: repeated taps don't create duplicates
+        dup = conn.execute("SELECT * FROM requests WHERE encounter=? AND kind=? AND status IN ('open','acknowledged') AND encounter IS NOT NULL",
+                           (p.get("encounter"), kind)).fetchone()
+        if dup:
+            return JSONResponse(_request_public(dup))
+        cur = conn.execute(
+            "INSERT INTO requests (ts, day, kiosk, kind, details, lang, person, encounter, source) VALUES (?,?,?,?,?,?,?,?,?)",
+            (stamp(ts), ts.date().isoformat(), kiosk, kind, (p.get("details") or "").strip()[:500] or None,
+             p.get("lang"), (p.get("employee") or "").strip() or None, p.get("encounter"), p.get("source") or "button"))
+        r = conn.execute("SELECT * FROM requests WHERE id=?", (cur.lastrowid,)).fetchone()
+    req = dict(r)
+    req["location"] = k.get("headline") or kiosk
+    task = asyncio.create_task(_notify(req))
+    _bg.add(task)
+    task.add_done_callback(_bg.discard)
+    return JSONResponse(_request_public(r))
+
+
+async def assist_status(request: Request):
+    with db() as conn:
+        r = conn.execute("SELECT * FROM requests WHERE id=?", (int(request.path_params["req_id"]),)).fetchone()
+    if not r:
+        raise HTTPException(404, "not found")
+    return JSONResponse(_request_public(r))
+
+
+async def assist_cancel(request: Request):
+    """The traveller changed their mind (only while nobody has picked it up)."""
+    with db() as conn:
+        conn.execute("UPDATE requests SET status='cancelled', done_ts=? WHERE id=? AND status='open'",
+                     (stamp(), int(request.path_params["req_id"])))
+    return JSONResponse({"ok": True})
+
+
+async def requests_list(request: Request):
+    require_staff(request)
+    statuses = [x for x in (request.query_params.get("status") or "open,acknowledged").split(",") if x]
+    date_from, date_to = _range(request, default_days=0)
+    live = [x for x in statuses if x in ("open", "acknowledged")]
+    closed = [x for x in statuses if x in ("done", "cancelled")]
+    # live requests regardless of date; closed ones only within the date range — one call for the whole board
+    conds, args = [], []
+    if live:
+        conds.append(f"status IN ({','.join('?' * len(live))})")
+        args += live
+    if closed:
+        conds.append(f"(status IN ({','.join('?' * len(closed))}) AND day BETWEEN ? AND ?)")
+        args += closed + [date_from, date_to]
+    sql = "SELECT r.*, COALESCE(k.zone, r.kiosk) AS location FROM requests r LEFT JOIN kiosks k ON k.name = r.kiosk WHERE (" + (" OR ".join(conds) or "0") + ")"
+    if request.query_params.get("kiosk"):
+        sql += " AND r.kiosk=?"
+        args.append(request.query_params["kiosk"])
+    with db() as conn:
+        rows = [dict(r) for r in conn.execute(sql + " ORDER BY r.id DESC LIMIT 300", args)]
+        staff = [r["name"] for r in conn.execute("SELECT name FROM people ORDER BY name COLLATE NOCASE")]
+    return JSONResponse({"rows": rows, "kinds": {k: {"icon": v[0], "label": v[1]} for k, v in phrases.ASSIST_KINDS.items()},
+                         "staff": staff, "now": stamp(), "sla_min": int(os.environ.get("ASSIST_SLA_MINUTES", "5"))})
+
+
+async def request_update(request: Request):
+    require_staff(request)
+    rid = int(request.path_params["req_id"])
+    p = await request.json()
+    status = p.get("status")
+    if status and status not in ("open", "acknowledged", "done", "cancelled"):
+        raise HTTPException(400, "bad status")
+    with db() as conn:
+        r = conn.execute("SELECT * FROM requests WHERE id=?", (rid,)).fetchone()
+        if not r:
+            raise HTTPException(404, "not found")
+        fields = {}
+        if "assigned_to" in p:
+            fields["assigned_to"] = (p["assigned_to"] or "").strip() or None
+        if "notes" in p:
+            fields["notes"] = p["notes"]
+        if status:
+            fields["status"] = status
+            if status == "acknowledged" and not r["ack_ts"]:
+                fields["ack_ts"] = stamp()
+            if status in ("done", "cancelled"):
+                fields["done_ts"] = stamp()   # no ack_ts invented: skipped acknowledgements don't fake 0-min responses
+            if status == "open":
+                fields.update(ack_ts=None, done_ts=None)
+        if fields:
+            conn.execute(f"UPDATE requests SET {', '.join(f'{k}=?' for k in fields)} WHERE id=?", (*fields.values(), rid))
+    return JSONResponse({"ok": True})
+
+
+# ---- ramp safety pack
+async def _post_webhook(url: str, payload: dict):
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            await client.post(url, json=payload)
+    except httpx.HTTPError as e:
+        print("webhook failed", e.__class__.__name__)
+
+
+async def safety_precheck(request: Request):
+    p = await request.json()
+    employee = (p.get("employee") or "").strip()
+    if not employee:
+        raise HTTPException(400, "employee required")
+    with db() as conn:
+        return JSONResponse(safety.precheck(conn, employee, profile(conn, employee), p.get("hivis")))
+
+
+async def safety_check(request: Request):
+    p = await request.json()
+    employee = (p.get("employee") or "").strip()
+    if not employee:
+        raise HTTPException(400, "employee required")
+    rested = p.get("rested")
+    rested = int(rested) if rested in (1, 2, 3, 4, 5, "1", "2", "3", "4", "5") else None
+    kiosk = (p.get("kiosk") or "").strip() or None
+    with db() as conn:
+        prof = profile(conn, employee)
+        out = safety.record(conn, employee, prof, kiosk, p.get("items") or {}, p.get("hivis"), rested)
+    if out["result"] == "flagged" and SAFETY_WEBHOOK_URL:
+        bits = []
+        if out["missing"]:
+            bits.append("missing " + ", ".join(safety.PPE[m][1] for m in out["missing"]))
+        if out["fatigue"] and out["fatigue"]["level"] == "high":
+            bits.append(f"HIGH fatigue risk ({out['fatigue']['score']}): " + "; ".join(f["text"] for f in out["fatigue"]["factors"]))
+        task = asyncio.create_task(_post_webhook(SAFETY_WEBHOOK_URL, {
+            "text": f"⚠️ Safety check — {employee} ({prof.get('department') or '—'}) at {kiosk}: " + " · ".join(bits),
+            "safety": {"person": employee, **out}}))
+        _bg.add(task)
+        task.add_done_callback(_bg.discard)
+    return JSONResponse(out)
+
+
+async def safety_rules(request: Request):
+    require_pin(request)
+    with db() as conn:
+        if request.method == "PUT":
+            dept = request.path_params.get("department", "").strip()
+            if not dept:
+                raise HTTPException(400, "department required")
+            safety.save_rule(conn, dept, await request.json())
+            return JSONResponse({"ok": True})
+        depts = [r[0] for r in conn.execute("SELECT DISTINCT department FROM people WHERE department IS NOT NULL AND department!='' ORDER BY 1")]
+        return JSONResponse({"rules": safety.all_rules(conn), "departments": depts,
+                             "catalog": {k: {"icon": v[0], "label": v[1]} for k, v in safety.PPE.items()}})
+
+
+async def safety_rule_delete(request: Request):
+    require_pin(request)
+    with db() as conn:
+        conn.execute("DELETE FROM safety_rules WHERE department=?", (request.path_params["department"],))
+    return JSONResponse({"ok": True})
 
 
 # ----------------------------------------------------------------------------- admin API
@@ -595,6 +812,8 @@ async def kiosk_save(request: Request):
     with db() as conn:
         kiosk_row(conn, name)
         fields = {k: p[k] for k in ("zone", "headline", "subtitle", "theme", "language") if k in p}
+        if p.get("flights") in ("both", "departures", "arrivals", "off"):
+            fields["flights"] = p["flights"]
         if "voice" in p:
             fields["voice"] = 1 if p["voice"] else 0
         if "info" in p:
@@ -761,7 +980,8 @@ async def demo_data(request: Request):
 async def engine_status(request: Request):
     require_pin(request)
     out = {**brain.engines(), "jev_ok": await brain.jev_status(), "mood_tracking": MOOD_TRACKING,
-           "retention_days": RETENTION_DAYS}
+           "retention_days": RETENTION_DAYS, "flights": flights.status(), "assist_webhook": bool(ASSIST_WEBHOOK_URL),
+           "safety_webhook": bool(SAFETY_WEBHOOK_URL)}
     async with httpx.AsyncClient(timeout=4) as client:
         for key, url in (("recognizer", f"{COMPREFACE_URL}/healthcheck"), ("listener", f"{LISTENER_URL}/healthcheck")):
             try:
@@ -780,6 +1000,18 @@ routes = [
     Route("/", kiosk_page),
     Route("/admin", admin_page),
     Route("/insights", insights_page),
+    Route("/assist", assist_page),
+    Route("/api/flights", flight_board),
+    Route("/api/assist", assist_create, methods=["POST"]),
+    Route("/api/assist/{req_id:int}", assist_status),
+    Route("/api/assist/{req_id:int}/cancel", assist_cancel, methods=["POST"]),
+    Route("/api/requests", requests_list),
+    Route("/api/safety/precheck", safety_precheck, methods=["POST"]),
+    Route("/api/safety/check", safety_check, methods=["POST"]),
+    Route("/api/safety/rules", safety_rules),
+    Route("/api/safety/rules/{department}", safety_rules, methods=["PUT"]),
+    Route("/api/safety/rules/{department}", safety_rule_delete, methods=["DELETE"]),
+    Route("/api/requests/{req_id:int}", request_update, methods=["PUT"]),
     Route("/api/health", health),
     Route("/api/recognize", recognize, methods=["POST"]),
     Route("/api/greet", greet, methods=["POST"]),

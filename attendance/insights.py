@@ -9,6 +9,7 @@ import statistics
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 
+import safety
 from brain import MOODS
 from store import db
 
@@ -78,6 +79,13 @@ def _valence(label):
     return MOODS.get(label, (None,))[0]
 
 
+def _group(pairs) -> dict:
+    out = defaultdict(list)
+    for k, v in pairs:
+        out[k].append(v)
+    return out
+
+
 def _avg(xs):
     xs = [x for x in xs if x is not None]
     return round(sum(xs) / len(xs), 3) if xs else None
@@ -90,6 +98,7 @@ def overview(date_from: str, date_to: str, kiosk: str = None) -> dict:
         ev = conn.execute(f"SELECT * FROM events WHERE day BETWEEN ? AND ? {kf} ORDER BY ts", [date_from, date_to] + ka).fetchall()
         si = conn.execute(f"SELECT * FROM sightings WHERE day BETWEEN ? AND ? {kf} ORDER BY ts", [date_from, date_to] + ka).fetchall()
         it = conn.execute(f"SELECT * FROM interactions WHERE day BETWEEN ? AND ? {kf} ORDER BY ts", [date_from, date_to] + ka).fetchall()
+        rq = conn.execute(f"SELECT * FROM requests WHERE day BETWEEN ? AND ? {kf} ORDER BY ts", [date_from, date_to] + ka).fetchall()
         # previous period of equal length, for trend arrows
         d0, d1 = date.fromisoformat(date_from), date.fromisoformat(date_to)
         span = (d1 - d0).days + 1
@@ -272,15 +281,51 @@ def overview(date_from: str, date_to: str, kiosk: str = None) -> dict:
         "sentiment": _avg([x["sentiment"] for x in talk]),
         "alerts": sum(1 for a in alerts if a["severity"] in ("high", "medium")),
     }
+    # ---- assistance requests: volume, response (open -> acknowledged) and resolution times
+    def mins(a, b):
+        return (datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds() / 60 if a and b else None
+    resp = [mins(r["ts"], r["ack_ts"]) for r in rq if r["ack_ts"]]
+    reso = [mins(r["ts"], r["done_ts"]) for r in rq if r["status"] == "done" and r["done_ts"]]
+    sla = int(os.environ.get("ASSIST_SLA_MINUTES", "5"))
+    assist = {
+        "total": len(rq), "open": sum(r["status"] in ("open", "acknowledged") for r in rq),
+        "done": sum(r["status"] == "done" for r in rq), "cancelled": sum(r["status"] == "cancelled" for r in rq),
+        "median_response_min": round(statistics.median(resp), 1) if resp else None,
+        "median_resolution_min": round(statistics.median(reso), 1) if reso else None,
+        "within_sla_pct": round(100 * sum(x <= sla for x in resp) / len(resp), 1) if resp else None, "sla_min": sla,
+        "by_kind": dict(Counter(r["kind"] for r in rq).most_common()),
+        "by_kiosk": dict(Counter(r["kiosk"] for r in rq).most_common()),
+        "by_hour": [sum(1 for r in rq if int(r["ts"][11:13]) == h) for h in range(24)],
+        "by_source": dict(Counter(r["source"] for r in rq)),
+        "responders": sorted(
+            ({"name": n, "handled": len(v), "median_response_min": round(statistics.median(v), 1)}
+             for n, v in _group([(r["assigned_to"], mins(r["ts"], r["ack_ts"])) for r in rq if r["assigned_to"] and r["ack_ts"]]).items()),
+            key=lambda x: -x["handled"])[:10],
+    }
+
+    with db() as conn:
+        safety_block = safety.summary(conn, date_from, date_to)
+    for h in safety_block["high_fatigue"][:5]:
+        alerts.append({"person": h["person"], "type": "fatigue", "severity": "high",
+                       "text": f"{h['person']} clocked in with HIGH fatigue risk ({h['score']}): " + "; ".join(f["text"] for f in h["factors"][:2]) + "."})
+
     # keep kudos meaningful: only the three longest streaks
-    kudos = sorted((a for a in alerts if a["type"] == "kudos"), key=lambda a: -next(r["streak"] for r in people_rows if r["name"] == a["person"]))
+    concern = {a["person"] for a in alerts if a["severity"] in ("high", "medium")}
+    for r in people_rows:
+        if any(h["person"] == r["name"] for h in safety_block["high_fatigue"]):
+            r["flags"].append("fatigue")
+        if r["name"] in concern and "star" in r["flags"]:
+            r["flags"].remove("star")
+    kudos = sorted((a for a in alerts if a["type"] == "kudos" and a["person"] not in concern),
+                   key=lambda a: -next(r["streak"] for r in people_rows if r["name"] == a["person"]))
     alerts = [a for a in alerts if a["type"] != "kudos"] + kudos[:3]
     sev = {"high": 0, "medium": 1, "low": 2, "positive": 3}
     return {
         "from": date_from, "to": date_to, "kpis": kpis, "daily": daily,
         "mood_mix": {"staff": dict(mix_staff), "visitor": dict(mix_vis)},
         "mood_by_hour": by_hour, "by_weekday": by_weekday, "arrivals_heat": heat,
-        "locations": locations, "people": people_rows, "departments": departments,
+        "locations": locations, "people": people_rows, "departments": departments, "assist": assist,
+        "safety": safety_block,
         "alerts": sorted(alerts, key=lambda a: sev[a["severity"]]),
         "intents": dict(intents.most_common()), "languages": dict(languages.most_common()),
         "engines": dict(engines),
@@ -297,6 +342,8 @@ def person(name: str, date_from: str, date_to: str) -> dict:
                           (name, date_from, date_to)).fetchall()
         mem = conn.execute("SELECT * FROM memories WHERE person=? AND substr(ts,1,10) BETWEEN ? AND ? ORDER BY id DESC LIMIT 100",
                            (name, date_from, date_to)).fetchall()
+        checks = [dict(r) for r in conn.execute("SELECT * FROM safety_checks WHERE person=? AND day BETWEEN ? AND ? ORDER BY ts DESC",
+                                                (name, date_from, date_to))]
     prof = dict(prof) if prof else {"name": name}
     wd = workdays(ev)
     shift = _shift_min(prof)
@@ -321,7 +368,7 @@ def person(name: str, date_from: str, date_to: str) -> dict:
         "profile": prof, "days": days,
         "mood_mix": dict(Counter(s["mood"] for s in si if s["mood"])),
         "attire_mix": dict(Counter(s["attire"] for s in si if s["attire"])),
-        "interactions": [dict(r) for r in it], "memories": [dict(r) for r in mem],
+        "interactions": [dict(r) for r in it], "memories": [dict(r) for r in mem], "safety_checks": checks,
         "moods_meta": {k: {"valence": v[0], "word": v[1], "emoji": v[2]} for k, v in MOODS.items()},
     }
 

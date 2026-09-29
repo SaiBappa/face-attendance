@@ -161,17 +161,17 @@ T = {
         "es": "Para horarios en tiempo real, consulta las pantallas de vuelos o el mostrador de tu aerolínea.",
         "ja": "最新のフライト情報は案内表示板か航空会社カウンターでご確認ください。",
     },
-    "lost": {
-        "en": "I've flagged this for the team. Please stay near {location}; a staff member will come to help. For emergencies, speak to the nearest security officer.",
-        "ar": "لقد أبلغت الفريق. يرجى البقاء قرب {location}، وسيأتي أحد الموظفين لمساعدتك.",
-        "zh": "我已通知工作人员。请留在{location}附近，工作人员会来帮助您。",
-        "ru": "Я сообщил команде. Пожалуйста, оставайтесь у {location} — сотрудник скоро подойдёт.",
-        "hi": "मैंने टीम को सूचित कर दिया है। कृपया {location} के पास रहें, कोई स्टाफ़ सदस्य मदद के लिए आएगा।",
-        "de": "Ich habe das Team informiert. Bitte bleiben Sie bei {location}, jemand kommt gleich.",
-        "it": "Ho avvisato il personale. Resta vicino a {location}, qualcuno arriverà ad aiutarti.",
-        "fr": "J'ai prévenu l'équipe. Restez près de {location}, quelqu'un va venir vous aider.",
-        "es": "He avisado al equipo. Quédate cerca de {location}; alguien vendrá a ayudarte.",
-        "ja": "スタッフに連絡しました。{location}の近くでお待ちください。",
+    "lost": {  # followed by the "call a team member" button on the kiosk
+        "en": "Don't worry — please stay here at {location}. A team member can come to you right away.",
+        "ar": "لا تقلق — يرجى البقاء هنا عند {location}. يمكن لأحد الموظفين القدوم إليك فوراً.",
+        "zh": "别担心——请留在{location}。工作人员可以马上过来帮您。",
+        "ru": "Не волнуйтесь — оставайтесь здесь, у {location}. Сотрудник может сразу подойти к вам.",
+        "hi": "चिंता न करें — कृपया यहीं {location} पर रहें। स्टाफ़ तुरंत आपके पास आ सकता है।",
+        "de": "Keine Sorge — bitte bleiben Sie hier bei {location}. Jemand vom Team kann sofort kommen.",
+        "it": "Non preoccuparti — resta qui a {location}. Qualcuno del personale può arrivare subito.",
+        "fr": "Pas d'inquiétude — restez ici à {location}. Un membre de l'équipe peut venir tout de suite.",
+        "es": "No te preocupes — quédate aquí en {location}. Alguien del equipo puede venir enseguida.",
+        "ja": "ご安心ください。{location}でお待ちください。スタッフがすぐに伺えます。",
     },
     "complaint": {
         "en": "Thank you for telling me — I've recorded it so the team can follow up. I'm sorry for the trouble.",
@@ -250,3 +250,128 @@ def render(intent: str, lang: str, **values) -> tuple:
         return text.format(**safe).strip(), used
     except (KeyError, IndexError):
         return text, used
+
+
+# ----------------------------------------------------------------------------- flights
+# {status} comes from FLIGHT_STATUS; {extra} is ", gate 5" / ", belt 2" built with FLIGHT_WORDS.
+FLIGHT_DEP = {
+    "en": "{number} to {city}: {status}. Departure {time}{extra}.",
+    "dv": "{number} → {city}: {status}. {time}{extra}",
+    "ar": "الرحلة {number} إلى {city}: {status}. المغادرة {time}{extra}.",
+    "zh": "{number} 飞往{city}：{status}。起飞时间 {time}{extra}。",
+    "ru": "Рейс {number} в {city}: {status}. Вылет в {time}{extra}.",
+    "hi": "{number} {city} के लिए: {status}। प्रस्थान {time}{extra}।",
+    "de": "{number} nach {city}: {status}. Abflug {time}{extra}.",
+    "it": "{number} per {city}: {status}. Partenza {time}{extra}.",
+    "fr": "{number} pour {city} : {status}. Départ {time}{extra}.",
+    "es": "{number} a {city}: {status}. Salida {time}{extra}.",
+    "ja": "{number}便 {city}行き：{status}。出発 {time}{extra}。",
+}
+FLIGHT_ARR = {
+    "en": "{number} from {city}: {status}. Arrival {time}{extra}.",
+    "dv": "{number} ← {city}: {status}. {time}{extra}",
+    "ar": "الرحلة {number} من {city}: {status}. الوصول {time}{extra}.",
+    "zh": "{number} 来自{city}：{status}。到达时间 {time}{extra}。",
+    "ru": "Рейс {number} из {city}: {status}. Прилёт в {time}{extra}.",
+    "hi": "{number} {city} से: {status}। आगमन {time}{extra}।",
+    "de": "{number} aus {city}: {status}. Ankunft {time}{extra}.",
+    "it": "{number} da {city}: {status}. Arrivo {time}{extra}.",
+    "fr": "{number} de {city} : {status}. Arrivée {time}{extra}.",
+    "es": "{number} desde {city}: {status}. Llegada {time}{extra}.",
+    "ja": "{number}便 {city}発：{status}。到着 {time}{extra}。",
+}
+FLIGHT_ASK = {
+    "en": "Happy to check! What's your flight number? It's on your boarding pass, like EK653.",
+    "ar": "بكل سرور! ما رقم رحلتك؟ ستجده في بطاقة الصعود، مثل EK653.",
+    "zh": "乐意为您查询！请问您的航班号是多少？登机牌上有，例如 EK653。",
+    "ru": "С радостью проверю! Какой у вас номер рейса? Он указан в посадочном талоне, например EK653.",
+    "hi": "ज़रूर! आपका फ़्लाइट नंबर क्या है? यह बोर्डिंग पास पर होता है, जैसे EK653।",
+    "de": "Gern! Wie lautet Ihre Flugnummer? Sie steht auf der Bordkarte, z. B. EK653.",
+    "it": "Volentieri! Qual è il numero del tuo volo? È sulla carta d'imbarco, ad es. EK653.",
+    "fr": "Avec plaisir ! Quel est votre numéro de vol ? Il figure sur la carte d'embarquement, ex. EK653.",
+    "es": "¡Claro! ¿Cuál es tu número de vuelo? Está en la tarjeta de embarque, p. ej. EK653.",
+    "ja": "お調べします！便名を教えてください。搭乗券に記載されています（例：EK653）。",
+}
+FLIGHT_STATUS = {
+    "en": {"scheduled": "on schedule", "checkin": "check-in open", "boarding": "now boarding", "gate_closed": "gate closed",
+           "departed": "departed", "delayed": "delayed", "cancelled": "cancelled", "expected": "on time",
+           "approaching": "landing shortly", "landed": "landed", "diverted": "diverted"},
+    "ar": {"scheduled": "في موعدها", "checkin": "تسجيل الوصول مفتوح", "boarding": "الصعود جارٍ الآن", "gate_closed": "البوابة مغلقة",
+           "departed": "غادرت", "delayed": "متأخرة", "cancelled": "ملغاة", "expected": "في موعدها",
+           "approaching": "تهبط قريباً", "landed": "هبطت", "diverted": "تم تحويلها"},
+    "zh": {"scheduled": "准点", "checkin": "正在办理值机", "boarding": "正在登机", "gate_closed": "登机口已关闭",
+           "departed": "已起飞", "delayed": "延误", "cancelled": "已取消", "expected": "准点",
+           "approaching": "即将降落", "landed": "已到达", "diverted": "已备降"},
+    "ru": {"scheduled": "по расписанию", "checkin": "идёт регистрация", "boarding": "идёт посадка", "gate_closed": "выход закрыт",
+           "departed": "вылетел", "delayed": "задерживается", "cancelled": "отменён", "expected": "по расписанию",
+           "approaching": "скоро приземлится", "landed": "приземлился", "diverted": "перенаправлен"},
+    "hi": {"scheduled": "समय पर", "checkin": "चेक-इन खुला है", "boarding": "बोर्डिंग जारी है", "gate_closed": "गेट बंद",
+           "departed": "रवाना हो गई", "delayed": "देरी से", "cancelled": "रद्द", "expected": "समय पर",
+           "approaching": "जल्द उतरेगी", "landed": "उतर चुकी है", "diverted": "मार्ग बदला गया"},
+    "de": {"scheduled": "planmäßig", "checkin": "Check-in geöffnet", "boarding": "Boarding läuft", "gate_closed": "Gate geschlossen",
+           "departed": "gestartet", "delayed": "verspätet", "cancelled": "annulliert", "expected": "pünktlich",
+           "approaching": "im Landeanflug", "landed": "gelandet", "diverted": "umgeleitet"},
+    "it": {"scheduled": "in orario", "checkin": "check-in aperto", "boarding": "imbarco in corso", "gate_closed": "gate chiuso",
+           "departed": "partito", "delayed": "in ritardo", "cancelled": "cancellato", "expected": "in orario",
+           "approaching": "in atterraggio", "landed": "atterrato", "diverted": "dirottato"},
+    "fr": {"scheduled": "à l'heure", "checkin": "enregistrement ouvert", "boarding": "embarquement en cours", "gate_closed": "porte fermée",
+           "departed": "parti", "delayed": "retardé", "cancelled": "annulé", "expected": "à l'heure",
+           "approaching": "atterrissage imminent", "landed": "atterri", "diverted": "dérouté"},
+    "es": {"scheduled": "a tiempo", "checkin": "facturación abierta", "boarding": "embarcando", "gate_closed": "puerta cerrada",
+           "departed": "despegó", "delayed": "retrasado", "cancelled": "cancelado", "expected": "a tiempo",
+           "approaching": "aterrizando pronto", "landed": "aterrizó", "diverted": "desviado"},
+    "ja": {"scheduled": "定刻", "checkin": "チェックイン受付中", "boarding": "搭乗中", "gate_closed": "搭乗締切",
+           "departed": "出発済み", "delayed": "遅延", "cancelled": "欠航", "expected": "定刻",
+           "approaching": "まもなく到着", "landed": "到着済み", "diverted": "目的地変更"},
+}
+FLIGHT_WORDS = {  # gate, check-in desks, baggage belt, delay "(+N min)"
+    "en": ("gate", "check-in desks", "baggage belt", "+{n} min"), "ar": ("البوابة", "كاونترات التسجيل", "حزام الأمتعة", "+{n} د"),
+    "zh": ("登机口", "值机柜台", "行李转盘", "+{n}分钟"), "ru": ("выход", "стойки регистрации", "лента", "+{n} мин"),
+    "hi": ("गेट", "चेक-इन काउंटर", "बैगेज बेल्ट", "+{n} मिनट"), "de": ("Gate", "Check-in-Schalter", "Gepäckband", "+{n} Min."),
+    "it": ("gate", "banchi check-in", "nastro bagagli", "+{n} min"), "fr": ("porte", "comptoirs", "tapis bagages", "+{n} min"),
+    "es": ("puerta", "mostradores", "cinta de equipaje", "+{n} min"), "ja": ("搭乗口", "チェックインカウンター", "手荷物受取所", "+{n}分"),
+}
+
+
+def render_flight(f: dict, lang: str) -> tuple:
+    used = lang if lang in FLIGHT_DEP else "en"
+    words = FLIGHT_WORDS.get(used, FLIGHT_WORDS["en"])
+    status = FLIGHT_STATUS.get(used, FLIGHT_STATUS["en"]).get(f.get("status"), f.get("status") or "")
+    when = (f.get("estimated") or f.get("scheduled") or "")[11:16]
+    if (f.get("delay_min") or 0) >= 15 and f.get("status") not in ("cancelled",):
+        when += f" ({words[3].format(n=f['delay_min'])})"
+    extra = ""
+    if f["dir"] == "dep":
+        if f.get("gate") and f.get("status") in ("boarding", "gate_closed", "checkin", "delayed", "scheduled"):
+            extra = f", {words[0]} {f['gate']}"
+        if f.get("desk") and f.get("status") in ("checkin", "scheduled", "delayed"):
+            extra += f", {words[1]} {f['desk']}"
+    elif f.get("belt") and f.get("status") in ("landed", "approaching"):
+        extra = f", {words[2]} {f['belt']}"
+    tpl = (FLIGHT_DEP if f["dir"] == "dep" else FLIGHT_ARR)[used]
+    return tpl.format(number=f["number"], city=f.get("city") or f.get("city_iata") or "", status=status,
+                      time=when, extra=extra), used
+
+
+# ----------------------------------------------------------------------------- assistance
+ASSIST_KINDS = {
+    "wheelchair": ("♿", "Wheelchair / reduced mobility"),
+    "medical": ("🩺", "Medical help"),
+    "lost_item": ("🧳", "Lost item"),
+    "lost_person": ("🧒", "Lost child / person"),
+    "porter": ("🛄", "Porter / baggage help"),
+    "security": ("🛡️", "Security concern"),
+    "other": ("💬", "Talk to a staff member"),
+}
+ASSIST_OFFER = {
+    "en": "I can call a team member to help you — tap the button below.",
+    "ar": "يمكنني استدعاء أحد الموظفين لمساعدتك — اضغط الزر أدناه.",
+    "zh": "我可以为您呼叫工作人员——请点击下方按钮。",
+    "ru": "Я могу вызвать сотрудника — нажмите кнопку ниже.",
+    "hi": "मैं आपकी मदद के लिए स्टाफ़ को बुला सकती हूँ — नीचे बटन दबाएँ।",
+    "de": "Ich kann eine Mitarbeiterin oder einen Mitarbeiter rufen — tippen Sie unten.",
+    "it": "Posso chiamare qualcuno del personale — tocca il pulsante qui sotto.",
+    "fr": "Je peux appeler un membre de l'équipe — touchez le bouton ci-dessous.",
+    "es": "Puedo llamar a alguien del personal — toca el botón de abajo.",
+    "ja": "スタッフをお呼びできます。下のボタンを押してください。",
+}
