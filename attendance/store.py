@@ -2,7 +2,8 @@
 SQLite schema for Aura. One file, created/migrated on start-up.
 
   events         IN / BREAK / BACK / OUT per employee (the original attendance log)
-  people         staff profile: role, department, shift, birthday, language, mood consent
+  people         staff profile: role (designation), department, shift, birthday, language, mood consent,
+                 record card no., date of birth, security pass expiry, authorised zone colour
   sightings      one row per approach to a kiosk: who (or anonymous visitor), mood, attire
   interactions   everything said to / by the kiosk, per person or anonymous visitor
   memories       short facts the kiosk remembers about a person ("said they were tired")
@@ -228,6 +229,8 @@ MIGRATIONS = {
     "events": {"mood": "TEXT", "attire": "TEXT", "demo": "INTEGER NOT NULL DEFAULT 0"},
     # flight board on the ambient screen: departures | arrivals | both | off
     "kiosks": {"flights": "TEXT DEFAULT 'both'"},
+    # enrolment / security pass details (role doubles as designation)
+    "people": {"record_card": "TEXT", "dob": "TEXT", "pass_expiry": "TEXT", "zone": "TEXT"},
 }
 
 

@@ -14,12 +14,16 @@
     --bg:#f3f4f1; --card:#ffffff; --card2:#f8f8f6; --ink:#0d1015; --ink2:#4a4f57; --muted:#80858c;
     --line:rgba(13,16,21,.09); --grid:#e7e7e2; --axis:#c6c7c0; --hover:rgba(13,16,21,.04);
     --shadow:0 1px 2px rgba(13,16,21,.04), 0 8px 24px -12px rgba(13,16,21,.10);
-    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s7:#4a3aa7; --bar:#9fb3c8;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s7:#4a3aa7;
     --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
     --good-ink:#006300; --bad-ink:#b42525; --warn-ink:#8a5a00;
     --none:#e4e4df; --cell0:#f0f0ec;
     --brand1:#12b3a6; --brand2:#7c5cff;
-    --glow1:rgba(18,179,166,.10); --glow2:rgba(124,92,255,.09);
+    --glow1:rgba(18,179,166,.14); --glow2:rgba(124,92,255,.12); --glow3:rgba(235,104,52,.06);
+    /* tile / section accents */
+    --ac-blue:#2a78d6; --ac-teal:#0f9f94; --ac-violet:#6d4ff0; --ac-amber:#d98a00; --ac-rose:#df3f63;
+    --ac-green:#16994a; --ac-orange:#e5602a; --ac-sky:#0b93c9;
+    --bar:#a9c2dc; --card-hi:rgba(255,255,255,.9);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -27,10 +31,13 @@
       --bg:#08090c; --card:#111419; --card2:#161a20; --ink:#f3f5f7; --ink2:#b8bdc5; --muted:#7f858e;
       --line:rgba(255,255,255,.08); --grid:#22262d; --axis:#353a43; --hover:rgba(255,255,255,.04);
       --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 12px 32px -16px rgba(0,0,0,.6);
-      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s7:#9085e9; --bar:#4a5b70;
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s7:#9085e9;
       --good-ink:#2fc22f; --bad-ink:#f07171; --warn-ink:#f5c04a;
       --none:#262a31; --cell0:#171a1f;
-      --glow1:rgba(18,179,166,.13); --glow2:rgba(124,92,255,.13);
+      --glow1:rgba(18,179,166,.16); --glow2:rgba(124,92,255,.16); --glow3:rgba(235,104,52,.06);
+      --ac-blue:#4f9bf0; --ac-teal:#2cc7b9; --ac-violet:#9a86ff; --ac-amber:#f5b638; --ac-rose:#f5708c;
+      --ac-green:#3ccf77; --ac-orange:#f58250; --ac-sky:#38bdf8;
+      --bar:#3f5877; --card-hi:rgba(255,255,255,.04);
     }
   }
   :root[data-theme="dark"] {
@@ -38,10 +45,13 @@
     --bg:#08090c; --card:#111419; --card2:#161a20; --ink:#f3f5f7; --ink2:#b8bdc5; --muted:#7f858e;
     --line:rgba(255,255,255,.08); --grid:#22262d; --axis:#353a43; --hover:rgba(255,255,255,.04);
     --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 12px 32px -16px rgba(0,0,0,.6);
-    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s7:#9085e9; --bar:#4a5b70;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s7:#9085e9;
     --good-ink:#2fc22f; --bad-ink:#f07171; --warn-ink:#f5c04a;
     --none:#262a31; --cell0:#171a1f;
-    --glow1:rgba(18,179,166,.13); --glow2:rgba(124,92,255,.13);
+    --glow1:rgba(18,179,166,.16); --glow2:rgba(124,92,255,.16); --glow3:rgba(235,104,52,.06);
+    --ac-blue:#4f9bf0; --ac-teal:#2cc7b9; --ac-violet:#9a86ff; --ac-amber:#f5b638; --ac-rose:#f5708c;
+    --ac-green:#3ccf77; --ac-orange:#f58250; --ac-sky:#38bdf8;
+    --bar:#3f5877; --card-hi:rgba(255,255,255,.04);
   }
 
   /* ------------------------------------------------------------------ base */
@@ -373,6 +383,140 @@
     .hide-sm { display:none; }
   }
 
+  /* ------------------------------------------------------------------ visual polish
+     Accent colour per tile/section (--c), icon badges, gradient marks, section jump bar
+     and a gentle entrance. Semantics (good/warn/crit, mood scale) are unchanged. */
+  body { background:
+           radial-gradient(1200px 560px at 6% -10%, var(--glow1), transparent 62%),
+           radial-gradient(1000px 520px at 96% -14%, var(--glow2), transparent 62%),
+           radial-gradient(900px 600px at 50% 120%, var(--glow3), transparent 60%),
+           var(--bg); background-attachment:fixed; }
+  .ico { width:18px; height:18px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* card chrome: sentence-case titles with a small accent marker */
+  .card { transition:box-shadow .2s, border-color .2s, transform .2s; }
+  .card:hover { border-color:color-mix(in srgb, var(--ink) 14%, transparent); }
+  .card-h h2 { font-size:15px; font-weight:650; letter-spacing:-.005em; text-transform:none; color:var(--ink); display:flex; align-items:center; gap:8px; }
+  .card-h h2::before { content:""; width:4px; height:15px; border-radius:3px; flex:none; background:var(--c, linear-gradient(180deg,var(--brand1),var(--brand2))); }
+  .summary .card-h h2::before { display:none; }
+
+  /* jump bar (overview sub-sections) */
+  .jump { margin-left:auto; display:flex; gap:4px; align-items:center; padding-bottom:6px; }
+  .jump a { display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px; border-radius:99px; font-size:12.5px; font-weight:550;
+            color:var(--ink2); text-decoration:none; border:1px solid transparent; white-space:nowrap; transition:background .15s, color .15s; }
+  .jump a .ico { width:14px; height:14px; color:var(--c); }
+  .jump a:hover { background:var(--card); border-color:var(--line); color:var(--ink); }
+  .jump a.on { background:var(--card); border-color:color-mix(in srgb, var(--c) 40%, var(--line)); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  .tabs { align-items:flex-end; }
+  [data-anchor] { scroll-margin-top:118px; }
+  @media (max-width:1100px) { .jump a span { display:none; } .jump a { padding:0 8px; } }
+  @media (max-width:760px) { .jump { display:none; } }
+
+  /* summary hero */
+  .summary { padding:22px 22px 18px;
+             background:
+               radial-gradient(600px 220px at 0% 0%, color-mix(in srgb, var(--brand1) 12%, transparent), transparent 70%),
+               radial-gradient(520px 240px at 100% 0%, color-mix(in srgb, var(--brand2) 12%, transparent), transparent 70%),
+               linear-gradient(var(--card),var(--card)) padding-box,
+               linear-gradient(135deg,var(--brand1),var(--brand2) 60%,var(--line)) border-box; }
+  .summary .card-h h2 { font-size:20px; letter-spacing:-.015em; gap:10px; }
+  .hero-ic { width:34px; height:34px; border-radius:11px; display:grid; place-items:center; color:#fff; flex:none;
+             background:linear-gradient(135deg,var(--brand1),var(--brand2)); box-shadow:0 6px 16px -6px color-mix(in srgb, var(--brand2) 70%, transparent); }
+  .hero-ic .ico { width:18px; height:18px; }
+  .summary ul { gap:2px; }
+  .summary li { grid-template-columns:30px 1fr; gap:12px; align-items:start; padding:6px 10px; margin:0 -10px; border-radius:12px; font-size:14.5px; transition:background .15s; }
+  .summary li:hover { background:var(--hover); }
+  .summary li .ic { width:30px; height:30px; border-radius:10px; display:grid; place-items:center; font-size:16px; line-height:1;
+                    background:color-mix(in srgb, var(--c, var(--brand1)) 14%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c, var(--brand1)) 22%, transparent); }
+  .summary li > span:last-child { padding-top:3px; }
+  .summary b { color:var(--ink); }
+
+  /* attention list: severity rail */
+  .alert { position:relative; padding-left:16px; transition:transform .15s, border-color .15s, background .15s; }
+  .alert::before { content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px; border-radius:0 3px 3px 0; background:var(--axis); }
+  .alert:has(.sev.high)::before { background:var(--crit); }
+  .alert:has(.sev.medium)::before { background:var(--warn); }
+  .alert:hover { transform:translateX(2px); background:var(--card); }
+  .alert .go { transition:transform .15s; }
+  .alert:hover .go { transform:translateX(3px); color:var(--ink); }
+  .kudos { background:linear-gradient(135deg, color-mix(in srgb, var(--good) 9%, var(--card2)), var(--card2)); }
+
+  /* KPI tiles */
+  .kpi { --c:var(--ac-blue); transition:transform .2s, box-shadow .2s, border-color .2s; }
+  .kpi::before { content:""; position:absolute; inset:0 0 auto; height:3px; background:linear-gradient(90deg, var(--c), color-mix(in srgb, var(--c) 30%, transparent)); opacity:.85; }
+  .kpi::after { content:""; position:absolute; right:-40px; top:-40px; width:120px; height:120px; border-radius:50%; pointer-events:none;
+                background:radial-gradient(closest-side, color-mix(in srgb, var(--c) 13%, transparent), transparent); }
+  .kpi:hover { transform:translateY(-2px); box-shadow:0 2px 4px rgba(13,16,21,.04), 0 16px 32px -16px color-mix(in srgb, var(--c) 45%, transparent); border-color:color-mix(in srgb, var(--c) 30%, var(--line)); }
+  .kpi .kh { display:flex; align-items:center; gap:8px; min-width:0; }
+  .kpi .kh .l { line-height:1.25; min-width:0; }
+  .kpis { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  @media (max-width:760px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .kpi .ki { width:28px; height:28px; border-radius:9px; display:grid; place-items:center; flex:none; color:var(--c);
+             background:color-mix(in srgb, var(--c) 13%, transparent); }
+  .kpi .ki .ico { width:15px; height:15px; }
+  .kpi .v { margin-top:10px; }
+  .kpi .spark { height:28px; margin-top:6px; }
+  .kpi.alert-on { --c:var(--ac-rose); border-color:color-mix(in srgb, var(--crit) 45%, var(--line));
+                  background:linear-gradient(180deg, color-mix(in srgb, var(--crit) 6%, var(--card)), var(--card) 70%); }
+  .kpi.alert-on .ki { animation:pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 color-mix(in srgb, var(--c) 40%, transparent); } 50% { box-shadow:0 0 0 6px transparent; } }
+  .gauge { height:5px; }
+  .gauge i { background-image:linear-gradient(90deg, rgba(255,255,255,.0), rgba(255,255,255,.28)); }
+
+  /* section headers */
+  .asec-h { margin:36px 0 14px; align-items:center; }
+  .asec-h h2 { font-size:21px; letter-spacing:-.02em; }
+  .sico { width:42px; height:42px; border-radius:13px; display:grid; place-items:center; flex:none; color:#fff;
+          background:linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 55%, var(--brand2)));
+          box-shadow:0 8px 20px -8px color-mix(in srgb, var(--c) 75%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+  .sico .ico { width:21px; height:21px; }
+  .asec-h::after { content:""; flex:1 0 100%; height:1px; margin-top:4px; order:9;
+                   background:linear-gradient(90deg, color-mix(in srgb, var(--c) 45%, transparent), var(--line) 30%, transparent); }
+
+  /* bars */
+  .hbars { gap:9px; }
+  .hb .t { height:12px; border-radius:6px; background:var(--cell0); overflow:hidden; }
+  .hb .t i { border-radius:6px; transform-origin:left; animation:grow .7s cubic-bezier(.2,.8,.2,1) both; }
+  .hb:hover .n { color:var(--ink); font-weight:600; }
+  .inbar .t i, .mood .mb i, .loc .mm .t i, .gauge i { transform-origin:left; animation:grow .8s cubic-bezier(.2,.8,.2,1) both; }
+  .stack { border-radius:8px; }
+  .stack span { transition:filter .15s, transform .15s; }
+  @keyframes grow { from { transform:scaleX(0); } }
+
+  /* tables */
+  tbody tr { transition:background .12s; }
+  tbody tr:hover { background:var(--hover); }
+  .av { box-shadow:0 0 0 2px var(--card), 0 0 0 3px color-mix(in srgb, var(--brand2) 25%, transparent); }
+
+  /* locations */
+  .loc { background:var(--card); overflow:hidden; padding-top:18px; transition:transform .2s, box-shadow .2s; }
+  .loc::before { content:""; position:absolute; inset:0 0 auto; height:3px; background:linear-gradient(90deg,var(--brand1),var(--brand2)); }
+  .loc:hover { transform:translateY(-2px); box-shadow:var(--shadow); }
+  .loc h3 { display:flex; align-items:center; gap:8px; }
+  .loc h3 .ico { width:16px; height:16px; color:var(--brand1); }
+  .loc dl { background:var(--card2); border-radius:10px; padding:8px 10px; }
+
+  /* list items */
+  .sitem { transition:transform .15s, background .15s, border-color .15s; }
+  .sitem:hover { transform:translateX(2px); background:var(--card); }
+  .upc li { background:var(--card2); }
+
+  /* entrance */
+  @media (prefers-reduced-motion: no-preference) {
+    #app:not([hidden]) main .card, #app:not([hidden]) .kpi, .asec-h { animation:rise .55s cubic-bezier(.2,.8,.2,1) both; }
+    .kpis .kpi:nth-child(2), .aminis .kpi:nth-child(2), .rminis .kpi:nth-child(2) { animation-delay:.03s; }
+    .kpis .kpi:nth-child(3), .aminis .kpi:nth-child(3), .rminis .kpi:nth-child(3) { animation-delay:.06s; }
+    .kpis .kpi:nth-child(4), .aminis .kpi:nth-child(4), .rminis .kpi:nth-child(4) { animation-delay:.09s; }
+    .kpis .kpi:nth-child(5), .aminis .kpi:nth-child(5), .rminis .kpi:nth-child(5) { animation-delay:.12s; }
+    .kpis .kpi:nth-child(n+6), .rminis .kpi:nth-child(n+6) { animation-delay:.15s; }
+    @keyframes rise { from { opacity:0; transform:translateY(10px); } }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation:none !important; transition:none !important; }
+    html { scroll-behavior:auto; }
+  }
+  html { scroll-behavior:smooth; }
+
   /* ------------------------------------------------------------------ print */
   @media print {
     :root, :root[data-theme="dark"] { color-scheme:light;
@@ -388,7 +532,8 @@
     .alerts { max-height:none; overflow:visible; }
     .tbl-wrap { overflow:visible; }
     #s-people { break-before:page; }
-    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; animation:none !important; }
+    .asec-h::after { display:none; }
   }
 </style>
 </head>
@@ -403,6 +548,34 @@
       <circle cx="20" cy="20" r="10.5" fill="none" stroke="url(#auraG)" stroke-width="2.2" opacity=".55"/>
       <circle cx="20" cy="20" r="4.2" fill="url(#auraG)"/>
     </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-login" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><path d="M10 2h4M12 14l3-3"/><circle cx="12" cy="14" r="8"/></symbol>
+    <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M17 8h1a4 4 0 0 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8zM6 2v3M10 2v3M14 2v3"/></symbol>
+    <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-userx" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M17 8l5 5M22 8l-5 5"/><circle cx="9" cy="7" r="4"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-buoy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m5.6 5.6 3.6 3.6M14.8 14.8l3.6 3.6M14.8 9.2l3.6-3.6M5.6 18.4l3.6-3.6"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+    <symbol id="i-vest" viewBox="0 0 24 24"><path d="M8 3 4 6v15h6v-8l2-3 2 3v8h6V6l-4-3-2 4h-4z"/></symbol>
+    <symbol id="i-check2" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
   </defs>
 </svg>
 
@@ -444,24 +617,38 @@
     <button data-tab="overview" class="on">Overview</button>
     <button data-tab="people">People <span class="count" id="nPeople">0</span></button>
     <button data-tab="talk">Conversations <span class="count" id="nTalk">0</span></button>
+    <div class="jump" id="jump" aria-label="Jump to section">
+      <a href="#pulse" style="--c:var(--ac-violet)"><svg class="ico" aria-hidden="true"><use href="#i-sparkles"/></svg><span>Pulse</span></a>
+      <a href="#mood" style="--c:var(--ac-blue)"><svg class="ico" aria-hidden="true"><use href="#i-pulse"/></svg><span>Attendance &amp; mood</span></a>
+      <a href="#locs" style="--c:var(--ac-teal)"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg><span>Locations</span></a>
+      <a href="#assist" style="--c:var(--ac-orange)"><svg class="ico" aria-hidden="true"><use href="#i-buoy"/></svg><span>Assistance</span></a>
+      <a href="#roster" style="--c:var(--ac-sky)"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg><span>Roster</span></a>
+      <a href="#safety" style="--c:var(--ac-amber)"><svg class="ico" aria-hidden="true"><use href="#i-vest"/></svg><span>Safety</span></a>
+      <a href="#convo" style="--c:var(--ac-violet)"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg><span>Conversations</span></a>
+    </div>
   </nav>
 </header>
 
 <main id="main">
   <!-- ================================================================ OVERVIEW -->
   <section id="s-overview" data-sec="overview">
-    <div class="grid g-hero">
+    <div class="grid g-hero" id="pulse" data-anchor>
       <article class="card summary">
-        <div class="card-h"><div class="grow"><h2>✦ Executive summary</h2><p id="sumSub">Generated from the selected range</p></div></div>
+        <div class="card-h"><div class="grow"><h2><span class="hero-ic"><svg class="ico" aria-hidden="true"><use href="#i-sparkles"/></svg></span>Executive summary</h2><p id="sumSub">Generated from the selected range</p></div></div>
         <ul id="summary"></ul>
       </article>
-      <article class="card">
+      <article class="card" style="--c:var(--ac-rose)">
         <div class="card-h"><div class="grow"><h2>Needs attention</h2><p>Wellbeing, punctuality and kudos — select a person to drill down</p></div></div>
         <div class="alerts" id="attention"></div>
       </article>
     </div>
 
     <div class="kpis" id="kpis"></div>
+
+    <div class="asec-h" id="mood" data-anchor style="--c:var(--ac-blue)">
+      <span class="sico"><svg class="ico" aria-hidden="true"><use href="#i-pulse"/></svg></span>
+      <div class="grow"><h2>Attendance &amp; mood</h2><p>How the team arrived, how long they worked and how everyone felt</p></div>
+    </div>
 
     <div class="grid g-trend">
       <article class="card">
@@ -502,14 +689,15 @@
       </article>
     </div>
 
-    <article class="card" style="margin-bottom:16px">
+    <article class="card" style="margin-bottom:16px;--c:var(--ac-teal)" id="locs" data-anchor>
       <div class="card-h"><div class="grow"><h2>Locations</h2><p>Every kiosk in the selected range</p></div></div>
       <div class="locs" id="cLocs"></div>
     </article>
 
     <!-- assistance requests raised from the kiosks -->
-    <div class="asec-h" id="assist">
-      <div class="grow"><h2>🛎 Assistance</h2><p>Help requests raised at the kiosks — how fast the team responded and where help is needed</p></div>
+    <div class="asec-h" id="assist" data-anchor style="--c:var(--ac-orange)">
+      <span class="sico"><svg class="ico" aria-hidden="true"><use href="#i-buoy"/></svg></span>
+      <div class="grow"><h2>Assistance</h2><p>Help requests raised at the kiosks — how fast the team responded and where help is needed</p></div>
       <a class="btn no-print" href="/assist" target="_blank" rel="noopener">Open Assist board ↗</a>
     </div>
     <div class="aminis" id="aKpis"></div>
@@ -539,8 +727,9 @@
     </div>
 
     <!-- roster adherence: planned shifts vs what happened -->
-    <div class="asec-h" id="roster">
-      <div class="grow"><h2>🗓 Roster adherence</h2><p>Rostered shifts vs actual clock-ins — no-shows, lateness against the rostered start, early leaves and overtime</p></div>
+    <div class="asec-h" id="roster" data-anchor style="--c:var(--ac-sky)">
+      <span class="sico"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span>
+      <div class="grow"><h2>Roster adherence</h2><p>Rostered shifts vs actual clock-ins — no-shows, lateness against the rostered start, early leaves and overtime</p></div>
       <a class="btn no-print" href="/admin#roster">Open roster ↗</a>
     </div>
     <div class="rminis" id="rKpis"></div>
@@ -560,8 +749,9 @@
     </div>
 
     <!-- ramp safety pack: PPE + fatigue checks at clock-in -->
-    <div class="asec-h" id="safety">
-      <div class="grow"><h2>🦺 Safety</h2><p>PPE and fatigue checks at clock-in for departments with safety rules — a risk indicator, not a medical assessment</p></div>
+    <div class="asec-h" id="safety" data-anchor style="--c:var(--ac-amber)">
+      <span class="sico"><svg class="ico" aria-hidden="true"><use href="#i-vest"/></svg></span>
+      <div class="grow"><h2>Safety</h2><p>PPE and fatigue checks at clock-in for departments with safety rules — a risk indicator, not a medical assessment</p></div>
     </div>
     <div class="aminis" id="sKpis"></div>
     <div class="grid g-3">
@@ -589,6 +779,11 @@
       </article>
     </div>
 
+    <div class="asec-h" id="convo" data-anchor style="--c:var(--ac-violet)">
+      <span class="sico"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg></span>
+      <div class="grow"><h2>Conversations</h2><p>What people asked Aura, in which language, and who wrote the replies</p></div>
+      <button class="btn no-print" data-goto="talk">Open explorer →</button>
+    </div>
     <div class="grid g-3">
       <article class="card">
         <div class="card-h"><div class="grow"><h2>Top requests</h2><p>Detected intent of each conversation</p></div></div>
@@ -684,6 +879,29 @@
     return 'rgb(30,152,78)';
   }
   const scoreColor = s => s == null ? 'var(--none)' : moodColor(s / 50 - 1);
+
+  // icons come from the <symbol id="i-*"> sprite at the top of the page
+  const ico = n => `<svg class="ico" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  // KPI tile: {l label, v value html, d detail html, extra, sp sparkline, ic icon, c accent var, cls}
+  const tileHTML = t => `<div class="kpi ${t.cls || ''}" style="--c:var(--ac-${/alert-on/.test(t.cls || '') ? 'rose' : t.c || 'blue'})"><div class="kh">${t.ic ? `<span class="ki">${ico(t.ic)}</span>` : ''}<div class="l">${t.l}</div></div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d || ''}</div>${t.sp || ''}</div>`;
+  // count KPI numbers up from zero; only plain leading numbers ("1,234", "95.7") animate
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  function countUp(root) {
+    if (reduceMotion.matches) return;
+    root.querySelectorAll('.kpi .v').forEach(v => {
+      const n = v.firstChild;
+      if (!n || n.nodeType !== 3 || !/^[\d,]+(\.\d+)?$/.test(n.nodeValue.trim())) return;
+      const txt = n.nodeValue.trim(), end = parseFloat(txt.replace(/,/g, '')), dp = (txt.split('.')[1] || '').length;
+      if (!end) return;
+      const t0 = performance.now(), dur = 700;
+      const step = now => {
+        const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+        n.nodeValue = k < 1 ? fmt(end * e, dp) : txt;
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
 
   // Clothing colour names from the recognizer -> approximate swatch colours
   const ATTIRE = { white: '#f4f4f1', 'light grey': '#c6c8cc', grey: '#8d9096', charcoal: '#3b3f46', black: '#131416', maroon: '#7b1f2c', red: '#d23a3a',
@@ -787,14 +1005,26 @@
   const W = el => Math.max(280, Math.floor(el.clientWidth || el.parentElement.clientWidth || 600));
   const isDark = () => getComputedStyle(document.documentElement).colorScheme.includes('dark');
 
+  // soft area under a line, one closed shape per unbroken run of points
+  let gradSeq = 0;
+  function areaPath(pts, baseY) {
+    let d = '', run = [];
+    const flush = () => { if (run.length > 1) d += `M${run[0][0].toFixed(1)},${baseY}` + run.map(p => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('') + `L${run[run.length - 1][0].toFixed(1)},${baseY}Z`; run = []; };
+    for (const p of pts) { if (!p) { flush(); continue; } run.push(p); }
+    flush();
+    return d;
+  }
+  const vGrad = (id, color, a = .22) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="${a}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient>`;
+
   // tiny sparkline for KPI tiles
   function spark(vals, color) {
     const pts = vals.map((v, i) => v == null ? null : [i, v]).filter(Boolean);
     if (pts.length < 2) return '';
     const ys = pts.map(p => p[1]), lo = Math.min(...ys), hi = Math.max(...ys), n = vals.length - 1 || 1;
     const P = pts.map(([i, v]) => [2 + i / n * 60, 21 - (hi === lo ? 0.5 : (v - lo) / (hi - lo)) * 18]);
-    const last = P[P.length - 1];
-    return `<svg class="spark" viewBox="0 0 64 24" preserveAspectRatio="none" aria-hidden="true"><path d="${linePath(P)}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity=".7"/></svg>`;
+    const id = 'sg' + (++gradSeq);
+    const area = `${linePath(P)}L${P[P.length - 1][0].toFixed(1)},24L${P[0][0].toFixed(1)},24Z`;
+    return `<svg class="spark" viewBox="0 0 64 24" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#${id})"/><path d="${linePath(P)}" fill="none" stroke="${color}" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
   }
 
   // ============================================================== chart: daily trend
@@ -815,20 +1045,21 @@
     if (lo <= 50 && hi >= 50) g += `<text class="ax" x="${w - R + 4}" y="${Y(50) + 4}">calm</text>`;
     // attendance columns: on-time/other in slate, late stacked on top in amber with a 2px surface gap
     const maxP = Math.max(1, ...daily.map(d => d.present)), Yb = v => v / maxP * H2, cw = Math.min(24, Math.max(2, bw * .62));
+    g += `<defs>${vGrad('trA1', 'var(--s1)', .2)}${vGrad('trA2', 'var(--s2)', .12)}<linearGradient id="trBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--bar)"/><stop offset="1" stop-color="var(--bar)" stop-opacity=".55"/></linearGradient></defs>`;
     g += `<text class="pl" x="${L}" y="${T + H1 + G - 12}">Staff present</text>`;
     g += `<line class="grid" x1="${L}" x2="${w - R}" y1="${base - H2}" y2="${base - H2}"/><text class="ax" x="${L - 6}" y="${base - H2 + 4}" text-anchor="end">${maxP}</text>`;
     daily.forEach((d, i) => {
       const x = X(i) - cw / 2, hp = Yb(d.present), hl = Yb(d.late);
       if (hl > 0 && hp - hl > 3) {
-        g += `<rect x="${x}" y="${base - (hp - hl) + 1}" width="${cw}" height="${hp - hl - 1}" fill="var(--bar)"/>`;
+        g += `<rect x="${x}" y="${base - (hp - hl) + 1}" width="${cw}" height="${hp - hl - 1}" fill="url(#trBar)"/>`;
         g += `<path d="${colPath(x, base - hp, cw, hl - 1)}" fill="var(--warn)"/>`;
-      } else g += `<path d="${colPath(x, base - hp, cw, hp)}" fill="${hl > 0 ? 'var(--warn)' : 'var(--bar)'}"/>`;
+      } else g += `<path d="${colPath(x, base - hp, cw, hp)}" fill="${hl > 0 ? 'var(--warn)' : 'url(#trBar)'}"/>`;
     });
     g += `<line class="base" x1="${L}" x2="${w - R}" y1="${base}" y2="${base}"/>`;
-    // mood lines
-    for (const [vals, c] of [[vi, 'var(--s2)'], [st, 'var(--s1)']]) {
+    // mood lines, each over a soft fade to the panel floor
+    for (const [vals, c, a] of [[vi, 'var(--s2)', 'trA2'], [st, 'var(--s1)', 'trA1']]) {
       const pts = vals.map((v, i) => v == null ? null : [X(i), Y(v)]);
-      g += `<path class="ln" d="${linePath(pts)}" stroke="${c}"/>`;
+      g += `<path d="${areaPath(pts, T + H1)}" fill="url(#${a})"/><path class="ln" d="${linePath(pts)}" stroke="${c}" stroke-width="2.25"/>`;
       pts.forEach((p, i) => { if (p && (n <= 14 || i === pts.length - 1 || !pts[i + 1] && !pts[i - 1])) g += `<circle class="dot" cx="${p[0]}" cy="${p[1]}" r="4" fill="${c}"/>`; });
     }
     // x ticks
@@ -860,11 +1091,12 @@
     // highlight the afternoon band so the dip reads at a glance
     if (h1 >= 12 && h0 <= 18) {
       const a = X(Math.max(12, h0)), b = X(Math.min(18, h1));
-      g += `<rect x="${a}" y="${T}" width="${Math.max(0, b - a)}" height="${H1}" fill="var(--hover)"/><text class="ax" x="${(a + b) / 2}" y="${T - 10}" text-anchor="middle">afternoon</text>`;
+      g += `<rect x="${a}" y="${T}" width="${Math.max(0, b - a)}" height="${H1}" rx="6" fill="var(--brand2)" opacity=".06"/><text class="ax" x="${(a + b) / 2}" y="${T - 10}" text-anchor="middle">afternoon</text>`;
     }
-    for (const [vals, c] of [[vi, 'var(--s2)'], [st, 'var(--s1)']]) {
+    g += `<defs>${vGrad('hrA1', 'var(--s1)', .2)}${vGrad('hrA2', 'var(--s2)', .12)}</defs>`;
+    for (const [vals, c, ag] of [[vi, 'var(--s2)', 'hrA2'], [st, 'var(--s1)', 'hrA1']]) {
       const pts = vals.map((v, i) => v == null ? null : [X(rows[i].hour), Y(v)]);
-      g += `<path class="ln" d="${linePath(pts)}" stroke="${c}"/>`;
+      g += `<path d="${areaPath(pts, T + H1)}" fill="url(#${ag})"/><path class="ln" d="${linePath(pts)}" stroke="${c}" stroke-width="2.25"/>`;
       pts.forEach(p => { if (p) g += `<circle class="dot" cx="${p[0]}" cy="${p[1]}" r="4" fill="${c}"/>`; });
     }
     // annotate the staff afternoon low point (the one direct label this chart needs)
@@ -888,11 +1120,13 @@
   }
 
   // ============================================================== chart: arrivals heatmap
-  const RAMP = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#6da7ec', '#5598e7', '#3987e5', '#2a78d6', '#256abf', '#1c5cab', '#184f95', '#104281', '#0d366b'];
+  // brand ramp, pale teal -> deep violet; in dark mode low values start near the surface
+  const RAMP_L = [[214, 243, 239], [140, 218, 208], [52, 184, 172], [44, 142, 196], [86, 104, 226], [88, 56, 196]];
+  const RAMP_D = [[22, 58, 60], [18, 110, 104], [26, 160, 150], [58, 140, 214], [118, 112, 246], [170, 150, 255]];
   function heatColor(v, max) {
     if (!v) return 'var(--cell0)';
-    const ramp = isDark() ? [...RAMP].reverse() : RAMP;                 // low values recede toward the surface in both themes
-    return ramp[Math.min(ramp.length - 1, Math.floor(Math.sqrt(v / max) * (ramp.length - 1) + .0001))];
+    const R = isDark() ? RAMP_D : RAMP_L, f = Math.min(1, Math.sqrt(v / max)) * (R.length - 1), i = Math.min(R.length - 2, Math.floor(f)), t = f - i;
+    return `rgb(${R[i].map((c, j) => Math.round(c + (R[i + 1][j] - c) * t)).join(',')})`;
   }
   function drawHeat(el, heat) {
     const max = Math.max(0, ...heat.flat());
@@ -973,7 +1207,7 @@
     const max = Math.max(...items.map(i => i.value)), tot = sum(items.map(i => i.value));
     return items.map(i => `<div class="hb"${tipAttr({ t: i.label, r: [[color, unit, fmt(i.value)]], n: i.note || `${pctOf(i.value, tot)}% of total` })}>
       <span class="n">${i.icon ? `<span class="ki" aria-hidden="true">${esc(i.icon)}</span>` : ''}${esc(i.label)}${i.sub ? `<small>${esc(i.sub)}</small>` : ''}</span>
-      <span class="t"><i style="width:${Math.max(1, 100 * i.value / max)}%;background:${color}"></i></span>
+      <span class="t"><i style="width:${Math.max(1, 100 * i.value / max)}%;background:linear-gradient(90deg, color-mix(in srgb, ${color} 55%, transparent), ${color})"></i></span>
       <span class="v">${fmt(i.value)}</span></div>`).join('');
   }
   const prettyIntent = s => String(s || '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
@@ -1077,7 +1311,9 @@
     }
     const kudos = d.alerts.filter(a => a.severity === 'positive').length;
     if (kudos && out.length < 8) out.push(['★', `<b>${kudos}</b> ${kudos === 1 ? 'person is' : 'people are'} on a 10+ shift on-time streak — worth a shout-out.`]);
-    $('#summary').innerHTML = out.length ? out.slice(0, 8).map(([i, s]) => `<li><span class="ic" aria-hidden="true">${i}</span><span>${s}</span></li>`).join('')
+    const SUMI = { '⏱': ['clock', 'blue'], '🙂': ['smile', 'green'], '⚑': ['flag', 'rose'], '📍': ['pin', 'teal'], '☕': ['coffee', 'amber'],
+      '💬': ['chat', 'violet'], '🛎': ['buoy', 'orange'], '🗓': ['calendar', 'sky'], '🦺': ['vest', 'amber'], '★': ['sparkles', 'green'] };
+    $('#summary').innerHTML = out.length ? out.slice(0, 8).map(([i, s]) => { const m = SUMI[i]; return `<li style="--c:var(--ac-${m ? m[1] : 'teal'})"><span class="ic" aria-hidden="true" style="color:var(--c)">${m ? ico(m[0]) : i}</span><span>${s}</span></li>`; }).join('')
       : '<li><span></span><span class="muted">Not enough data in this range to summarise yet.</span></li>';
     $('#sumSub').textContent = `${S.kiosk || 'All locations'} · ${fmtDay(S.from)} – ${fmtDay(S.to)} · vs the ${(new Date(S.to) - new Date(S.from)) / 864e5 + 1}-day period before`;
   }
@@ -1105,19 +1341,20 @@
     const sm = score(k.staff_mood), vm = score(k.visitor_mood), sp = score(k.staff_mood_prev);
     const gauge = s => s == null ? '' : `<div class="gauge"><i style="width:${s}%;background:${scoreColor(s)}"></i></div>`;
     const tiles = [
-      { l: 'On-time', v: k.on_time_pct == null ? '—' : `${fmt(k.on_time_pct, 1)}<small>%</small>`, d: k.on_time_prev != null && k.on_time_pct != null ? delta(k.on_time_pct - k.on_time_prev, ' pts') : `<span>${fmt(k.shifts)} shifts</span>`,
+      { ic: 'clock', c: 'blue', l: 'On-time', v: k.on_time_pct == null ? '—' : `${fmt(k.on_time_pct, 1)}<small>%</small>`, d: k.on_time_prev != null && k.on_time_pct != null ? delta(k.on_time_pct - k.on_time_prev, ' pts') : `<span>${fmt(k.shifts)} shifts</span>`,
         sp: spark(daily.map(x => x.present ? 100 * x.on_time / x.present : null), 'var(--s1)') },
-      { l: 'Avg arrival', v: esc(k.avg_arrival || '—'), d: `<span>${fmt(k.staff_seen)} staff seen</span>` },
-      { l: 'Avg hours / shift', v: hrs(k.avg_hours), d: `<span>${fmt(k.shifts)} shifts</span>`, sp: spark(daily.map(x => x.avg_hours), 'var(--s1)') },
-      { l: 'Avg break', v: mins(k.avg_break), d: '<span>per shift with a break</span>' },
-      { l: 'Staff mood', v: sm ?? '—', d: sm != null && sp != null ? delta(sm - sp, '', 0) : '<span>score 0–100</span>', extra: gauge(sm), sp: spark(daily.map(x => score(x.staff_mood)), 'var(--s1)') },
-      { l: 'Visitor mood', v: vm ?? '—', d: `<span>${fmt(k.visitors)} visitor sightings</span>`, extra: gauge(vm), sp: spark(daily.map(x => score(x.visitor_mood)), 'var(--s2)') },
-      { l: 'Conversations', v: fmt(k.conversations), d: k.sentiment != null ? `<span>sentiment ${Math.round(k.sentiment * 100)}/100</span>` : '', sp: spark(daily.map(x => x.interactions), 'var(--s1)') },
-      { l: 'Languages', v: fmt(k.languages), d: `<span>${esc(Object.keys(d.languages).slice(0, 3).map(langName).join(', '))}</span>` },
-      { l: 'Assist requests', v: fmt(d.assist ? d.assist.total : null), d: d.assist && d.assist.median_response_min != null ? `<span>median response ${amins(d.assist.median_response_min)}</span>` : '<span>none in range</span>', sp: '' },
-      { l: 'Open alerts', v: fmt(k.alerts), d: k.alerts ? '<span class="delta down">● needs review</span>' : '<span class="delta up">● all clear</span>', cls: k.alerts ? 'alert-on' : '' }
+      { ic: 'login', c: 'teal', l: 'Avg arrival', v: esc(k.avg_arrival || '—'), d: `<span>${fmt(k.staff_seen)} staff seen</span>` },
+      { ic: 'timer', c: 'sky', l: 'Avg hours / shift', v: hrs(k.avg_hours), d: `<span>${fmt(k.shifts)} shifts</span>`, sp: spark(daily.map(x => x.avg_hours), 'var(--s1)') },
+      { ic: 'coffee', c: 'amber', l: 'Avg break', v: mins(k.avg_break), d: '<span>per shift with a break</span>' },
+      { ic: 'smile', c: 'green', l: 'Staff mood', v: sm ?? '—', d: sm != null && sp != null ? delta(sm - sp, '', 0) : '<span>score 0–100</span>', extra: gauge(sm), sp: spark(daily.map(x => score(x.staff_mood)), 'var(--s1)') },
+      { ic: 'eye', c: 'orange', l: 'Visitor mood', v: vm ?? '—', d: `<span>${fmt(k.visitors)} visitor sightings</span>`, extra: gauge(vm), sp: spark(daily.map(x => score(x.visitor_mood)), 'var(--s2)') },
+      { ic: 'chat', c: 'violet', l: 'Conversations', v: fmt(k.conversations), d: k.sentiment != null ? `<span>sentiment ${Math.round(k.sentiment * 100)}/100</span>` : '', sp: spark(daily.map(x => x.interactions), 'var(--s1)') },
+      { ic: 'globe', c: 'teal', l: 'Languages', v: fmt(k.languages), d: `<span>${esc(Object.keys(d.languages).slice(0, 3).map(langName).join(', '))}</span>` },
+      { ic: 'buoy', c: 'orange', l: 'Assist requests', v: fmt(d.assist ? d.assist.total : null), d: d.assist && d.assist.median_response_min != null ? `<span>median response ${amins(d.assist.median_response_min)}</span>` : '<span>none in range</span>', sp: '' },
+      { ic: 'bell', c: 'green', l: 'Open alerts', v: fmt(k.alerts), d: k.alerts ? '<span class="delta down">● needs review</span>' : '<span class="delta up">● all clear</span>', cls: k.alerts ? 'alert-on' : '' }
     ];
-    $('#kpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${t.l}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d || ''}</div>${t.sp || ''}</div>`).join('');
+    $('#kpis').innerHTML = tiles.map(tileHTML).join('');
+    countUp($('#kpis'));
   }
 
   function renderDepts(d) {
@@ -1141,7 +1378,7 @@
     (S.kiosks || []).forEach(k => zones[k.name] = k.zone);
     const mm = (label, v) => { const s = score(v); return `<div><span>${label}</span><span class="t"><i style="width:${s ?? 0}%;background:${scoreColor(s)}"></i></span><b>${s ?? '—'}</b></div>`; };
     el.innerHTML = d.locations.map(l => `<div class="loc">
-      <h3>${esc(l.kiosk)}</h3><div class="z">${esc(zones[l.kiosk] || 'Kiosk')}${l.kiosk === worst ? ' <span class="pill amber" style="margin-left:4px">▼ Lowest visitor mood</span>' : ''}</div>
+      <h3>${ico('pin')}${esc(l.kiosk)}</h3><div class="z">${esc(zones[l.kiosk] || 'Kiosk')}${l.kiosk === worst ? ' <span class="pill amber" style="margin-left:4px">▼ Lowest visitor mood</span>' : ''}</div>
       <dl><div><dt>Sightings</dt><dd>${fmt(l.sightings)}</dd></div><div><dt>Visitors</dt><dd>${fmt(l.visitors)}</dd></div><div><dt>Chats</dt><dd>${fmt(l.interactions)}</dd></div></dl>
       <div class="mm">${mm('Staff', l.staff_mood)}${mm('Visitors', l.visitor_mood)}</div></div>`).join('');
   }
@@ -1167,13 +1404,14 @@
     const a = d.assist || { total: 0, by_hour: [], by_kind: {}, by_kiosk: {}, by_source: {}, responders: [] };
     const slaCol = a.within_sla_pct == null ? 'var(--none)' : a.within_sla_pct >= 90 ? 'var(--good)' : a.within_sla_pct >= 70 ? 'var(--warn)' : 'var(--crit)';
     const tiles = [
-      { l: 'Requests', v: fmt(a.total), d: `<span>${fmt(a.done)} done · ${fmt(a.cancelled)} cancelled</span>` },
-      { l: 'Open now', v: fmt(a.open), d: a.open ? '<span class="delta down">● awaiting staff</span>' : '<span class="delta up">● all handled</span>', cls: a.open ? 'alert-on' : '' },
-      { l: 'Median response', v: amins(a.median_response_min), d: '<span>request → staff on it</span>' },
-      { l: 'Median resolution', v: amins(a.median_resolution_min), d: '<span>request → done</span>' },
-      { l: `Within ${a.sla_min || 5}-min SLA`, v: a.within_sla_pct == null ? '—' : `${fmt(a.within_sla_pct, 0)}<small>%</small>`, extra: a.within_sla_pct == null ? '' : `<div class="gauge"><i style="width:${a.within_sla_pct}%;background:${slaCol}"></i></div>`, d: '<span>of acknowledged requests</span>' }
+      { ic: 'inbox', c: 'orange', l: 'Requests', v: fmt(a.total), d: `<span>${fmt(a.done)} done · ${fmt(a.cancelled)} cancelled</span>` },
+      { ic: 'bell', c: 'green', l: 'Open now', v: fmt(a.open), d: a.open ? '<span class="delta down">● awaiting staff</span>' : '<span class="delta up">● all handled</span>', cls: a.open ? 'alert-on' : '' },
+      { ic: 'zap', c: 'sky', l: 'Median response', v: amins(a.median_response_min), d: '<span>request → staff on it</span>' },
+      { ic: 'check', c: 'teal', l: 'Median resolution', v: amins(a.median_resolution_min), d: '<span>request → done</span>' },
+      { ic: 'target', c: 'violet', l: `Within ${a.sla_min || 5}-min SLA`, v: a.within_sla_pct == null ? '—' : `${fmt(a.within_sla_pct, 0)}<small>%</small>`, extra: a.within_sla_pct == null ? '' : `<div class="gauge"><i style="width:${a.within_sla_pct}%;background:${slaCol}"></i></div>`, d: '<span>of acknowledged requests</span>' }
     ];
-    $('#aKpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${esc(t.l)}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d}</div></div>`).join('');
+    $('#aKpis').innerHTML = tiles.map(t => tileHTML({ ...t, l: esc(t.l) })).join('');
+    countUp($('#aKpis'));
     const tot = a.total || 0;
     $('#aKind').innerHTML = hbars(Object.entries(a.by_kind).map(([k, v]) => ({ icon: (AKIND[k] || ['💬'])[0], label: (AKIND[k] || [0, prettyIntent(k)])[1], value: v })), 'var(--s2)', 'requests');
     $('#aLoc').innerHTML = hbars(Object.entries(a.by_kiosk).slice(0, 10).map(([k, v]) => ({ label: k, value: v })), 'var(--s1)', 'requests');
@@ -1211,16 +1449,17 @@
     if (!r || !(r.shifts || r.upcoming)) return;
     const pc = (v, good, ok) => v == null ? 'var(--none)' : v >= good ? 'var(--good)' : v >= ok ? 'var(--warn)' : 'var(--crit)';
     const tiles = [
-      { l: 'Rostered shifts', v: fmt(r.shifts), d: `<span>${fmt(r.planned_h, 0)} h planned${r.upcoming ? ` · ${r.upcoming} upcoming` : ''}</span>` },
-      { l: 'Attendance', v: r.attendance_pct == null ? '—' : `${fmt(r.attendance_pct, 1)}<small>%</small>`, extra: r.attendance_pct == null ? '' : `<div class="gauge"><i style="width:${r.attendance_pct}%;background:${pc(r.attendance_pct, 97, 90)}"></i></div>`, d: '<span>shifts clocked in</span>' },
-      { l: 'No-shows', v: fmt(r.no_shows), d: r.no_shows ? '<span class="delta down">● follow up</span>' : '<span class="delta up">● none</span>', cls: r.no_shows ? 'alert-on' : '' },
-      { l: 'Late starts', v: r.late_pct == null ? '—' : `${fmt(r.late_pct, 1)}<small>%</small>`, d: '<span>vs rostered start</span>' },
-      { l: 'Avg minutes late', v: r.avg_late_min == null ? '—' : `${fmt(r.avg_late_min, 0)}<small>min</small>`, d: '<span>when late</span>' },
-      { l: 'Early leaves', v: fmt(r.early_leaves), d: '<span>left before shift end</span>' },
-      { l: 'Overtime', v: `${fmt(r.overtime_h, 1)}<small>h</small>`, d: '<span>past rostered end</span>' },
-      { l: 'Missed clock-outs', v: fmt(r.missed_clock_outs), d: '<span>never clocked out</span>' }
+      { ic: 'calendar', c: 'sky', l: 'Rostered shifts', v: fmt(r.shifts), d: `<span>${fmt(r.planned_h, 0)} h planned${r.upcoming ? ` · ${r.upcoming} upcoming` : ''}</span>` },
+      { ic: 'check', c: 'green', l: 'Attendance', v: r.attendance_pct == null ? '—' : `${fmt(r.attendance_pct, 1)}<small>%</small>`, extra: r.attendance_pct == null ? '' : `<div class="gauge"><i style="width:${r.attendance_pct}%;background:${pc(r.attendance_pct, 97, 90)}"></i></div>`, d: '<span>shifts clocked in</span>' },
+      { ic: 'userx', c: 'green', l: 'No-shows', v: fmt(r.no_shows), d: r.no_shows ? '<span class="delta down">● follow up</span>' : '<span class="delta up">● none</span>', cls: r.no_shows ? 'alert-on' : '' },
+      { ic: 'clock', c: 'amber', l: 'Late starts', v: r.late_pct == null ? '—' : `${fmt(r.late_pct, 1)}<small>%</small>`, d: '<span>vs rostered start</span>' },
+      { ic: 'timer', c: 'amber', l: 'Avg minutes late', v: r.avg_late_min == null ? '—' : `${fmt(r.avg_late_min, 0)}<small>min</small>`, d: '<span>when late</span>' },
+      { ic: 'logout', c: 'orange', l: 'Early leaves', v: fmt(r.early_leaves), d: '<span>left before shift end</span>' },
+      { ic: 'trend', c: 'violet', l: 'Overtime', v: `${fmt(r.overtime_h, 1)}<small>h</small>`, d: '<span>past rostered end</span>' },
+      { ic: 'alert', c: 'rose', l: 'Missed clock-outs', v: fmt(r.missed_clock_outs), d: '<span>never clocked out</span>' }
     ];
-    $('#rKpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${esc(t.l)}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d}</div></div>`).join('');
+    $('#rKpis').innerHTML = tiles.map(t => tileHTML({ ...t, l: esc(t.l) })).join('');
+    countUp($('#rKpis'));
     $('#rDept').innerHTML = (r.by_department || []).length ? `<table><thead><tr><th>Department</th><th class="r">Shifts</th><th>Attended</th><th class="r">No-show</th><th class="r">Late</th><th class="r">OT</th></tr></thead><tbody>${
       r.by_department.map(x => `<tr><td><b style="font-weight:600">${esc(x.department)}</b></td><td class="r">${fmt(x.shifts)}</td>
         <td><div class="inbar sm"${tipAttr({ t: x.department, r: [[pc(x.attendance_pct, 97, 90), 'attended', `${fmt(x.attendance_pct, 1)}%`]] })}><span class="t"><i style="width:${x.attendance_pct || 0}%;background:${pc(x.attendance_pct, 97, 90)}"></i></span>${fmt(x.attendance_pct, 0)}%</div></td>
@@ -1257,13 +1496,14 @@
     const pctCol = v => v == null ? 'var(--none)' : v >= 95 ? 'var(--good)' : v >= 85 ? 'var(--warn)' : 'var(--crit)';
     const af = s.avg_fatigue, afLvl = af == null ? null : af >= 60 ? 'high' : af >= 30 ? 'moderate' : 'low';
     const tiles = [
-      { l: 'Safety checks', v: fmt(s.checks), d: `<span>${fmt((s.by_department || []).length)} department${(s.by_department || []).length === 1 ? '' : 's'} with rules</span>` },
-      { l: 'PPE compliance', v: s.ppe_compliance_pct == null ? '—' : `${fmt(s.ppe_compliance_pct, 1)}<small>%</small>`, extra: s.ppe_compliance_pct == null ? '' : `<div class="gauge"><i style="width:${s.ppe_compliance_pct}%;background:${pctCol(s.ppe_compliance_pct)}"></i></div>`, d: '<span>checks with every item confirmed</span>' },
-      { l: 'Flagged', v: fmt(s.flagged), d: s.flagged ? '<span class="delta down">● sent to supervisors</span>' : '<span class="delta up">● none</span>', cls: s.flagged ? 'alert-on' : '' },
-      { l: 'Avg fatigue score', v: af == null ? '—' : `${fmt(af, 0)}<small>/100</small>`, extra: af == null ? '' : `<div class="gauge"><i style="width:${Math.max(2, af)}%;background:${FLEVEL[afLvl][1]}"></i></div>`, d: '<span>30+ moderate · 60+ high</span>' },
-      { l: 'Hi-vis auto-detected', v: s.hivis_auto_pct == null ? '—' : `${fmt(s.hivis_auto_pct, 0)}<small>%</small>`, d: '<span>of checks requiring hi-vis</span>' }
+      { ic: 'shield', c: 'amber', l: 'Safety checks', v: fmt(s.checks), d: `<span>${fmt((s.by_department || []).length)} department${(s.by_department || []).length === 1 ? '' : 's'} with rules</span>` },
+      { ic: 'vest', c: 'green', l: 'PPE compliance', v: s.ppe_compliance_pct == null ? '—' : `${fmt(s.ppe_compliance_pct, 1)}<small>%</small>`, extra: s.ppe_compliance_pct == null ? '' : `<div class="gauge"><i style="width:${s.ppe_compliance_pct}%;background:${pctCol(s.ppe_compliance_pct)}"></i></div>`, d: '<span>checks with every item confirmed</span>' },
+      { ic: 'flag', c: 'green', l: 'Flagged', v: fmt(s.flagged), d: s.flagged ? '<span class="delta down">● sent to supervisors</span>' : '<span class="delta up">● none</span>', cls: s.flagged ? 'alert-on' : '' },
+      { ic: 'moon', c: 'violet', l: 'Avg fatigue score', v: af == null ? '—' : `${fmt(af, 0)}<small>/100</small>`, extra: af == null ? '' : `<div class="gauge"><i style="width:${Math.max(2, af)}%;background:${FLEVEL[afLvl][1]}"></i></div>`, d: '<span>30+ moderate · 60+ high</span>' },
+      { ic: 'eye', c: 'sky', l: 'Hi-vis auto-detected', v: s.hivis_auto_pct == null ? '—' : `${fmt(s.hivis_auto_pct, 0)}<small>%</small>`, d: '<span>of checks requiring hi-vis</span>' }
     ];
-    $('#sKpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${esc(t.l)}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d}</div></div>`).join('');
+    $('#sKpis').innerHTML = tiles.map(t => tileHTML({ ...t, l: esc(t.l) })).join('');
+    countUp($('#sKpis'));
     $('#sMiss').innerHTML = Object.keys(s.missing_items || {}).length
       ? hbars(Object.entries(s.missing_items).map(([k, m]) => ({ icon: m.icon, label: m.label, value: m.count })), 'var(--crit)', 'checks missing it')
       : '<div class="empty">✓ Every check had full PPE</div>';
@@ -1315,17 +1555,17 @@
     if (!max) return empty(el, 'No assistance requests in this range');
     const w = W(el), L = 30, R = 8, T = 22, H1 = 170, B = 22, H = T + H1 + B, bw = (w - L - R) / 24, cw = Math.max(3, bw * .64);
     const peak = hours.indexOf(max), Y = v => v / max * H1, tot = sum(hours);
-    let g = '';
+    let g = `<defs><linearGradient id="ahBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--s1)" stop-opacity=".55"/><stop offset="1" stop-color="var(--s1)" stop-opacity=".2"/></linearGradient><linearGradient id="ahPk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--s2)"/><stop offset="1" stop-color="var(--s2)" stop-opacity=".6"/></linearGradient></defs>`;
     for (const v of [Math.round(max / 2), max]) if (v) g += `<line class="grid" x1="${L}" x2="${w - R}" y1="${T + H1 - Y(v)}" y2="${T + H1 - Y(v)}"/><text class="ax" x="${L - 6}" y="${T + H1 - Y(v) + 4}" text-anchor="end">${v}</text>`;
     hours.forEach((v, h) => {
       const x = L + bw * h + (bw - cw) / 2;
-      g += `<path d="${colPath(x, T + H1 - Y(v), cw, Y(v))}" fill="${v === max ? 'var(--s2)' : 'var(--bar)'}"/>`;
+      g += `<path d="${colPath(x, T + H1 - Y(v), cw, Y(v))}" fill="${v === max ? 'url(#ahPk)' : 'url(#ahBar)'}"/>`;
     });
     const px = L + bw * peak + bw / 2, anchor = px > w - 70 ? 'end' : px < L + 50 ? 'start' : 'middle';
     g += `<text class="lab" x="${px}" y="${T + H1 - Y(max) - 8}" text-anchor="${anchor}">Peak ${hh(peak)} · ${max}</text>`;
     g += `<line class="base" x1="${L}" x2="${w - R}" y1="${T + H1}" y2="${T + H1}"/>`;
     for (let h = 0; h < 24; h += bw < 26 ? 3 : 2) g += `<text class="ax" x="${L + bw * h + bw / 2}" y="${T + H1 + 16}" text-anchor="middle">${String(h).padStart(2, '0')}</text>`;
-    hours.forEach((v, h) => { g += `<rect class="hit" x="${L + bw * h}" y="${T}" width="${bw}" height="${H1}"${tipAttr({ t: `${hh(h)}–${hh((h + 1) % 24)}`, r: [[v === max ? 'var(--s2)' : 'var(--bar)', 'requests', v]], n: `${pctOf(v, tot)}% of all requests` })}/>`; });
+    hours.forEach((v, h) => { g += `<rect class="hit" x="${L + bw * h}" y="${T}" width="${bw}" height="${H1}"${tipAttr({ t: `${hh(h)}–${hh((h + 1) % 24)}`, r: [[v === max ? 'var(--s2)' : 'var(--s1)', 'requests', v]], n: `${pctOf(v, tot)}% of all requests` })}/>`; });
     el.innerHTML = svgWrap(w, H, g, 'Assistance requests by hour of day');
   }
 
@@ -1356,6 +1596,7 @@
     renderCharts();
     renderPeople();
     fillTalkFilters(d);
+    syncJump();
     if (S.tab === 'talk') loadTalk();
   }
 
@@ -1618,9 +1859,24 @@
     S.tab = b.dataset.tab;
     $$('#tabs button').forEach(x => x.classList.toggle('on', x === b));
     $$('section[data-sec]').forEach(s => s.hidden = s.dataset.sec !== S.tab);
+    $('#jump').hidden = S.tab !== 'overview';
     if (S.tab === 'overview') renderCharts();
     if (S.tab === 'talk') loadTalk();
   });
+
+  $$('[data-goto]').forEach(b => b.addEventListener('click', () => { $(`#tabs button[data-tab="${b.dataset.goto}"]`).click(); scrollTo(0, 0); }));
+
+  // jump bar: highlight the section in view (sections hidden by missing data drop out of the bar)
+  const jumpLinks = $$('#jump a');
+  function syncJump() {
+    jumpLinks.forEach(a => { const t = $(a.getAttribute('href')); a.hidden = !t || t.hidden; });
+    const probe = 140, secs = jumpLinks.map(a => $(a.getAttribute('href'))).filter(t => t && !t.hidden);
+    let cur = secs[0];
+    for (const t of secs) if (t.getBoundingClientRect().top - probe <= 0) cur = t;
+    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) cur = secs[secs.length - 1];
+    jumpLinks.forEach(a => a.classList.toggle('on', cur && a.getAttribute('href') === '#' + cur.id));
+  }
+  addEventListener('scroll', () => requestAnimationFrame(syncJump), { passive: true });
 
   // theme: OS preference by default; the toggle pins light/dark for this browser
   const THEME_KEY = 'aura-theme';

@@ -126,13 +126,20 @@ def seed(days: int = 60) -> dict:
                 safety.save_rule(conn, dept, {"ppe": ppe, "fatigue": fat})
         conn.execute("INSERT INTO announcements (kiosk, text, level, created) VALUES ('*', ?, 'info', ?)",
                      ("Staff townhall on Thursday 14:00 in the training room — snacks provided! (demo)", datetime.now().isoformat(timespec="seconds")))
+        prng = random.Random(7)  # pass details on their own stream so the rest of the demo stays identical
         for i, (name, dept, role, shift, lang) in enumerate(STAFF):
             bday = (today + timedelta(days=0 if i == 2 else rng.randint(3, 300))).strftime("%m-%d")
+            dob = f"{prng.randint(1975, 2003)}-{bday}"
+            # one expired pass (4) and one about to expire (9) so the People screen shows both states
+            expiry = today + timedelta(days=-12 if i == 4 else 9 if i == 9 else prng.randint(60, 700))
+            zone = {"Security": "green", "Ground Handling": "red"}.get(dept) or prng.choice(["orange", "blue", "yellow", "white"])
             conn.execute(
-                """INSERT OR IGNORE INTO people (name, role, department, shift_start, birthday, joined, language, mood_consent, demo, created)
-                   VALUES (?,?,?,?,?,?,?,?,1,?)""",
+                """INSERT OR IGNORE INTO people (name, role, department, shift_start, birthday, joined, language, mood_consent,
+                                                 record_card, dob, pass_expiry, zone, demo, created)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?)""",
                 (name, role, dept, shift, bday, f"{rng.randint(2015, 2024)}-{rng.randint(1, 12):02d}-{rng.randint(1, 28):02d}",
-                 lang, 0 if i == 17 else 1, datetime.now().isoformat(timespec="seconds")))
+                 lang, 0 if i == 17 else 1, f"RC-{10200 + i * 7}", dob if bday != "02-29" else None, expiry.isoformat(), zone,
+                 datetime.now().isoformat(timespec="seconds")))
 
         for d in range(days, -1, -1):
             day = today - timedelta(days=d)

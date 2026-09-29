@@ -64,6 +64,8 @@ ok "Docker is running ($(docker --version))"
 # ---- 3. Build + start ----
 bold "Building + starting containers (first build downloads the face, emotion and speech models, ~4–8 min)…"
 docker compose up -d --build --remove-orphans || die "docker compose failed — scroll up for the error."
+# compose doesn't recreate Caddy when only the mounted Caddyfile changed, so restart it to pick up a new LAN IP
+docker compose restart caddy >/dev/null 2>&1 && ok "Caddy restarted (HTTPS for ${IP:-this Mac})" || warn "Could not restart Caddy — check: docker compose logs caddy"
 
 echo -n "Waiting for the recognizer to be ready "
 for i in $(seq 1 90); do
@@ -76,6 +78,8 @@ curl -s http://localhost:8181/api/health | grep -q '"ok": *true' && ok "Recogniz
 PIN=$(awk -F= '/^ADMIN_PIN/{print $2}' .env 2>/dev/null); PIN=${PIN:-2468}
 echo; bold "── Face Attendance is running ─────────────────────"
 echo "Admin (this Mac):  http://localhost:8181/admin      PIN: $PIN"
+echo "Kiosk (this Mac):  http://localhost:8181/?kiosk=Staff-Entrance"
+echo "Recognizer:        http://localhost:8182/healthcheck   Listener: http://localhost:8183/healthcheck"
 [[ -n "$IP" ]] && echo "Admin (iPads):     https://$IP:8443/admin"
 [[ -n "$IP" ]] && echo "Kiosk (iPads):     https://$IP:8443/?kiosk=Staff-Entrance"
 echo "Insights:          http://localhost:8181/insights"

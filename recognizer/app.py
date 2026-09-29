@@ -20,7 +20,7 @@ then discarded with it:
   * attire   — dominant clothing colour from the region below the chin, plus `hivis`: the share
                of fluorescent yellow/lime/orange pixels (a high-visibility vest) in the torso area
 """
-import os, uuid, threading, json
+import os, uuid, threading, json, time
 import numpy as np
 import cv2
 from starlette.applications import Starlette
@@ -36,6 +36,9 @@ DET_MODEL = os.environ.get("DET_MODEL", "/models/yunet.onnx")
 REC_MODEL = os.environ.get("REC_MODEL", "/models/sface.onnx")
 EMO_MODEL = os.environ.get("EMO_MODEL", "/models/emotion.onnx")
 
+# several uvicorn workers share the CPU: keep each one's OpenCV thread pool small
+cv2.setNumThreads(int(os.environ.get("CV_THREADS", "2")))
+
 _lock = threading.Lock()
 _det = cv2.FaceDetectorYN.create(DET_MODEL, "", (320, 320), 0.6, 0.3, 5000)
 _rec = cv2.FaceRecognizerSF.create(REC_MODEL, "")
@@ -44,6 +47,31 @@ EMOTIONS = ("neutral", "happiness", "surprise", "sadness", "anger", "disgust", "
 
 # in-memory index: {subject: [(image_id, np.float32[128]), ...]}
 _index: dict = {}
+# Each uvicorn worker keeps its own copy of the index. Any enrol/delete/rename touches this stamp
+# file, and every worker reloads when the stamp is newer than its copy.
+STAMP = os.path.join(FACES, ".changed")
+_loaded_at = None  # stamp mtime this worker last loaded (None = never)
+
+
+def _stamp_mtime() -> float:
+    try:
+        return os.stat(STAMP).st_mtime
+    except OSError:
+        return 0.0
+
+
+def _touch_stamp():
+    with open(STAMP, "a"):
+        os.utime(STAMP, None)
+    _sync_index()
+
+
+def _sync_index():
+    global _loaded_at
+    m = _stamp_mtime()
+    if m != _loaded_at:
+        _load_index()
+        _loaded_at = m
 
 
 def _load_index():
@@ -75,18 +103,26 @@ def _decode(data: bytes):
     return cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
 
-def _detect_all(img):
-    """Return list of (box[x,y,w,h], score, aligned_feature) sorted by score desc."""
+def _detect_all(img, timing: dict = None, limit: int = 0):
+    """Return list of (box[x,y,w,h], score, aligned_feature) sorted by score desc.
+    Only the first `limit` faces (0 = all) get an embedding; `timing` collects stage times in ms."""
     h, w = img.shape[:2]
     with _lock:
+        t0 = time.perf_counter()
         _det.setInputSize((w, h))
         _, faces = _det.detect(img)
+        t1 = time.perf_counter()
         results = []
         if faces is not None:
-            for f in sorted(faces, key=lambda r: -r[-1]):
+            ranked = sorted(faces, key=lambda r: -r[-1])
+            for f in ranked[:limit] if limit > 0 else ranked:
                 aligned = _rec.alignCrop(img, f)
                 feat = _rec.feature(aligned).flatten().astype(np.float32).copy()
                 results.append((f[:4].tolist(), float(f[-1]), feat))
+        t2 = time.perf_counter()
+    if timing is not None:
+        timing["detect"] = (t1 - t0) * 1000
+        timing["embed"] = (t2 - t1) * 1000
     return results
 
 
@@ -195,10 +231,12 @@ async def healthcheck(request):
 
 
 async def get_subjects(request):
+    _sync_index()
     return JSONResponse({"subjects": sorted(_index.keys(), key=str.lower)})
 
 
 async def get_faces(request):
+    _sync_index()
     faces = []
     for subj, vecs in _index.items():
         for image_id, _ in vecs:
@@ -226,39 +264,62 @@ async def add_face(request: Request):
     os.makedirs(d, exist_ok=True)
     np.save(os.path.join(d, image_id + ".npy"), feat)
     _index.setdefault(subject, []).append((image_id, feat))
+    _touch_stamp()
     return JSONResponse({"image_id": image_id, "subject": subject})
 
 
 async def recognize(request: Request):
+    """Query params (CompreFace-compatible plus two extras):
+      extras=0|1               compute emotion + clothing for the top face (default 1)
+      extras_min_similarity=x  ...or compute them only when the top match reaches x
+    The response carries "timing" (ms per stage) for latency monitoring."""
+    t_start = time.perf_counter()
     limit = int(request.query_params.get("limit", 0) or 0)
     pred = int(request.query_params.get("prediction_count", 1) or 1)
+    want_extras = request.query_params.get("extras", "1") not in ("0", "false")
+    extras_min = request.query_params.get("extras_min_similarity")
+    extras_min = float(extras_min) if extras_min else None
     form = await request.form()
     up = form.get("file")
     if up is None:
         return JSONResponse({"message": "file is required"}, status_code=400)
-    img = _decode(await up.read())
+    data = await up.read()
+    t_read = time.perf_counter()
+    img = _decode(data)
     if img is None:
         return JSONResponse({"message": "Invalid image"}, status_code=400)
-    faces = _detect_all(img)
-    if limit and limit > 0:
-        faces = faces[:limit]
+    t_decode = time.perf_counter()
+    _sync_index()
+    timing = {"read": (t_read - t_start) * 1000, "decode": (t_decode - t_read) * 1000}
+    faces = _detect_all(img, timing, limit)
+    t0 = time.perf_counter()
     result = []
     H, W = img.shape[:2]
+    extras_ms = 0.0
     for i, (box, score, feat) in enumerate(faces):
         x, y, w, h = box
         subs = [{"subject": s, "similarity": round(max(0.0, min(1.0, sim)), 5)}
                 for s, sim in _best_matches(feat, top=max(1, pred))]
+        # extra signals for the largest face only (the person standing at the kiosk)
+        top = subs[0]["similarity"] if subs else 0.0
+        extras = i == 0 and (want_extras or (extras_min is not None and top >= extras_min))
+        te = time.perf_counter()
+        emotion = _emotion(img, box) if extras else None
+        attire = _attire(img, box) if extras else None
+        extras_ms += (time.perf_counter() - te) * 1000
         result.append({
             "box": {"probability": round(score, 4),
                     "x_min": int(x), "y_min": int(y),
                     "x_max": int(x + w), "y_max": int(y + h)},
             "subjects": subs,
-            # extra signals for the largest face only (the person standing at the kiosk)
-            "emotion": _emotion(img, box) if i == 0 else None,
-            "attire": _attire(img, box) if i == 0 else None,
+            "emotion": emotion,
+            "attire": attire,
             "size": round(float(w) / W, 3),
         })
-    return JSONResponse({"result": result})
+    timing["match"] = (time.perf_counter() - t0) * 1000 - extras_ms
+    timing["extras"] = extras_ms
+    timing["total"] = (time.perf_counter() - t_start) * 1000
+    return JSONResponse({"result": result, "timing": {k: round(v, 2) for k, v in timing.items()}})
 
 
 async def delete_subject(request: Request):
@@ -269,6 +330,7 @@ async def delete_subject(request: Request):
         for fn in os.listdir(d):
             os.remove(os.path.join(d, fn))
         os.rmdir(d)
+    _touch_stamp()
     return JSONResponse({"deleted": 1})
 
 
@@ -281,6 +343,7 @@ async def rename_subject(request: Request):
     if os.path.isdir(od):
         os.rename(od, nd)
     _index[new] = _index.pop(old, [])
+    _touch_stamp()
     return JSONResponse({"updated": True})
 
 
@@ -296,4 +359,4 @@ routes = [
 ]
 
 app = Starlette(routes=routes)
-_load_index()
+_sync_index()

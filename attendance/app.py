@@ -16,6 +16,8 @@ Kiosk (no PIN, LAN only):
   POST /api/assist           raise an assistance request; GET /api/assist/{id} its live status
   POST /api/safety/precheck  PPE items + fatigue risk for a worker about to clock in
   POST /api/safety/check     record the confirmed checklist + self-rated restedness
+  An expired security pass (people.pass_expiry before today) blocks /api/event and the safety endpoints
+  (403), and each approach is logged as a `pass_expired` supervisor alert.
 Assist desk (X-Admin-Pin = ASSIST_PIN or ADMIN_PIN):
   /assist page, GET /api/requests, PUT /api/requests/{id}
 Admin (X-Admin-Pin):
@@ -110,6 +112,28 @@ def profile(conn, name: str) -> dict:
     return dict(r) if r else {"name": name, "mood_consent": 1}
 
 
+def pass_expired(prof: dict) -> bool:
+    """True when the security pass expired before today (valid through its expiry date). No date = not known expired."""
+    exp = (prof.get("pass_expiry") or "").strip()
+    return bool(exp) and exp < date.today().isoformat()
+
+
+def pass_incident(conn, employee: str, prof: dict, kiosk: Optional[str]):
+    """Log an expired-pass incident and push it to the supervisor webhook right away (not on the next scan)."""
+    if alerts.pass_incident(conn, employee, prof.get("department"), kiosk, prof.get("pass_expiry")):
+        task = asyncio.create_task(alerts.deliver())
+        _bg.add(task)
+        task.add_done_callback(_bg.discard)
+
+
+def refuse_expired_pass(conn, employee: str, kiosk: Optional[str]):
+    prof = profile(conn, employee)
+    if pass_expired(prof):
+        pass_incident(conn, employee, prof, kiosk)
+        conn.commit()  # the `with db()` block rolls back on the exception below; keep the incident
+        raise HTTPException(403, f"Security pass expired on {prof['pass_expiry']}. Report to the pass office — your supervisor has been notified.")
+
+
 def kiosk_row(conn, name: str) -> dict:
     r = conn.execute("SELECT * FROM kiosks WHERE name=?", (name,)).fetchone()
     if not r:
@@ -150,12 +174,25 @@ def cf_headers() -> dict:
     return {"x-api-key": API_KEY}
 
 
+# One pooled client for every recognizer call: creating a client (and a TCP connection) per frame
+# cost ~5 ms. Opened in lifespan(); created lazily if a call arrives first.
+_cf_client: Optional[httpx.AsyncClient] = None
+
+
+def _recognizer_client() -> httpx.AsyncClient:
+    global _cf_client
+    if _cf_client is None or _cf_client.is_closed:
+        # retry connect failures (Docker's DNS occasionally stalls, the recognizer may be restarting)
+        _cf_client = httpx.AsyncClient(timeout=httpx.Timeout(20, connect=4),
+                                       transport=httpx.AsyncHTTPTransport(retries=2))
+    return _cf_client
+
+
 async def cf(method: str, path: str, **kw) -> httpx.Response:
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.request(
-                method, f"{COMPREFACE_URL}/api/v1/recognition{path}", headers=cf_headers(), **kw
-            )
+        r = await _recognizer_client().request(
+            method, f"{COMPREFACE_URL}/api/v1/recognition{path}", headers=cf_headers(), **kw
+        )
     except httpx.HTTPError as e:
         raise HTTPException(502, f"Recognizer unreachable: {e.__class__.__name__}")
     if r.status_code >= 400:
@@ -183,20 +220,29 @@ def _range(request: Request, default_days: int = 0):
 
 
 # ----------------------------------------------------------------------------- pages
+# Wall screens stay open for days; "no-cache" makes them revalidate on every load so a UI update
+# shows up on the next refresh instead of whatever copy Safari cached.
+NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
+
+
+def page(name: str) -> FileResponse:
+    return FileResponse(os.path.join(STATIC, name), headers=NO_CACHE)
+
+
 async def kiosk_page(request):
-    return FileResponse(os.path.join(STATIC, "kiosk.html"))
+    return page("kiosk.html")
 
 
 async def admin_page(request):
-    return FileResponse(os.path.join(STATIC, "admin.html"))
+    return page("admin.html")
 
 
 async def assist_page(request):
-    return FileResponse(os.path.join(STATIC, "assist.html"))
+    return page("assist.html")
 
 
 async def insights_page(request):
-    return FileResponse(os.path.join(STATIC, "insights.html"))
+    return page("insights.html")
 
 
 async def health(request):
@@ -244,18 +290,40 @@ def _log_sighting(encounter: str, kiosk: str, person: Optional[str], face: dict,
     e["logged"] = True
 
 
+def _wants_extras(encounter: str) -> bool:
+    """Emotion + clothing (~11 ms per frame) are only needed on frames that get logged or shown.
+    Matched frames always get them (via extras_min_similarity). Unmatched frames get them only while
+    this approach's visitor sighting is still pending, from the frame that will log it (the 3rd) on."""
+    e = _encounters.get(encounter) if encounter else None
+    return bool(e) and not e.get("logged") and e.get("frames", 0) >= 2
+
+
 async def recognize(request: Request):
-    """Send one camera frame; get back the best matching employee (or none) plus mood/attire."""
+    """Send one camera frame; get back the best matching employee (or none) plus mood/attire.
+    A Server-Timing header reports per-stage times (the kiosk's ?debug=1 overlay reads it)."""
+    t0 = time.perf_counter()
     upload, form = await read_upload(request)
-    kiosk = (form.get("kiosk") or "Main").strip()
     encounter = (form.get("encounter") or "").strip()
+    t1 = time.perf_counter()
     r = await cf(
         "POST",
         "/recognize",
-        params={"limit": 1, "prediction_count": 1, "det_prob_threshold": 0.8},
+        params={"limit": 1, "prediction_count": 1, "det_prob_threshold": 0.8,
+                "extras": int(_wants_extras(encounter)), "extras_min_similarity": THRESHOLD},
         files={"file": upload},
     )
-    faces = r.json().get("result", [])
+    t2 = time.perf_counter()
+    body = r.json()
+    resp = _recognize_result(body.get("result", []), (form.get("kiosk") or "Main").strip(), encounter)
+    rt = body.get("timing") or {}
+    stages = {"upload": (t1 - t0) * 1000, "recognizer": (t2 - t1) * 1000,
+              **{k: rt[k] for k in ("decode", "detect", "embed", "match", "extras") if k in rt},
+              "total": (time.perf_counter() - t0) * 1000}
+    resp.headers["Server-Timing"] = ", ".join(f"{k};dur={v:.1f}" for k, v in stages.items())
+    return resp
+
+
+def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
     if not faces:
         return JSONResponse({"face": False, "matched": False})
     face = faces[0]
@@ -271,11 +339,18 @@ async def recognize(request: Request):
     employee = subjects[0]["subject"]
     with db() as conn:
         last = last_action_today(conn, employee)
-        consent = bool(profile(conn, employee).get("mood_consent", 1))
+        prof = profile(conn, employee)
+        consent = bool(prof.get("mood_consent", 1))
+        expired = pass_expired(prof)
+        if expired:
+            pass_incident(conn, employee, prof, kiosk)
     if encounter:
         _log_sighting(encounter, kiosk, employee, face, consent)
     if not mood_allowed("staff", consent):
         base["emotion"] = None
+    if expired:  # the kiosk locks the screen; no actions are offered
+        return JSONResponse({**base, "matched": True, "employee": employee, "similarity": round(sim, 3),
+                             "pass_expired": True, "pass_expiry": prof.get("pass_expiry"), "suggested": None})
     last_action = last["action"] if last else None
     return JSONResponse(
         {
@@ -346,6 +421,7 @@ async def record_event(request: Request):
         raise HTTPException(400, f"action must be one of {ACTIONS}")
     ts = now()
     with db() as conn:
+        refuse_expired_pass(conn, employee, kiosk)
         last = last_action_today(conn, employee)
         if last and last["action"] == action:
             if ts - datetime.fromisoformat(last["ts"]) < timedelta(seconds=DUP_WINDOW):
@@ -590,6 +666,7 @@ async def safety_precheck(request: Request):
     if not employee:
         raise HTTPException(400, "employee required")
     with db() as conn:
+        refuse_expired_pass(conn, employee, (p.get("kiosk") or "").strip() or None)
         return JSONResponse(safety.precheck(conn, employee, profile(conn, employee), p.get("hivis")))
 
 
@@ -602,6 +679,7 @@ async def safety_check(request: Request):
     rested = int(rested) if rested in (1, 2, 3, 4, 5, "1", "2", "3", "4", "5") else None
     kiosk = (p.get("kiosk") or "").strip() or None
     with db() as conn:
+        refuse_expired_pass(conn, employee, kiosk)
         prof = profile(conn, employee)
         out = safety.record(conn, employee, prof, kiosk, p.get("items") or {}, p.get("hivis"), rested)
     if out["result"] == "flagged" and SAFETY_WEBHOOK_URL:
@@ -856,6 +934,10 @@ async def enrol_photo(request: Request):
     name = request.path_params["name"].strip()
     if not name:
         raise HTTPException(400, "name required")
+    with db() as conn:
+        missing = missing_enrolment(profile(conn, name))
+    if missing:
+        raise HTTPException(400, f"Save {', '.join(missing)} for {name} before adding photos")
     upload, _ = await read_upload(request)
     r = await cf("POST", "/faces", params={"subject": name, "det_prob_threshold": 0.8}, files={"file": upload})
     with db() as conn:
@@ -895,7 +977,26 @@ async def rename_employee(request: Request):
     return JSONResponse({"ok": True})
 
 
-PROFILE_FIELDS = ("role", "department", "shift_start", "birthday", "joined", "language", "nickname", "mood_consent", "notes")
+PROFILE_FIELDS = ("role", "department", "shift_start", "birthday", "joined", "language", "nickname", "mood_consent", "notes",
+                  "record_card", "dob", "pass_expiry", "zone")
+
+# authorised airside zone colours, highest access first
+ZONES = ("green", "red", "orange", "blue", "yellow", "white")
+# must be on file before a face can be enrolled
+REQUIRED_FOR_ENROL = {"record_card": "record card number", "pass_expiry": "security pass expiry", "zone": "authorised zone"}
+
+
+def missing_enrolment(prof: dict) -> list:
+    return [label for f, label in REQUIRED_FOR_ENROL.items() if not prof.get(f)]
+
+
+def _iso_date(v, label: str):
+    if v in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(v)).isoformat()
+    except ValueError:
+        raise HTTPException(400, f"{label} must be a date (YYYY-MM-DD)")
 
 
 async def people_list(request: Request):
@@ -912,7 +1013,32 @@ async def people_save(request: Request):
     vals = {f: p.get(f) for f in PROFILE_FIELDS if f in p}
     if "mood_consent" in vals:
         vals["mood_consent"] = 1 if vals["mood_consent"] in (1, True, "1", "true", "on") else 0
+    for f in REQUIRED_FOR_ENROL:  # once set, mandatory fields can be changed but not blanked
+        if f in vals and not str(vals[f] or "").strip():
+            raise HTTPException(400, f"{REQUIRED_FOR_ENROL[f].capitalize()} is required")
+    if "record_card" in vals:
+        vals["record_card"] = str(vals["record_card"]).strip().upper()
+    if "zone" in vals:
+        vals["zone"] = str(vals["zone"]).strip().lower()
+        if vals["zone"] not in ZONES:
+            raise HTTPException(400, "Zone must be one of: " + ", ".join(z.capitalize() for z in ZONES))
+    if "dob" in vals:
+        vals["dob"] = _iso_date(vals["dob"], "Date of birth")
+        if vals["dob"] and vals["dob"] >= date.today().isoformat():
+            raise HTTPException(400, "Date of birth must be in the past")
     with db() as conn:
+        old = profile(conn, name)
+    if vals.get("dob"):  # the kiosk's birthday greeting comes from the date of birth
+        vals["birthday"] = vals["dob"][5:]
+    elif "dob" in vals and old.get("dob"):  # date of birth removed: drop the birthday derived from it
+        vals["birthday"] = None
+    if "pass_expiry" in vals:
+        vals["pass_expiry"] = _iso_date(vals["pass_expiry"], "Security pass expiry")
+    with db() as conn:
+        if vals.get("record_card"):
+            dup = conn.execute("SELECT name FROM people WHERE record_card=? AND name!=?", (vals["record_card"], name)).fetchone()
+            if dup:
+                raise HTTPException(409, f"Record card {vals['record_card']} already belongs to {dup['name']}")
         conn.execute("INSERT OR IGNORE INTO people (name, created) VALUES (?,?)", (name, stamp()))
         if vals:
             conn.execute(f"UPDATE people SET {', '.join(f'{k}=?' for k in vals)} WHERE name=?", (*vals.values(), name))
@@ -1209,8 +1335,11 @@ routes = [
 @contextlib.asynccontextmanager
 async def lifespan(app):
     task = asyncio.create_task(alerts.loop())  # supervisor alerts: scan every ALERT_SCAN_SECONDS
+    _recognizer_client()
     yield
     task.cancel()
+    if _cf_client is not None:
+        await _cf_client.aclose()
 
 
 app = Starlette(routes=routes, exception_handlers={HTTPException: on_http_exception}, lifespan=lifespan)

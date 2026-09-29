@@ -37,4 +37,7 @@ PY
 WORKDIR /app
 COPY app.py .
 EXPOSE 8000
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Several workers so frames from different kiosks are processed in parallel instead of queueing
+# (each worker loads its own models, ~70 MB). Enrolment changes reach every worker via /data/faces/.changed.
+ENV WORKERS=3 CV_THREADS=2
+CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port 8000 --workers ${WORKERS}"]

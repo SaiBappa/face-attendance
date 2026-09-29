@@ -337,6 +337,20 @@
   ul.priv li .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; background:var(--ok-soft); color:var(--ok); flex:none; }
   video#ev { width:100%; max-width:440px; aspect-ratio:4/3; object-fit:cover; border-radius:14px; background:#000; transform:scaleX(-1); display:block; }
   .enrol-grid { display:grid; grid-template-columns:minmax(0,440px) minmax(0,1fr); gap:22px; align-items:start; }
+  .enrol-form { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 14px; margin:4px 0 18px; }
+  .field > span .req { color:var(--bad); }
+  .field.invalid input, .field.invalid .zone-opts { outline:2px solid var(--bad); outline-offset:2px; border-radius:10px; }
+  .zone-opts { display:flex; flex-wrap:wrap; gap:6px; }
+  .zone-opt { position:relative; cursor:pointer; }
+  .zone-opt input { position:absolute; opacity:0; }
+  .zone-opt > span { display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border:1px solid var(--line); border-radius:999px; font-size:13px; font-weight:600; color:var(--muted); background:var(--surface); }
+  .zone-opt input:checked + span { color:var(--fg); border-color:var(--accent); background:var(--accent-soft); }
+  .zone-opt input:focus-visible + span { outline:2px solid var(--accent); outline-offset:2px; }
+  .zdot { width:12px; height:12px; border-radius:50%; flex:none; border:1px solid rgba(0,0,0,.25); display:inline-block; }
+  .z-green { background:#16a34a; } .z-red { background:#dc2626; } .z-orange { background:#ea580c; }
+  .z-blue { background:#2563eb; } .z-yellow { background:#eab308; } .z-white { background:#fff; }
+  @media (max-width:900px) { .enrol-form { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:600px) { .enrol-form { grid-template-columns:minmax(0,1fr); } }
 
   /* ---------- toast ---------- */
   #toasts { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:1000; max-width:calc(100vw - 32px); }
@@ -433,7 +447,6 @@
   </div>
   <div class="card"><div class="tablewrap"><table><thead><tr><th>Employee</th><th>State</th><th>Since</th><th class="hide-sm">Kiosk</th><th>Mood</th><th>Mood · 14 days</th></tr></thead><tbody id="statusBody"></tbody></table></div>
     <p class="hint">Select a person to see their mood through the day and over the last 14 days. Mood score: 0–100, 50 = calm. Only staff who consented are measured.</p></div>
-
 </section>
 
 <!-- ================= LOG ================= -->
@@ -454,7 +467,7 @@
   <div class="card">
     <div class="card-h">
       <h2 id="peopleCount">People</h2>
-      <input id="peopleQ" type="search" placeholder="Search name, role, department" style="flex:1 1 220px;max-width:340px">
+      <input id="peopleQ" type="search" placeholder="Search name, card no., designation, department" style="flex:1 1 220px;max-width:340px">
       <select id="peopleF" aria-label="Filter"><option value="">Everyone</option><option value="enrolled">Face enrolled</option><option value="not">Not enrolled</option></select>
       <button class="btn ghost" id="empRefresh">Refresh</button>
     </div>
@@ -469,11 +482,14 @@
     <div class="dlg-h"><div class="avatar" id="pAv"></div><div style="flex:1;min-width:0"><h2 id="pName"></h2><div class="muted" id="pMeta"></div></div><button type="button" class="btn ghost icon" data-close aria-label="Close">✕</button></div>
     <div class="dlg-b">
       <div class="grid2">
-        <label class="field"><span>Role</span><input id="pf_role" placeholder="e.g. Ramp Lead"></label>
+        <label class="field"><span>Record card number</span><input id="pf_card" placeholder="e.g. RC-10234" autocomplete="off"></label>
+        <label class="field"><span>Authorised zone colour</span><select id="pf_zone"></select></label>
+        <label class="field"><span>Security pass expiry</span><input id="pf_expiry" type="date"></label>
+        <label class="field"><span>Date of birth</span><input id="pf_dob" type="date"><span class="hint" id="pf_dobHint"></span></label>
+        <label class="field"><span>Designation</span><input id="pf_role" placeholder="e.g. Ramp Lead"></label>
         <label class="field"><span>Department</span><input id="pf_department" placeholder="e.g. Ground Handling" list="deptList"></label>
         <label class="field"><span>Shift start</span><input id="pf_shift" type="time"></label>
         <label class="field"><span>Nickname</span><input id="pf_nick" placeholder="What Aura calls them"></label>
-        <label class="field"><span>Birthday</span><input id="pf_bday" type="date"><span class="hint" id="pf_bdayHint">Year is ignored — stored as month-day</span></label>
         <label class="field"><span>Joined</span><input id="pf_joined" type="date"></label>
         <label class="field"><span>Preferred language</span><select id="pf_lang"></select></label>
         <div class="field"><span>Mood tracking</span><label class="switch"><input type="checkbox" id="pf_consent"><span class="sl"></span><span id="pf_consentLbl">Consent given</span></label></div>
@@ -497,8 +513,15 @@
 <section id="s-enrol">
   <div class="card">
     <h2>Enrol / add photos</h2>
-    <p class="muted" style="margin-top:0">Pick an existing profile or type a new name. Only face vectors are stored — the photos themselves are discarded after processing.</p>
-    <div class="row"><input id="enrolName" placeholder="Employee name, e.g. Aishath Ali" list="nameList" style="flex:1 1 260px;max-width:420px"></div>
+    <p class="muted" style="margin-top:0">Pick an existing profile or type a new name, fill in the pass details, then add photos. Fields marked <span class="err">*</span> are required. Only face vectors are stored — the photos themselves are discarded after processing.</p>
+    <div class="enrol-form" id="enrolForm">
+      <label class="field"><span>Name <span class="req">*</span></span><input id="enrolName" placeholder="e.g. Aishath Ali" list="nameList" autocomplete="off" required></label>
+      <label class="field"><span>Record card number <span class="req">*</span></span><input id="en_card" placeholder="e.g. RC-10234" autocomplete="off" required></label>
+      <label class="field"><span>Designation</span><input id="en_role" placeholder="e.g. Ramp Agent"></label>
+      <label class="field"><span>Date of birth</span><input id="en_dob" type="date"></label>
+      <label class="field"><span>Security pass expiry <span class="req">*</span></span><input id="en_expiry" type="date" required><span class="hint" id="en_expiryHint"></span></label>
+      <div class="field span2" id="en_zoneF"><span id="en_zoneL">Authorised zone colour <span class="req">*</span></span><div class="zone-opts" id="en_zone" role="radiogroup" aria-labelledby="en_zoneL"></div><span class="hint">Green is the highest access, White the lowest.</span></div>
+    </div>
     <div class="enrol-grid">
       <div>
         <video id="ev" autoplay playsinline muted></video>
@@ -945,6 +968,21 @@
   $('logGo').onclick = () => loadLog().catch(fail);
   $('csv').onclick = () => location.href = `/api/export.csv?pin=${enc(PIN)}&from=${enc($('from').value)}&to=${enc($('to').value)}`;
 
+  // ---- security pass ----
+  const ZONES = ['green', 'red', 'orange', 'blue', 'yellow', 'white']; // highest access first
+  const cap = z => z ? z[0].toUpperCase() + z.slice(1) : '';
+  const zonePill = z => ZONES.includes(z) ? `<span class="chip" title="Authorised zone"><i class="zdot z-${z}" style="width:9px;height:9px;vertical-align:-1px;margin-right:4px"></i>${cap(z)} zone</span>` : '';
+  function passState(exp) {
+    if (!exp) return null;
+    const days = Math.round((new Date(exp + 'T00:00') - new Date(today() + 'T00:00')) / 864e5);
+    const d = new Date(exp + 'T12:00').toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    if (days < 0) return { cls: 'bad', text: `Pass expired ${d}` };
+    if (days <= 30) return { cls: 'warn', text: `Pass expires ${d}` + (days === 0 ? ' (today)' : ` (${days} day${days === 1 ? '' : 's'})`) };
+    return { cls: 'ok', text: `Pass valid to ${d}` };
+  }
+  const passPill = exp => { const st = passState(exp); return st && st.cls !== 'ok' ? `<span class="pill ${st.cls} plain">${esc(st.text)}</span>` : ''; };
+  $('pf_zone').innerHTML = '<option value="">— not set —</option>' + ZONES.map((z, i) => `<option value="${z}">${cap(z)}${i === 0 ? ' (highest)' : i === ZONES.length - 1 ? ' (lowest)' : ''}</option>`).join('');
+
   // ---- people ----
   let PEOPLE = [], current = null;
   async function loadPeople() {
@@ -961,14 +999,14 @@
   }
   function renderPeople() {
     const q = $('peopleQ').value.trim().toLowerCase(), f = $('peopleF').value;
-    const list = PEOPLE.filter(x => (!f || (f === 'enrolled') === x.enrolled) && (!q || [x.name, x.nickname, x.role, x.department].some(v => (v || '').toLowerCase().includes(q))));
+    const list = PEOPLE.filter(x => (!f || (f === 'enrolled') === x.enrolled) && (!q || [x.name, x.nickname, x.role, x.department, x.record_card].some(v => (v || '').toLowerCase().includes(q))));
     const enrolled = PEOPLE.filter(x => x.enrolled).length;
     $('peopleCount').textContent = `People · ${PEOPLE.length}` + (PEOPLE.length ? ` (${enrolled} enrolled)` : '');
     $('peopleGrid').innerHTML = list.map(x => {
       const sub = [x.role, x.department].filter(Boolean).join(' · ') || 'No role set';
       const photos = x.enrolled ? `<span class="pill ${x.photos < 3 ? 'warn' : 'ok'}">${x.photos} photo${x.photos === 1 ? '' : 's'}${x.photos < 3 ? ' · add more' : ''}</span>` : '<span class="pill">not enrolled</span>';
       const consent = +x.mood_consent === 0 ? '<span class="pill bad plain">Mood off</span>' : '<span class="pill acc plain">Mood consent</span>';
-      return `<button class="person" data-n="${esc(x.name)}">${avatar(x.name)}<div class="who"><b>${esc(x.name)}</b><div class="muted">${esc(sub)}</div><div class="badges">${photos}${consent}${x.demo ? '<span class="chip">demo</span>' : ''}</div></div></button>`;
+      return `<button class="person" data-n="${esc(x.name)}">${avatar(x.name)}<div class="who"><b>${esc(x.name)}</b><div class="muted">${esc(sub)}</div><div class="badges">${photos}${zonePill(x.zone)}${passPill(x.pass_expiry)}${consent}${x.demo ? '<span class="chip">demo</span>' : ''}</div></div></button>`;
     }).join('') || `<div class="empty" style="grid-column:1/-1">${PEOPLE.length ? 'No matches.' : 'Nobody here yet — enrol someone in the Enrol tab, or load demo data in Setup.'}</div>`;
     $('peopleGrid').querySelectorAll('[data-n]').forEach(b => b.onclick = () => openPerson(b.dataset.n));
   }
@@ -983,19 +1021,18 @@
     $('pName').textContent = x.name;
     $('pMeta').textContent = (x.enrolled ? `Face enrolled · ${x.photos} photo${x.photos === 1 ? '' : 's'}` : 'Face not enrolled') + (x.demo ? ' · demo profile' : '');
     $('pf_role').value = x.role || ''; $('pf_department').value = x.department || '';
+    $('pf_card').value = x.record_card || ''; $('pf_zone').value = x.zone || ''; $('pf_expiry').value = x.pass_expiry || ''; $('pf_dob').value = x.dob || '';
     $('pf_shift').value = x.shift_start || ''; $('pf_nick').value = x.nickname || '';
-    $('pf_bday').value = /^\d\d-\d\d$/.test(x.birthday || '') ? '2000-' + x.birthday : '';
     $('pf_joined').value = x.joined || '';
     $('pf_lang').value = LANGS[x.language] ? x.language : '';
     $('pf_consent').checked = +(x.mood_consent ?? 1) !== 0; consentUi();
     $('pf_notes').value = x.notes || '';
-    bdayHint();
+    // older profiles may only have a month-day birthday on file
+    $('pf_dobHint').textContent = !x.dob && /^\d\d-\d\d$/.test(x.birthday || '') ? `Birthday on file: ${new Date('2000-' + x.birthday + 'T12:00').toLocaleDateString([], { day: 'numeric', month: 'long' })} — add the full date to replace it` : 'Also used for the kiosk birthday greeting';
     $('pInsights').href = '/insights#person=' + enc(x.name);
     $('pActHint').textContent = 'Delete removes face data (if enrolled), profile, mood readings and conversations. Attendance records are kept for payroll.';
     $('pDlg').showModal();
   }
-  const bdayHint = () => { const v = $('pf_bday').value; $('pf_bdayHint').textContent = v ? `Stored as ${v.slice(5)} (${new Date(v + 'T12:00').toLocaleDateString([], { day: 'numeric', month: 'long' })}) — year is ignored` : 'Year is ignored — stored as month-day'; };
-  $('pf_bday').oninput = bdayHint;
   function consentUi() {
     const on = $('pf_consent').checked, was = +(current?.mood_consent ?? 1) !== 0;
     $('pf_consentLbl').textContent = on ? 'Consent given' : 'Off';
@@ -1008,8 +1045,10 @@
     const x = current, v = id => $(id).value.trim() || null;
     const consent = $('pf_consent').checked;
     if (!consent && +(x.mood_consent ?? 1) !== 0 && !confirm(`Turn off mood tracking for ${x.name}? This also permanently erases their past mood readings.`)) return;
-    const body = { role: v('pf_role'), department: v('pf_department'), shift_start: v('pf_shift'), birthday: $('pf_bday').value ? $('pf_bday').value.slice(5) : null,
-      joined: v('pf_joined'), language: v('pf_lang'), nickname: v('pf_nick'), mood_consent: consent, notes: v('pf_notes') };
+    const body = { role: v('pf_role'), department: v('pf_department'), shift_start: v('pf_shift'),
+      joined: v('pf_joined'), language: v('pf_lang'), nickname: v('pf_nick'), mood_consent: consent, notes: v('pf_notes'), dob: v('pf_dob') };
+    // required pass fields can be changed but not cleared, so only send them when filled in
+    for (const [k, id] of [['record_card', 'pf_card'], ['zone', 'pf_zone'], ['pass_expiry', 'pf_expiry']]) if (v(id)) body[k] = v(id);
     try { $('pSave').disabled = true; await api('/api/people/' + enc(x.name), jsonBody('PUT', body)); $('pDlg').close(); toast(`Saved ${x.name}`); loadPeople().catch(fail); }
     catch (e) { fail(e); } finally { $('pSave').disabled = false; }
   };
@@ -1035,12 +1074,45 @@
     try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } } }); ev.srcObject = stream; $('snap').disabled = false; }
     catch (e) { $('enrolMsg').innerHTML = `<span class="err">Camera: ${esc(e.message)}</span>`; }
   };
+  $('en_zone').innerHTML = ZONES.map((z, i) => `<label class="zone-opt"><input type="radio" name="en_zone" value="${z}"><span><i class="zdot z-${z}"></i>${cap(z)}${i === 0 ? ' · highest' : i === ZONES.length - 1 ? ' · lowest' : ''}</span></label>`).join('');
+  const enZone = () => document.querySelector('input[name=en_zone]:checked')?.value || '';
+  const expiryHint = () => { const st = passState($('en_expiry').value); $('en_expiryHint').innerHTML = st ? `<span class="${st.cls === 'ok' ? '' : 'err'}">${esc(st.text)}</span>` : ''; };
+  $('en_expiry').oninput = expiryHint;
+  // picking an existing person fills in what's already on file
+  let enrolFilled = '';
+  $('enrolName').onchange = async () => {
+    const name = $('enrolName').value.trim(); if (!name || name === enrolFilled) return;
+    let x;
+    try { x = (await api('/api/people')).people.find(p => p.name.toLowerCase() === name.toLowerCase()); } catch (e) { return; }
+    if (!x) return;
+    enrolFilled = $('enrolName').value = x.name;
+    $('en_card').value = x.record_card || ''; $('en_role').value = x.role || ''; $('en_dob').value = x.dob || ''; $('en_expiry').value = x.pass_expiry || '';
+    document.querySelectorAll('input[name=en_zone]').forEach(r => r.checked = r.value === x.zone);
+    expiryHint();
+  };
+  document.querySelectorAll('#enrolForm input').forEach(i => i.addEventListener('input', () => i.closest('.field').classList.remove('invalid')));
+  // validates the form and saves the profile; returns the name, or null when something is missing
+  async function saveEnrolProfile() {
+    const val = id => $(id).value.trim();
+    const need = [['enrolName', 'name'], ['en_card', 'record card number'], ['en_expiry', 'security pass expiry']].filter(([id]) => !val(id));
+    if (!enZone()) need.push(['en_zoneF', 'authorised zone colour']);
+    document.querySelectorAll('#enrolForm .field').forEach(f => f.classList.remove('invalid'));
+    need.forEach(([id]) => (id === 'en_zoneF' ? $(id) : $(id).closest('.field')).classList.add('invalid'));
+    if (need.length) { $('enrolMsg').innerHTML = `<span class="err">Please fill in: ${need.map(n => n[1]).join(', ')}</span>`; return null; }
+    if (val('en_dob') && val('en_dob') >= today()) { $('en_dob').closest('.field').classList.add('invalid'); $('enrolMsg').innerHTML = '<span class="err">Date of birth must be in the past</span>'; return null; }
+    const name = val('enrolName');
+    const body = { record_card: val('en_card'), pass_expiry: val('en_expiry'), zone: enZone(), dob: val('en_dob') || null };
+    if (val('en_role')) body.role = val('en_role');
+    await api('/api/people/' + enc(name), jsonBody('PUT', body));
+    return name;
+  }
   async function addPhoto(name, blob) {
     const fd = new FormData(); fd.append('file', blob, 'face.jpg');
     return api(`/api/employees/${enc(name)}/photo`, { method: 'POST', body: fd });
   }
   $('snap').onclick = async () => {
-    const name = $('enrolName').value.trim(); if (!name) return $('enrolMsg').textContent = 'Enter a name first';
+    let name; try { name = await saveEnrolProfile(); } catch (e) { return $('enrolMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+    if (!name) return;
     const c = document.createElement('canvas'); c.width = ev.videoWidth; c.height = ev.videoHeight; c.getContext('2d').drawImage(ev, 0, 0);
     c.toBlob(async blob => {
       $('enrolMsg').textContent = 'Saving…';
@@ -1049,8 +1121,9 @@
     }, 'image/jpeg', 0.92);
   };
   $('upload').onclick = async () => {
-    const name = $('enrolName').value.trim(); if (!name) return $('enrolMsg').textContent = 'Enter a name first';
     const files = [...$('files').files]; if (!files.length) return $('enrolMsg').textContent = 'Choose photos first';
+    let name; try { name = await saveEnrolProfile(); } catch (e) { return $('enrolMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+    if (!name) return;
     let ok = 0; const errs = [];
     $('enrolMsg').textContent = 'Uploading…';
     for (const f of files) { try { await addPhoto(name, f); ok++; } catch (e) { errs.push(`${f.name}: ${e.message}`); } }
@@ -1083,7 +1156,7 @@
     const url = kioskLink(k.name);
     $('kEditor').innerHTML = `
       <div class="card-h"><h2>${esc(k.name)}</h2>${online(k) ? '<span class="pill ok">online</span>' : `<span class="pill">offline · ${esc(ago(k.last_seen))}</span>`}</div>
-      <div class="row"><code style="flex:1 1 220px">${esc(url)}</code><button class="btn ghost sm" id="kCopy">Copy URL</button><a class="btn ghost sm" href="/?kiosk=${esc(enc(k.name))}" target="_blank" rel="noopener">Live preview ↗</a></div>
+      <div class="row"><code style="flex:1 1 220px">${esc(url)}</code><button class="btn ghost sm" id="kCopy">Copy URL</button><a class="btn ghost sm" href="/?kiosk=${esc(enc(k.name))}" target="_blank" rel="noopener">Live preview ↗</a><a class="btn ghost sm" href="/?kiosk=${esc(enc(k.name))}&amp;debug=1" target="_blank" rel="noopener" title="Kiosk with an on-screen overlay: capture, network and server time per frame, and time from walk-up to greeting">Latency preview ↗</a></div>
       <div class="grid2">
         <label class="field"><span>Zone</span><input id="k_zone" value="${esc(k.zone || '')}" placeholder="e.g. Departures"></label>
         <label class="field"><span>Screen language</span><select id="k_lang">${langOpts(k.language || 'en')}</select></label>
@@ -1491,6 +1564,7 @@
     understaffed: ['UNDERSTAFF_MIN', 'understaff_min', 'A department has at least this many fewer people on duty than rostered.'],
     assist_sla: ['ASSIST_SLA_MINUTES', null, 'A traveller’s assistance request has waited more than 2 × the assist SLA.'],
     safety: [null, null, 'A clock-in safety check was flagged (missing PPE or HIGH fatigue risk).'],
+    pass_expired: ['PASS_ALERT_MINUTES', 'pass_alert_minutes', 'Someone with an expired security pass was recognised at a kiosk: the screen locked red, the siren sounded and every action was refused. Repeat sightings at the same kiosk within this many minutes count as one incident.'],
   };
   const rel = ts => {
     const s = Math.max(0, (Date.now() + A.skew - new Date(ts)) / 1000);

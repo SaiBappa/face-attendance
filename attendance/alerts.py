@@ -9,6 +9,8 @@ live attendance / assistance / safety data into operational alerts.
   understaffed   a department has at least UNDERSTAFF_MIN fewer people on duty than rostered
   assist_sla     an assistance request has waited longer than 2 x ASSIST_SLA_MINUTES
   safety         a clock-in safety check was flagged (missing PPE / high fatigue)
+  pass_expired   someone with an expired security pass was recognised at a kiosk (logged live by
+                 the kiosk, not by the scan; at most once per person per kiosk every PASS_ALERT_MINUTES)
 
 Each alert has a stable `key`, so re-scans never duplicate it. New alerts are posted to the
 department's webhook (Admin → Alerts → routing) or ALERT_WEBHOOK_URL, and shown in the Admin
@@ -33,6 +35,7 @@ BREAK_MAX = int(os.environ.get("BREAK_MAX_MINUTES", "60"))
 UNDERSTAFF_MIN = int(os.environ.get("UNDERSTAFF_MIN", "2"))
 ASSIST_SLA = int(os.environ.get("ASSIST_SLA_MINUTES", "5"))
 WEBHOOK = os.environ.get("ALERT_WEBHOOK_URL", "")
+PASS_ALERT_MIN = int(os.environ.get("PASS_ALERT_MINUTES", "10"))
 
 TYPES = {  # type -> (icon, label, severity)
     "no_show": ("🚫", "No-show", "high"),
@@ -42,6 +45,7 @@ TYPES = {  # type -> (icon, label, severity)
     "understaffed": ("👥", "Understaffed", "high"),
     "assist_sla": ("🛎", "Assistance waiting", "high"),
     "safety": ("🦺", "Safety check flagged", "high"),
+    "pass_expired": ("⛔", "Expired security pass", "high"),
 }
 
 
@@ -52,6 +56,20 @@ def _add(conn, key, type_, text, now, person=None, department=None, kiosk=None, 
         (key, now.isoformat(timespec="seconds"), now.date().isoformat(), type_, severity or TYPES[type_][2],
          person, department, kiosk, text, demo))
     return cur.rowcount > 0
+
+
+def pass_incident(conn, person, department, kiosk, expiry, now: datetime = None) -> bool:
+    """Log an expired-security-pass incident at a kiosk. Repeat sightings of the same person at the same
+    kiosk within PASS_ALERT_MINUTES are one incident. Returns True when a new alert was created."""
+    now = now or datetime.now()
+    since = (now - timedelta(minutes=PASS_ALERT_MIN)).isoformat(timespec="seconds")
+    if conn.execute("SELECT 1 FROM alerts WHERE type='pass_expired' AND person=? AND kiosk IS ? AND ts>=? LIMIT 1",
+                    (person, kiosk, since)).fetchone():
+        return False
+    return _add(conn, f"pass_expired|{person}|{kiosk}|{now.isoformat(timespec='seconds')}", "pass_expired",
+                f"{person} tried to use the {kiosk or 'kiosk'} kiosk with a security pass that expired on {expiry}. "
+                "All attendance actions were blocked and the floor siren sounded.",
+                now, person, department, kiosk)
 
 
 def scan(conn, now: datetime = None) -> int:
@@ -175,5 +193,5 @@ async def loop():
 
 def settings() -> dict:
     return {"scan_seconds": SCAN_S, "no_show_minutes": NO_SHOW_MIN, "late_alert_minutes": LATE_MIN,
-            "clockout_grace_minutes": CLOCKOUT_GRACE, "break_max_minutes": BREAK_MAX, "understaff_min": UNDERSTAFF_MIN,
+            "clockout_grace_minutes": CLOCKOUT_GRACE, "pass_alert_minutes": PASS_ALERT_MIN, "break_max_minutes": BREAK_MAX, "understaff_min": UNDERSTAFF_MIN,
             "webhook": bool(WEBHOOK), "types": {k: {"icon": v[0], "label": v[1], "severity": v[2]} for k, v in TYPES.items()}}

@@ -490,7 +490,7 @@ def greeting_candidates(g: dict) -> dict:
     elif stats.get("next_shift") and action in ("OUT", None):
         chips.append({"icon": "🗓", "text": "Next: " + stats["next_shift"]})
     if stats.get("days_this_month"):
-        chips.append({"icon": "📅", "text": f"{stats['days_this_month']} days this month"})
+        chips.append({"icon": "📅", "text": f"{stats['days_this_month']} day{'' if stats['days_this_month'] == 1 else 's'} this month"})
     return {"headline": headline, "special": special, "compliments": compliments, "behaviour": behaviour, "chips": chips}
 
 

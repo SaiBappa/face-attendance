@@ -73,8 +73,15 @@ is then measured against each person's *rostered* start, and every shift gets an
 worked, late, left early, overtime, missed clock-out or no-show. A background scan raises
 supervisor alerts — no-show (15 min after start), late arrival, missed clock-out, long break,
 understaffed department (rostered vs on duty), assistance request waiting too long, flagged safety
-check — each once, routed to the department's webhook (Admin → Alerts) or `ALERT_WEBHOOK_URL`, and
+check, expired security pass — each once, routed to the department's webhook (Admin → Alerts) or `ALERT_WEBHOOK_URL`, and
 acknowledged/resolved in the Alerts feed. Staff can ask Aura "when is my next shift?".
+
+**Expired security pass** — when the kiosk recognises someone whose security pass expiry (Admin →
+People) is before today, it shows a full-screen flashing red *Security pass expired* warning, sounds a
+20-second siren and speaks the warning so others on the floor notice, and swallows every tap, so no
+IN / BREAK / BACK / OUT, safety check or chat is possible. The server enforces the same rule (the
+event and safety endpoints return 403) and logs each incident as a high-severity `pass_expired`
+supervisor alert, pushed to the webhook immediately.
 
 ```bash
 curl -X POST http://<server>:8181/api/roster -H "X-Admin-Pin: <pin>" -H "Content-Type: application/json" \
@@ -109,6 +116,7 @@ and kudos for on-time streaks.
 | `ASSIST_SLA_MINUTES` | `5` | Response-time target shown on the board and in Insights |
 | `SAFETY_WEBHOOK_URL` | = assist webhook | POSTs flagged safety checks (missing PPE / high fatigue) |
 | `HIVIS_MIN_SHARE` | `0.12` | Share of fluorescent torso pixels that counts as "hi-vis seen" |
+| `PASS_ALERT_MINUTES` | `10` | Repeat sightings of an expired-pass holder at the same kiosk within this window are one incident |
 | `ALERT_WEBHOOK_URL` | — | Default destination for supervisor alerts (per-department routes override it) |
 | `NO_SHOW_MINUTES` / `LATE_ALERT_MINUTES` | `15` / `10` | When a missing / late arrival becomes an alert |
 | `CLOCKOUT_GRACE_MINUTES` / `BREAK_MAX_MINUTES` | `60` / `60` | Missed clock-out and long-break thresholds |

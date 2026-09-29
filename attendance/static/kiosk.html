@@ -51,7 +51,7 @@
   body:not([data-state=ambient]) #caption { opacity:0; }
 
   /* ------------------------------------------------------------------ layout */
-  #stage { position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr auto auto; padding:calc(18px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left)); }
+  #stage { position:fixed; inset:0; display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto auto; padding:calc(18px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left)); }
   header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
   .where { min-width:0; } .when { flex:none; }
   .where .zone { display:inline-flex; align-items:center; gap:8px; font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--a1); font-weight:600; }
@@ -60,17 +60,22 @@
   .where h1 { margin:6px 0 2px; font-size:clamp(24px,3.6vw,40px); font-weight:700; letter-spacing:-.02em; }
   .where p { margin:0; color:var(--muted); font-size:16px; }
   .when { text-align:right; }
-  #clock { font-size:clamp(40px,6.5vw,76px); font-weight:200; letter-spacing:-.04em; font-variant-numeric:tabular-nums; line-height:1; }
+  #clock { font-size:clamp(34px,min(6.5vw,10vh),76px); font-weight:200; letter-spacing:-.04em; font-variant-numeric:tabular-nums; line-height:1; }
   #date { color:var(--muted); font-size:15px; margin-top:6px; }
   .privacy { margin-top:10px; display:inline-flex; gap:6px; align-items:center; font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:5px 10px; background:var(--glass); }
 
   /* ------------------------------------------------------------------ orb + portal */
-  #center { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:clamp(14px,2.4vh,26px); min-height:0; text-align:center; overflow-y:auto; overflow-x:hidden; padding:clamp(14px,3vh,40px) 0 8px; }
-  #center > :first-child { margin-top:auto; } #center > :last-child { margin-bottom:auto; }   /* centred, but scrolls instead of overflowing */
-  #orbWrap { position:relative; width:min(38vmin,300px); aspect-ratio:1; transition:width .6s cubic-bezier(.2,.8,.2,1); flex:none; }
-  body[data-state=ambient] #orbWrap { width:min(30vmin,240px); }
-  body[data-state=staff] #orbWrap, body[data-state=visitor] #orbWrap { width:min(24vmin,190px); }
-  body.chatting #orbWrap { width:min(16vmin,120px); }
+  #center { display:flex; flex-direction:column; align-items:center; gap:clamp(10px,2.2vh,26px); min-height:0; text-align:center; overflow-y:auto; overflow-x:hidden; padding:clamp(8px,2.4vh,36px) 0 8px; container-type:size; }
+  /* flexible spacers centre the content but collapse to 0 when it's taller than the screen, so it scrolls from the top instead of being clipped */
+  #center::before, #center::after { content:""; flex:1 0 0; }
+  #center::before { margin-bottom:calc(clamp(10px,2.2vh,26px) * -1); } #center::after { margin-top:calc(clamp(10px,2.2vh,26px) * -1); }   /* cancel the gap next to each spacer */
+  #who, #act { display:contents; }
+  #orbWrap { position:relative; width:min(38vmin,300px,50cqh); aspect-ratio:1; transition:width .6s cubic-bezier(.2,.8,.2,1); flex:none; }
+  body[data-state=ambient] #orbWrap { width:min(34vmin,340px,52cqh); }   /* ripple rings reach ~1.6x the orb */
+  body[data-state=ambient] #center { overflow:hidden; }   /* nothing to scroll while idle; stops the fading ripple rings creating a scrollbar */
+  body[data-state=ambient] #headline:empty, body[data-state=ambient] #sub:empty { display:none; }
+  body[data-state=staff] #orbWrap, body[data-state=visitor] #orbWrap { width:min(24vmin,17vh,190px,26cqh); }
+  body.chatting #orbWrap { width:min(16vmin,120px,26cqh); }
   .orb { position:absolute; inset:0; border-radius:50%;
     background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.55), transparent 32%), radial-gradient(circle at 50% 50%, var(--orb), transparent 72%);
     filter:saturate(1.2); animation:breathe 5s ease-in-out infinite; transition:background .6s; }
@@ -97,24 +102,40 @@
   body[data-state=presence] #scanline { opacity:1; }
   @keyframes scan { from { top:-30%; } to { top:100%; } }
 
+  /* ------------------------------------------------------------------ human activity indicator */
+  #activity { display:none; align-items:center; gap:10px; margin:0 auto clamp(6px,1.2vh,12px); padding:8px 16px 8px 12px; border-radius:999px; width:max-content; max-width:100%;
+    background:var(--glass); border:1px solid color-mix(in srgb, var(--a1) 55%, transparent); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    box-shadow:0 0 0 1px rgba(0,0,0,.15), 0 8px 30px -10px var(--a1); color:var(--fg); font-size:clamp(12px,1.8vh,15px); font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
+  body.activity[data-state=ambient] #activity, body[data-state=presence] #activity { display:inline-flex; animation:rise .4s forwards; opacity:0; }
+  #activity .bars { display:inline-flex; align-items:flex-end; gap:3px; height:14px; }
+  #activity .bars i { width:3px; height:100%; border-radius:2px; background:var(--a1); box-shadow:0 0 8px var(--a1); animation:eq 1s ease-in-out infinite; transform-origin:bottom; }
+  #activity .bars i:nth-child(2) { animation-delay:.15s; } #activity .bars i:nth-child(3) { animation-delay:.3s; } #activity .bars i:nth-child(4) { animation-delay:.45s; }
+  @keyframes eq { 0%,100% { transform:scaleY(.3); } 50% { transform:scaleY(1); } }
+  /* someone is moving in front of the idle screen: the orb wakes a little before a face is found */
+  body.activity[data-state=ambient] .ring { opacity:.55; }
+  body.activity[data-state=ambient] .ring2 { animation-duration:2s; border-color:color-mix(in srgb, var(--a1) 45%, transparent); }
+  body.activity[data-state=ambient] #hint { opacity:0; }
+  #hint { transition:opacity .4s; }
+  @media (prefers-reduced-motion: reduce) { #activity .bars i, #activity { animation:none !important; opacity:1; } }
+
   /* ------------------------------------------------------------------ text */
-  #say { max-width:min(900px,92vw); }
-  #headline { font-size:clamp(28px,min(5.4vw,8.5vh),64px); font-weight:750; letter-spacing:-.03em; line-height:1.12; margin:0; padding-bottom:.06em;
+  #say { max-width:min(900px,100%); }
+  #headline { font-size:clamp(26px,min(5.4vw,8vh),64px); font-weight:750; letter-spacing:-.03em; line-height:1.12; margin:0; padding-bottom:.06em;
     background:linear-gradient(92deg, #fff 10%, var(--a1) 55%, var(--a2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  #sub { margin-top:10px; color:var(--muted); font-size:clamp(17px,2.2vw,24px); min-height:1.3em; }
-  #lines { margin:14px auto 0; display:grid; gap:8px; max-width:760px; }
-  #lines div { font-size:clamp(17px,2.2vw,23px); line-height:1.35; opacity:0; transform:translateY(8px); animation:rise .6s forwards; }
+  #sub { margin-top:clamp(4px,1vh,10px); color:var(--muted); font-size:clamp(15px,min(2.2vw,3vh),24px); min-height:1.3em; }
+  #lines { margin:clamp(6px,1.4vh,14px) auto 0; display:grid; gap:8px; max-width:760px; }
+  #lines div { font-size:clamp(15px,min(2.2vw,2.9vh),23px); line-height:1.35; opacity:0; transform:translateY(8px); animation:rise .6s forwards; }
   @keyframes rise { to { opacity:1; transform:none; } }
-  #chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:14px; }
-  .chip { display:inline-flex; align-items:center; gap:7px; padding:8px 14px; border-radius:999px; background:var(--glass); border:1px solid var(--line); font-size:15px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); opacity:0; animation:rise .5s forwards; }
+  #chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:clamp(8px,1.4vh,14px); }
+  .chip { display:inline-flex; align-items:center; gap:7px; padding:8px 14px; border-radius:999px; background:var(--glass); border:1px solid var(--line); font-size:clamp(13px,2vh,16px); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); opacity:0; animation:rise .5s forwards; }
   .chip .sw { width:14px; height:14px; border-radius:50%; border:1px solid rgba(255,255,255,.5); }
   .shimmer { height:18px; border-radius:9px; margin:6px auto; background:linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.16), rgba(255,255,255,.06)); background-size:200% 100%; animation:sh 1.2s linear infinite; }
   @keyframes sh { to { background-position:-200% 0; } }
 
   /* ------------------------------------------------------------------ actions */
-  #actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; width:min(860px,94vw); }
-  #actions button { position:relative; border:1px solid var(--line); border-radius:24px; padding:22px 8px 18px; background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
-    display:flex; flex-direction:column; align-items:center; gap:6px; font-size:clamp(18px,2.3vw,24px); font-weight:700; letter-spacing:.02em; transition:transform .15s, box-shadow .3s, background .3s; }
+  #actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:clamp(10px,1.8vh,16px); width:min(1100px,100%); }
+  #actions button { position:relative; border:1px solid var(--line); border-radius:24px; padding:clamp(14px,2.6vh,34px) 8px clamp(12px,2.2vh,30px); background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    display:flex; flex-direction:column; align-items:center; gap:6px; font-size:clamp(18px,min(3.2vw,2.8vh),34px); font-weight:700; letter-spacing:.02em; transition:transform .15s, box-shadow .3s, background .3s; }
   #actions button small { font-size:13px; font-weight:500; color:var(--muted); letter-spacing:0; }
   #actions button .ic { width:46px; height:46px; border-radius:15px; display:grid; place-items:center; font-size:22px; }
   #actions button:active { transform:scale(.95); }
@@ -137,7 +158,7 @@
   #ambient { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:end; margin-bottom:10px; transition:opacity .5s; }
   /* collapse (not just fade) once someone is in front: the flight board is tall and would squeeze #center, pushing the IN/OUT actions out of view */
   body:not([data-state=ambient]) #ambient { display:none; }
-  #infoCard { max-width:520px; padding:18px 20px; border-radius:22px; background:var(--glass); border:1px solid var(--line); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); display:flex; gap:14px; align-items:flex-start; min-height:84px; }
+  #infoCard { max-width:520px; padding:clamp(12px,2vh,18px) clamp(14px,1.6vw,20px); border-radius:22px; background:var(--glass); border:1px solid var(--line); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); display:flex; gap:14px; align-items:flex-start; min-height:84px; }
   #infoCard .ico { font-size:30px; line-height:1; }
   #infoCard b { display:block; font-size:18px; margin-bottom:4px; }
   #infoCard span { color:var(--muted); font-size:15px; line-height:1.4; }
@@ -146,11 +167,11 @@
   #pulse { display:flex; gap:10px; justify-content:flex-end; }
   #right { display:flex; flex-direction:column; gap:12px; align-items:flex-end; }
   /* flight board */
-  #board { width:min(560px,46vw); border-radius:22px; background:rgba(0,0,0,.28); border:1px solid var(--line); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); padding:12px 14px 8px; }
-  #board .bh { display:flex; justify-content:space-between; align-items:center; font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--a1); font-weight:700; margin:0 4px 6px; }
+  #board { width:min(620px,46vw); border-radius:22px; background:rgba(0,0,0,.28); border:1px solid var(--line); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); padding:12px 14px 8px; }
+  #board .bh { display:flex; justify-content:space-between; align-items:center; font-size:clamp(11px,1.6vh,15px); letter-spacing:.12em; text-transform:uppercase; color:var(--a1); font-weight:700; margin:0 4px 6px; }
   #board .bh span { color:var(--muted); letter-spacing:.04em; font-weight:500; text-transform:none; }
   #board table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
-  #board td { padding:7px 4px; font-size:16px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; }
+  #board td { padding:clamp(3px,.9vh,9px) 4px; font-size:clamp(13px,min(1.3vw,2.2vh),20px); border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; }
   #board table { table-layout:fixed; }
   #board col.c-t { width:21%; } #board col.c-n { width:17%; } #board col.c-w { width:14%; } #board col.c-s { width:22%; }
   @media (max-width: 520px) { #board col.c-w { width:0; } #board col.c-t { width:24%; } #board col.c-s { width:26%; } #board td { font-size:13px; } }
@@ -172,13 +193,13 @@
   .ticket .ti { font-size:34px; } .ticket b { display:block; font-size:18px; } .ticket small { color:var(--muted); }
   .ticket.ack { background:linear-gradient(135deg, rgba(34,197,94,.25), rgba(46,230,214,.18)); border-color:rgba(34,197,94,.6); }
   .ticket button { margin-left:auto; }
-  #pulse div { padding:12px 16px; border-radius:18px; background:var(--glass); border:1px solid var(--line); text-align:center; min-width:96px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
-  #pulse b { display:block; font-size:24px; font-weight:650; font-variant-numeric:tabular-nums; }
+  #pulse div { padding:clamp(8px,1.4vh,14px) clamp(10px,1.2vw,18px); border-radius:18px; background:var(--glass); border:1px solid var(--line); text-align:center; min-width:96px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+  #pulse b { display:block; font-size:clamp(18px,3vh,30px); font-weight:650; font-variant-numeric:tabular-nums; }
   #pulse span { font-size:12px; color:var(--muted); letter-spacing:.04em; }
   #hint { color:var(--muted); font-size:clamp(16px,2vw,20px); letter-spacing:.01em; }
   #hint b { color:var(--fg); }
 
-  #ticker { height:40px; overflow:hidden; border-top:1px solid var(--line); display:flex; align-items:center; mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+  #ticker { height:clamp(32px,4.4vh,44px); overflow:hidden; border-top:1px solid var(--line); display:flex; align-items:center; mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
   #ticker .track { display:inline-flex; gap:60px; white-space:nowrap; animation:tick 40s linear infinite; padding-left:100%; font-size:15px; color:var(--muted); }
   #ticker .alert { color:#fecaca; font-weight:600; }
   @keyframes tick { to { transform:translateX(-100%); } }
@@ -237,6 +258,17 @@
   .risk b.low { color:#4ade80; } .risk b.moderate { color:#fbbf24; } .risk b.high { color:#f87171; }
   .risk ul { margin:6px 0 0; padding-left:20px; color:var(--muted); }
   #safety .go { margin-top:22px; display:flex; gap:12px; justify-content:flex-end; flex-wrap:wrap; }
+  /* expired security pass: full-screen red lockout, swallows every tap */
+  #passAlert { position:fixed; inset:0; z-index:35; display:none; place-items:center; text-align:center; padding:24px;
+    background:#b00016; color:#fff; animation:pa-flash 1s steps(1,end) infinite; }
+  #passAlert.show { display:grid; }
+  @keyframes pa-flash { 50% { background:#7a000f; } }
+  #passAlert .ico { font-size:clamp(90px,16vw,170px); line-height:1; animation:pop .5s cubic-bezier(.2,1.6,.4,1); }
+  #passAlert h2 { margin:14px 0 6px; font-size:clamp(38px,7vw,84px); font-weight:900; letter-spacing:.02em; text-transform:uppercase; }
+  #passAlert .who { font-size:clamp(24px,3.6vw,40px); font-weight:700; }
+  #passAlert p { font-size:clamp(18px,2.6vw,28px); margin:14px auto 0; max-width:900px; line-height:1.35; }
+  #passAlert .log { display:inline-block; margin-top:22px; padding:10px 18px; border-radius:999px; background:rgba(0,0,0,.28); font-size:clamp(14px,1.8vw,18px); font-weight:600; }
+  @media (prefers-reduced-motion: reduce) { #passAlert { animation:none; } }
   #start { position:fixed; inset:0; z-index:40; display:grid; place-items:center; text-align:center; background:radial-gradient(circle at 50% 40%, var(--bg2), var(--bg1)); }
   #start .orb { position:relative; width:180px; height:180px; margin:0 auto 30px; }
   #start h2 { font-size:34px; margin:0 0 8px; letter-spacing:-.02em; }
@@ -251,15 +283,27 @@
     #right { align-items:stretch; }
     #board { width:100%; }
   }
+  @media (min-aspect-ratio: 1/1) {
+    body[data-state=ambient] #stage { grid-template-columns:minmax(0,1fr) auto; grid-template-rows:auto minmax(0,1fr) auto auto; column-gap:clamp(16px,3vw,48px);
+      grid-template-areas:"head head" "center side" "info side" "ticker ticker"; }
+    body[data-state=ambient] header { grid-area:head; }
+    body[data-state=ambient] #center { grid-area:center; }
+    body[data-state=ambient] #ticker { grid-area:ticker; }
+    body[data-state=ambient] #ambient { display:contents; }
+    body[data-state=ambient] #ambient > :first-child { grid-area:info; margin-bottom:clamp(8px,1.6vh,16px); min-width:0; }
+    body[data-state=ambient] #right { grid-area:side; align-self:end; min-height:0; max-height:100%; overflow:hidden; margin-bottom:clamp(8px,1.6vh,16px); }
+    body[data-state=ambient] #board { width:clamp(320px,40vw,640px); }
+    body[data-state=ambient] #pulse { flex:none; }
+  }
+  @media (min-aspect-ratio: 1/1) and (max-height: 520px) { body[data-state=ambient] #pulse { display:none; } }
   /* short landscape screens (e.g. a laptop or TV in a browser window): keep greeting + actions + tools on one screen */
   @media (max-height: 760px) and (min-aspect-ratio: 4/5) {
     #clock { font-size:clamp(34px,8vh,60px); } #date { font-size:13px; margin-top:2px; } .when .privacy { display:none; }
     .where h1 { font-size:clamp(22px,5vh,34px); margin:2px 0 0; } .where p { font-size:14px; }
-    body[data-state=staff] #orbWrap, body[data-state=visitor] #orbWrap { width:min(17vh,160px); }
-    #center { gap:10px; justify-content:safe center; } #center > :first-child, #center > :last-child { margin-top:0; margin-bottom:0; }
+    body[data-state=staff] #orbWrap, body[data-state=visitor] #orbWrap { width:min(17vh,160px,26cqh); }
     /* the tap targets come straight after the name; the longer AI greeting (lines, chips) flows underneath */
     #say { display:contents; }
-    #orbWrap { order:1; } #headline { order:2; max-width:92vw; } #sub { order:3; margin-top:-6px; font-size:clamp(15px,2.6vh,20px); }
+    #orbWrap { order:1; } #activity { order:1; margin-bottom:-4px; } #headline { order:2; max-width:92vw; } #sub { order:3; margin-top:-6px; font-size:clamp(15px,2.6vh,20px); }
     #actions { order:4; } #tools { order:5; } #countdown { order:6; } #lines { order:7; margin:0 auto; max-width:min(760px,92vw); } #chips { order:8; margin-top:0; } #prompts { order:9; }
     #lines:empty, #chips:empty { display:none; }
     #actions button { padding:10px 8px 8px; gap:2px; border-radius:18px; font-size:clamp(16px,2.8vh,20px); }
@@ -267,12 +311,43 @@
     #actions button small { font-size:12px; }
     .pill { padding:8px 16px; font-size:15px; }
   }
+  /* landscape with the IN/BREAK/BACK/OUT buttons up: person on the left, big 2x2 tap targets on the right, everything on one screen */
+  @media (min-aspect-ratio: 1/1) {
+    body.acting:not(.chatting) #center { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); align-items:center;
+      gap:clamp(20px,4vw,72px); padding:clamp(8px,2vh,28px) clamp(0px,2vw,40px); overflow:hidden; }
+    body.acting:not(.chatting) #center::before, body.acting:not(.chatting) #center::after { display:none; }
+    body.acting:not(.chatting) #who, body.acting:not(.chatting) #act { display:flex; flex-direction:column; align-items:center; min-height:0; max-height:100%; }
+    body.acting:not(.chatting) #who { gap:clamp(8px,1.6vh,18px); overflow-y:auto; overflow-x:hidden; padding:4px 0; }
+    body.acting:not(.chatting) #act { gap:clamp(12px,2.4vh,24px); height:100%; justify-content:center; }
+    body.acting:not(.chatting) #say { display:block; max-width:100%; }
+    body.acting:not(.chatting) #orbWrap { width:min(26vh,300px,32cqh); order:0; }
+    body.acting:not(.chatting) #headline { font-size:clamp(26px,min(4.6vw,8.5vh),104px); max-width:none; }
+    body.acting:not(.chatting) #sub { font-size:clamp(15px,min(2vw,3.2vh),34px); }
+    body.acting:not(.chatting) #lines div { font-size:clamp(15px,min(2vw,3vh),32px); }
+    body.acting:not(.chatting) .chip { font-size:clamp(13px,2.1vh,22px); padding:.5em 1em; }
+    body.acting:not(.chatting) #sub { margin-top:clamp(4px,1vh,10px); }
+    body.acting:not(.chatting) #lines { max-width:none; }
+    body.acting:not(.chatting) #actions { grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:1fr; width:100%; flex:0 1 auto; height:min(100%,74vh); min-height:0; gap:clamp(10px,1.8vh,18px); }
+    body.acting:not(.chatting) #actions button { justify-content:center; padding:clamp(10px,2vh,24px) 10px; gap:clamp(4px,1vh,10px); border-radius:clamp(18px,3vh,28px);
+      font-size:clamp(20px,min(3.2vw,5.4vh),60px); min-height:0; }
+    body.acting:not(.chatting) #actions button .ic { width:clamp(36px,9.5vh,112px); height:clamp(36px,9.5vh,112px); border-radius:clamp(11px,2.8vh,32px); font-size:clamp(18px,4.4vh,52px); }
+    body.acting:not(.chatting) #actions button small { font-size:clamp(12px,2.1vh,24px); }
+    body.acting:not(.chatting) #actions button.suggest::after { top:-.9em; font-size:clamp(10px,1.6vh,17px); }
+    body.acting:not(.chatting) #tools, body.acting:not(.chatting) #countdown { flex:none; }
+    body.acting:not(.chatting) .pill { padding:clamp(8px,1.6vh,14px) clamp(16px,2vw,24px); font-size:clamp(15px,2.4vh,26px); }
+  }
   @media (max-width: 820px) {
     #clock { font-size:44px; }
     #board td { font-size:14px; padding:6px 3px; }
   }
   @media (max-width: 640px) {
     #pulse div { min-width:0; padding:10px; }
+    #stage { padding-left:calc(16px + env(safe-area-inset-left)); padding-right:calc(16px + env(safe-area-inset-right)); }
+    .where p { font-size:14px; }
+    #actions button { padding:12px 6px 10px; gap:4px; border-radius:20px; }
+    #actions button .ic { width:38px; height:38px; border-radius:12px; font-size:18px; }
+    #lines { gap:4px; } .chip { padding:6px 12px; }
+    .pill { padding:11px 18px; font-size:16px; }
     .when .privacy { display:none; }
     #caption { display:none; }
   }
@@ -301,6 +376,7 @@
   </header>
 
   <main id="center">
+    <div id="who">
     <div id="orbWrap">
       <div class="ring2"></div><div class="ring2 r2"></div>
       <div class="orb"></div>
@@ -308,24 +384,28 @@
       <div class="ring"></div>
     </div>
     <div id="say">
+      <div id="activity" role="status" aria-live="polite"><span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Detecting human activity</div>
       <h2 id="headline"></h2>
       <div id="sub"></div>
       <div id="lines"></div>
       <div id="chips"></div>
     </div>
+    <div id="prompts" class="hidden"></div>
+    </div>
+    <div id="act">
     <div id="actions" class="hidden">
       <button class="a-IN" data-a="IN"><span class="ic">▶︎</span>IN<small>Start shift</small></button>
       <button class="a-BREAK" data-a="BREAK"><span class="ic">☕︎</span>BREAK<small>Take a break</small></button>
       <button class="a-BACK" data-a="BACK"><span class="ic">↩︎</span>BACK<small>From break</small></button>
       <button class="a-OUT" data-a="OUT"><span class="ic">■</span>OUT<small>End shift</small></button>
     </div>
-    <div id="prompts" class="hidden"></div>
     <div id="tools" class="hidden">
       <button class="pill primary" id="talkBtn">🎙️ Talk to Aura</button>
       <button class="pill" id="typeBtn">⌨️ Type</button>
       <button class="pill ghost" id="notMe">Not me</button>
     </div>
     <div id="countdown" class="hidden"><i></i></div>
+    </div>
   </main>
 
   <section id="ambient">
@@ -353,6 +433,10 @@
 </div>
 
 <div id="safety"><div class="sheet"></div></div>
+<div id="passAlert" role="alertdialog" aria-modal="true" aria-live="assertive" aria-labelledby="paT" aria-describedby="paS">
+  <div><div class="ico" aria-hidden="true">⛔</div><h2 id="paT">Security pass expired</h2><div class="who" id="paWho"></div>
+  <p id="paS"></p><div class="log">🚨 Incident logged · Supervisor notified</div></div>
+</div>
 <div id="done"><div><div class="check">✓</div><h2 id="doneT"></h2><p id="doneS"></p></div></div>
 <div id="start"><div><div class="orb"></div><h2>Tap to wake Aura</h2><p>Enables camera, microphone and voice on this screen.</p></div></div>
 <div id="status"></div>
@@ -362,12 +446,21 @@
 (() => {
   const q = new URLSearchParams(location.search);
   const KIOSK = q.get('kiosk') || 'Main';
-  const SCAN_IDLE_MS = 900;       // frame cadence while nobody is close
-  const SCAN_ACTIVE_MS = 650;     // while someone is in front
-  const FRAME_W = 640;            // downscale before upload
+  const SCAN_IDLE_MS = 900;       // frame cadence while the scene is still
+  const SCAN_ACTIVE_MS = 120;     // movement in front of the kiosk
+  const SCAN_FACE_MS = 40;        // a face is in view but not matched yet: scan almost back-to-back
+  const SCAN_VISITOR_MS = 650;    // visitor panel / chat is up: only watching for them leaving
+  const VISITOR_MIN_MS = 400;     // ...and 3 unmatched frames spanning at least this long before "visitor"
+  const FRAME_W = 480;            // downscale before upload (a kiosk face is large; 480 px is plenty)
+  const JPEG_QUALITY = 0.75;
+  const DEBUG = q.has('debug');   // ?debug=1: on-screen latency overlay
+  const RECOGNIZE_TIMEOUT_MS = 8000; // give up on a frame that hangs (e.g. server restarting)
   const STAFF_TIMEOUT_S = 20;     // staff panel returns to ambient if untouched
   const VISITOR_TIMEOUT_S = 25;
-  const COOLDOWN_MS = 8000;       // after an action, ignore the same person briefly
+  const COOLDOWN_MS = 8000;       // after an action, ignore the same person (backstop if they never leave the frame)
+  const COOLDOWN_CLEAR_FRAMES = 2; // ...but end the cooldown once this many frames in a row have no face
+  const MOTION_MS = 250;          // on-device motion check cadence (tiny thumbnail, never uploaded)
+  const MOTION_HOLD_MS = 2500;    // keep the activity sign up this long after movement stops
   const MOODS = { happiness:['😊','happy'], neutral:['😌','calm'], surprise:['😮','surprised'], sadness:['😔','low'],
                   anger:['😠','tense'], fear:['😟','anxious'], disgust:['😣','uneasy'], contempt:['😏','unimpressed'] };
   const WELCOME = ['Welcome', 'مرحباً', 'މަރުޙަބާ', '欢迎', 'Добро пожаловать', 'स्वागत है', 'Benvenuti', 'Willkommen', 'Bienvenue', 'ようこそ', 'Bienvenidos', '환영합니다'];
@@ -381,8 +474,58 @@
   const S = {
     state: 'ambient', encounter: null, noFace: 0, unmatched: 0, face: null, current: null, cfg: null,
     paused: false, chatting: false, lastActivity: Date.now(), cooldownName: null, cooldownUntil: 0,
-    deadline: 0, mediaIdx: 0, cardIdx: 0, lang: 'en', voiceOn: true, busy: false,
+    deadline: 0, mediaIdx: 0, cardIdx: 0, lang: 'en', voiceOn: true, busy: false, failures: 0,
+    frames: 0, firstUnmatchedAt: 0,
   };
+  let approachAt = 0;   // when the current walk-up started (first motion, else first frame of the encounter)
+
+  // ================================================================ ?debug=1 latency overlay
+  // Per frame: capture (canvas + JPEG on this device), network (round trip minus server time),
+  // server stages from the Server-Timing header, and the time from walk-up to "Hi, name".
+  const dbg = (() => {
+    if (!DEBUG) return { frame() {}, walkup() {} };
+    const el = document.createElement('pre');
+    el.id = 'latency';
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:9999;margin:0;padding:10px 12px;max-width:calc(100vw - 20px);' +
+      'font:12px/1.45 ui-monospace,Menlo,monospace;color:#e6f4f1;background:rgba(4,14,20,.82);border:1px solid rgba(255,255,255,.18);' +
+      'border-radius:10px;pointer-events:none;white-space:pre-wrap;';
+    document.body.appendChild(el);
+    const hist = [];          // last 30 frames
+    let last = null, walk = null;
+    const parse = h => Object.fromEntries((h || '').split(',').map(p => {
+      const [name, ...kv] = p.trim().split(';');
+      const d = kv.find(x => x.startsWith('dur='));
+      return [name, d ? parseFloat(d.slice(4)) : NaN];
+    }).filter(([n]) => n));
+    const p50 = k => { const v = hist.map(f => f[k]).filter(Number.isFinite).sort((a, b) => a - b); return v.length ? v[v.length >> 1] : NaN; };
+    const ms = v => Number.isFinite(v) ? String(Math.round(v)).padStart(4) : '   –';
+    function render() {
+      const fps = hist.length > 1 ? (hist.length - 1) / ((hist[hist.length - 1].at - hist[0].at) / 1000) : 0;
+      const s = last?.srv || {};
+      el.textContent =
+        `LATENCY ms        capture  network  server   total\n` +
+        `last frame           ${ms(last?.capture)}     ${ms(last?.net)}    ${ms(last?.server)}    ${ms(last?.total)}\n` +
+        `median (${String(hist.length).padStart(2)} frames)   ${ms(p50('capture'))}     ${ms(p50('net'))}    ${ms(p50('server'))}    ${ms(p50('total'))}\n` +
+        `server detail   decode ${ms(s.decode)}  detect ${ms(s.detect)}  embed ${ms(s.embed)}  mood+clothes ${ms(s.extras)}\n` +
+        `frame ${last ? Math.round(last.bytes / 1024) : '–'} KB · ${fps.toFixed(1)} fps · next scan ${nextScanMs()} ms · state ${S.state}\n` +
+        (walk ? `walk-up → ${walk.label}: ${(walk.ms / 1000).toFixed(2)} s over ${walk.frames} frame${walk.frames === 1 ? '' : 's'}` : 'walk-up → waiting for someone to step up');
+    }
+    el.textContent = 'LATENCY  waiting for the first frame…';
+    return {
+      frame({ capture, rtt, bytes, timing }) {
+        const srv = parse(timing), server = srv.total;
+        last = { at: performance.now(), capture, bytes, srv, server,
+                 net: Number.isFinite(server) ? Math.max(0, rtt - server) : rtt, total: capture + rtt };
+        hist.push(last); if (hist.length > 30) hist.shift();
+        render();
+      },
+      walkup(label) {
+        if (approachAt) walk = { label, ms: Date.now() - approachAt, frames: S.frames };
+        render();
+      },
+    };
+  })();
 
   function setState(s) { S.state = s; document.body.dataset.state = s; }
   function touch() { S.lastActivity = Date.now(); }
@@ -587,7 +730,10 @@
   // ================================================================ screen states
   let welcomeTimer;
   function clearSay() { $('headline').textContent = ''; $('sub').textContent = ''; $('lines').innerHTML = ''; $('chips').innerHTML = ''; }
-  function show(ids) { ['actions', 'prompts', 'tools', 'countdown'].forEach(id => $(id).classList.toggle('hidden', !ids.includes(id))); }
+  function show(ids) {
+    ['actions', 'prompts', 'tools', 'countdown'].forEach(id => $(id).classList.toggle('hidden', !ids.includes(id)));
+    document.body.classList.toggle('acting', ids.includes('actions'));   // switches to the two-column layout on landscape screens
+  }
 
   function ambientText() {
     clearInterval(welcomeTimer);
@@ -600,6 +746,7 @@
     if (S.chatting) closeChat();
     setState('ambient'); clearSay(); show([]);
     S.current = null; S.encounter = null; S.unmatched = 0; S.noFace = 0; S.paused = false; S.deadline = 0;
+    S.firstUnmatchedAt = 0; approachAt = 0;
     ambientText(); rotateCard();
   }
 
@@ -629,6 +776,7 @@
   // ---- staff recognised
   async function showStaff(j) {
     setState('staff'); S.current = j; S.paused = true; touch();
+    dbg.walkup(`Hi, ${j.employee}`);
     const first = j.employee.split(' ')[0];
     clearSay();
     $('headline').textContent = `Hi, ${first}`;
@@ -654,6 +802,7 @@
   // ---- visitor (face, no match)
   function showVisitor() {
     setState('visitor'); touch();
+    dbg.walkup('Visitor welcome');
     clearSay();
     let i = 0;
     const w = () => { $('headline').textContent = WELCOME[i++ % WELCOME.length]; };
@@ -670,7 +819,7 @@
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
       video.srcObject = stream; await video.play();
-      loop();
+      loop(); setInterval(motionTick, MOTION_MS);
     } catch (e) { status(`Camera blocked: ${e.message}. Use HTTPS and allow the camera.`); }
   }
 
@@ -680,7 +829,14 @@
     const scale = FRAME_W / vw;
     cv.width = FRAME_W; cv.height = Math.round(vh * scale);
     cv.getContext('2d').drawImage(video, 0, 0, cv.width, cv.height);
-    return new Promise(res => cv.toBlob(res, 'image/jpeg', 0.85));
+    return new Promise(res => cv.toBlob(res, 'image/jpeg', JPEG_QUALITY));
+  }
+
+  // how long to wait before the next frame: fast while someone is arriving, slow otherwise
+  function nextScanMs() {
+    if (S.state === 'presence') return SCAN_FACE_MS;
+    if (S.state === 'ambient') return Date.now() - motionAt < MOTION_HOLD_MS ? SCAN_ACTIVE_MS : SCAN_IDLE_MS;
+    return SCAN_VISITOR_MS;
   }
 
   async function loop() {
@@ -688,35 +844,66 @@
       if (!S.paused && !S.busy) {
         S.busy = true;
         try {
+          const t0 = performance.now();
           const blob = await grabFrame();
           if (blob) {
-            if (!S.encounter) S.encounter = uid();
+            const t1 = performance.now();
+            if (!S.encounter) { S.encounter = uid(); S.frames = 0; approachAt = approachAt || Date.now(); }
+            S.frames++;
             const fd = new FormData(); fd.append('file', blob, 'frame.jpg'); fd.append('kiosk', KIOSK); fd.append('encounter', S.encounter);
-            const j = await fetch('/api/recognize', { method: 'POST', body: fd }).then(r => r.json());
-            if (j.error) status(j.error); else { status(''); onResult(j); }
+            // a hung request must never freeze the loop, so every frame gets a hard timeout
+            const r = await fetch('/api/recognize', { method: 'POST', body: fd, signal: AbortSignal.timeout(RECOGNIZE_TIMEOUT_MS) });
+            const j = await r.json().catch(() => ({ error: `Server error (${r.status})` }));
+            dbg.frame({ capture: t1 - t0, rtt: performance.now() - t1, bytes: blob.size, timing: r.headers.get('Server-Timing'), j });
+            if (j.error) { status(j.error); S.failures++; }
+            else { status(''); S.failures = 0; onResult(j); }
           }
-        } catch (e) { status('Server unreachable'); }
+        } catch (e) { status('Server unreachable — retrying'); S.failures++; }
         S.busy = false;
+        if (S.failures) { await sleep(Math.min(5000, 500 * S.failures)); continue; }
       }
-      await sleep(S.state === 'ambient' ? SCAN_IDLE_MS : SCAN_ACTIVE_MS);
+      await napScan(nextScanMs());
     }
+  }
+
+  // a sleep that motionTick can cut short, so someone walking up is scanned straight away
+  let wakeScan = null;
+  function napScan(ms) {
+    return new Promise(res => {
+      const t = setTimeout(res, ms);
+      wakeScan = () => { clearTimeout(t); res(); };
+    }).finally(() => { wakeScan = null; });
   }
 
   function onResult(j) {
     if (!j.face) {
       S.noFace++;
+      // the person who just clocked has walked away: let them be recognised again right away
+      if (S.cooldownName && S.noFace >= COOLDOWN_CLEAR_FRAMES) S.cooldownName = null;
       if (S.state === 'presence' && S.noFace >= 3) toAmbient();
       else if (S.state === 'visitor' && S.noFace >= 8 && !S.chatting && Date.now() - S.lastActivity > 6000) toAmbient();
-      else if (S.state === 'ambient') S.encounter = null;   // nobody there: next face starts a fresh approach
+      else if (S.state === 'ambient') {
+        S.encounter = null;   // nobody there: next face starts a fresh approach
+        if (Date.now() - motionAt >= MOTION_HOLD_MS) approachAt = 0;   // a passer-by, not an arrival
+      }
       return;
     }
-    S.noFace = 0; S.face = j;
+    // the server only computes mood/clothing on frames that need them, so keep the last known values
+    S.noFace = 0; S.face = { ...j, emotion: j.emotion || S.face?.emotion, attire: j.attire || S.face?.attire };
+    motionAt = Date.now();   // a face counts as activity
+    if (S.alarm) {
+      // locked out: the expired-pass holder keeps it up; someone else can take over once the minimum has passed
+      if (j.matched && j.pass_expired) return showPassAlert(j);
+      if (j.matched && Date.now() - S.alarm.since > ALARM_MIN_MS) { clearPassAlert(); showStaff(j); }
+      return;
+    }
+    if (j.matched && j.pass_expired) return showPassAlert(j);
     if (j.matched) {
       if (j.employee === S.cooldownName && Date.now() < S.cooldownUntil) return;
       if (S.state !== 'staff' && !S.chatting) showStaff(j);
       return;
     }
-    S.unmatched++;
+    if (!S.unmatched++) S.firstUnmatchedAt = Date.now();
     if (S.state === 'ambient') {
       setState('presence'); clearSay();
       $('headline').textContent = 'Hello there';
@@ -725,9 +912,108 @@
     }
     if (S.state === 'presence') {
       if (j.size && j.size < 0.14) $('sub').textContent = 'Step a little closer';
-      if (S.unmatched >= 3) showVisitor();
+      // frames now arrive ~every 100 ms, so also require a minimum span: someone still turning
+      // towards the camera shouldn't be called a visitor before their face is usable
+      if (S.unmatched >= 3 && Date.now() - S.firstUnmatchedAt >= VISITOR_MIN_MS) showVisitor();
     }
   }
+
+  // ---- human activity: cheap frame differencing on a 32x24 thumbnail, so the screen reacts to someone
+  // walking up before the face detector has a usable face. Pixels stay in this tab.
+  const mcv = document.createElement('canvas'); mcv.width = 32; mcv.height = 24;
+  const mctx = mcv.getContext('2d', { willReadFrequently: true });
+  let prevLuma = null, motionAt = 0;
+  function motionTick() {
+    if (!video.videoWidth || document.hidden) return;
+    mctx.drawImage(video, 0, 0, mcv.width, mcv.height);
+    const px = mctx.getImageData(0, 0, mcv.width, mcv.height).data, n = mcv.width * mcv.height;
+    const luma = new Uint8Array(n);
+    let changed = 0;
+    for (let i = 0; i < n; i++) {
+      luma[i] = (px[i * 4] * 77 + px[i * 4 + 1] * 150 + px[i * 4 + 2] * 29) >> 8;
+      if (prevLuma && Math.abs(luma[i] - prevLuma[i]) > 28) changed++;
+    }
+    prevLuma = luma;
+    if (changed / n > 0.04) {
+      const wasStill = Date.now() - motionAt >= MOTION_HOLD_MS;
+      motionAt = Date.now();
+      if (wasStill && S.state === 'ambient') {
+        approachAt = Date.now();   // start of a walk-up, for the ?debug=1 overlay
+        if (wakeScan) wakeScan();  // someone just stepped in: scan now
+      }
+    }
+    setActivity(Date.now() - motionAt < MOTION_HOLD_MS);
+  }
+  function setActivity(on) {
+    if (document.body.classList.contains('activity') === on) return;
+    document.body.classList.toggle('activity', on);
+  }
+
+  // ================================================================ expired security pass
+  // Full-screen red lockout + siren. Nothing on the kiosk can be pressed while it is up; the server
+  // refuses the actions anyway and has already logged the incident as a supervisor alert.
+  const SIREN_S = 20;            // how long the siren wails for one approach
+  const ALARM_MIN_MS = 12000;    // keep the lockout up at least this long
+  const ALARM_CLEAR_MS = 6000;   // ...then clear once the person has been out of view this long
+  let siren = null;
+  function startSiren() {
+    stopSiren();
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
+      const g = actx.createGain(), t0 = actx.currentTime;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.15);
+      g.gain.setValueAtTime(0.5, t0 + SIREN_S - 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t0 + SIREN_S);
+      g.connect(actx.destination);
+      const oscs = [0, 7].map(detune => {           // two slightly detuned saws: harsh and loud on small speakers
+        const o = actx.createOscillator(); o.type = 'sawtooth'; o.detune.value = detune * 100 / 12;
+        for (let t = 0; t < SIREN_S; t += 1.2) {      // wail: 600 Hz -> 1400 Hz -> 600 Hz
+          o.frequency.setValueAtTime(600, t0 + t);
+          o.frequency.linearRampToValueAtTime(1400, t0 + t + 0.6);
+          o.frequency.linearRampToValueAtTime(600, t0 + t + 1.2);
+        }
+        o.connect(g); o.start(t0); o.stop(t0 + SIREN_S); return o;
+      });
+      siren = { oscs, g };
+    } catch (_) {}
+  }
+  function stopSiren() {
+    if (!siren) return;
+    try { siren.oscs.forEach(o => o.stop()); siren.g.disconnect(); } catch (_) {}
+    siren = null;
+  }
+
+  function showPassAlert(j) {
+    if (S.alarm && S.alarm.name === j.employee) { S.alarm.lastSeen = Date.now(); return; }
+    if (S.chatting) closeChat();
+    $('safety').classList.remove('show'); $('done').classList.remove('show');
+    setState('alarm'); clearSay(); show([]);
+    S.current = null; S.deadline = 0; S.paused = false;   // keep scanning so we know when they leave
+    S.alarm = { name: j.employee, since: Date.now(), lastSeen: Date.now() };
+    const exp = j.pass_expiry ? new Date(j.pass_expiry + 'T00:00').toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    $('paWho').textContent = j.employee;
+    $('paS').textContent = `This security pass expired${exp ? ` on ${exp}` : ''}. Access denied — no attendance or clock-in actions can be recorded. ` +
+      'Do not enter restricted areas. Report to the Security Pass Office or your supervisor immediately.';
+    $('passAlert').classList.add('show');
+    if (document.activeElement) document.activeElement.blur();
+    startSiren();
+    speak(`Warning. Security pass expired. Access denied. ${j.employee.split(' ')[0]}, please report to the security pass office.`);
+  }
+  function clearPassAlert() {
+    stopSiren();
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    $('passAlert').classList.remove('show');
+    S.alarm = null;
+    toAmbient();
+  }
+  setInterval(() => {
+    const a = S.alarm;
+    if (a && Date.now() - a.since > ALARM_MIN_MS && Date.now() - a.lastSeen > ALARM_CLEAR_MS) clearPassAlert();
+  }, 500);
+  // swallow every interaction while locked out (capture phase, before any button handler)
+  ['pointerdown', 'click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, e => {
+    if (!S.alarm) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+  }, { capture: true, passive: false }));
 
   // ================================================================ attendance actions
   async function post(url, body) {
@@ -740,13 +1026,13 @@
   const LABEL = { IN: 'Clocked in', BREAK: 'Enjoy your break', BACK: 'Welcome back', OUT: 'Clocked out' };
   const COLOR = { IN: 'var(--in)', BREAK: 'var(--break)', BACK: 'var(--back)', OUT: 'var(--out)' };
   document.querySelectorAll('#actions button').forEach(btn => btn.onclick = async () => {
-    const j = S.current; if (!j) return;
+    const j = S.current; if (!j || j.pass_expired || S.alarm) return;
     const action = btn.dataset.a;
     S.deadline = 0;
     let safetyOut = null;
     if (action === 'IN') {
       try {
-        const pre = await post('/api/safety/precheck', { employee: j.employee, hivis: j.attire?.hivis ?? null });
+        const pre = await post('/api/safety/precheck', { employee: j.employee, kiosk: KIOSK, hivis: j.attire?.hivis ?? null });
         if (pre.required) {
           safetyOut = await safetySheet(j, pre);
           if (!safetyOut) { startCountdown(STAFF_TIMEOUT_S); return; }   // cancelled
@@ -938,7 +1224,7 @@
       $('level').querySelector('i').style.width = Math.min(100, rms * 900) + '%';
       if (rms > 0.03) { spoke = true; quietSince = Date.now(); }
       const quiet = Date.now() - quietSince;
-      if ((spoke && quiet > 1300) || Date.now() - started > 15000 || (!spoke && Date.now() - started > 7000)) stopRec();
+      if ((spoke && quiet > 800) || Date.now() - started > 15000 || (!spoke && Date.now() - started > 7000)) stopRec();
     }, 80);
     mr.onstop = async () => {
       clearInterval(meter); $('level').querySelector('i').style.width = '0';
