@@ -21,7 +21,7 @@ Assist desk (X-Admin-Pin = ASSIST_PIN or ADMIN_PIN):
 Admin (X-Admin-Pin):
   /api/status, /api/events, /api/export.csv, /api/employees…   (original attendance admin)
   /api/people…, /api/kiosks…, /api/media…, /api/announcements…
-  /api/insights, /api/insights/person/{name}, /api/interactions(.csv), /api/demo, /api/engines
+  /api/insights, /api/insights/person/{name}, /api/status/mood, /api/interactions(.csv), /api/demo, /api/engines
   /api/roster…  (CSV import, JSON push from HR systems, edit, coverage)   /api/alerts…  (feed, ack, routing)
 
 Camera frames and voice clips are processed in memory and discarded. Only face vectors
@@ -1060,6 +1060,13 @@ async def insights_overview(request: Request):
     return JSONResponse(insights.overview(date_from, date_to, request.query_params.get("kiosk") or None))
 
 
+async def mood_today(request: Request):
+    require_pin(request)
+    day = request.query_params.get("day") or date.today().isoformat()
+    days = max(2, min(int(request.query_params.get("days", 14)), 90))
+    return JSONResponse(insights.mood_today(day, days))
+
+
 async def insights_person(request: Request):
     require_pin(request)
     date_from, date_to = _range(request, default_days=29)
@@ -1170,6 +1177,7 @@ routes = [
     Route("/api/listen", listen, methods=["POST"]),
     Route("/api/kiosk/{name}", kiosk_config),
     Route("/api/status", status),
+    Route("/api/status/mood", mood_today),
     Route("/api/events", events),
     Route("/api/events/{event_id:int}", delete_event, methods=["DELETE"]),
     Route("/api/export.csv", export_csv),

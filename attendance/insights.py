@@ -391,6 +391,48 @@ def person(name: str, date_from: str, date_to: str) -> dict:
     }
 
 
+def mood_today(day: str, days: int = 14) -> dict:
+    """Staff mood for the admin Today screen: the team and each person, through the chosen day
+    (by hour) and over the `days` days ending on it. Only consented readings exist (valence is
+    NULL otherwise), so nothing extra is filtered here."""
+    d1 = date.fromisoformat(day)
+    d0 = (d1 - timedelta(days=days - 1)).isoformat()
+    with db() as conn:
+        si = conn.execute(
+            """SELECT ts, day, hour, person, mood, valence FROM sightings
+               WHERE kind='staff' AND valence IS NOT NULL AND person IS NOT NULL AND day BETWEEN ? AND ?
+               ORDER BY ts""", (d0, day)).fetchall()
+    span = [(d1 - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
+    today_si = [s for s in si if s["day"] == day]
+
+    def daily(rows):
+        by = _group((s["day"], s["valence"]) for s in rows)
+        return [{"day": d, "mood": _avg(by.get(d, [])), "n": len(by.get(d, []))} for d in span]
+
+    by_hour = []
+    for h in range(24):
+        vs = [s["valence"] for s in today_si if s["hour"] == h]
+        if vs:
+            by_hour.append({"hour": h, "mood": _avg(vs), "n": len(vs)})
+    people = {}
+    for name in sorted({s["person"] for s in si}):
+        mine = [s for s in si if s["person"] == name]
+        mine_today = [s for s in mine if s["day"] == day]
+        people[name] = {
+            "today": _avg([s["valence"] for s in mine_today]),
+            "readings": [{"ts": s["ts"], "mood": s["mood"], "valence": s["valence"]} for s in mine_today],
+            "daily": daily(mine),
+            "mix": dict(Counter(s["mood"] for s in mine)),
+        }
+    return {
+        "day": day, "days": days,
+        "team": {"today": _avg([s["valence"] for s in today_si]), "n": len(today_si), "by_hour": by_hour,
+                 "daily": daily(si), "mix": dict(Counter(s["mood"] for s in today_si))},
+        "people": people,
+        "moods_meta": {k: {"valence": v[0], "word": v[1], "emoji": v[2]} for k, v in MOODS.items()},
+    }
+
+
 def person_stats(conn, name: str, today: date, profile: dict) -> dict:
     """Small stats used by the kiosk greeting: early minutes, on-time streak, yesterday, this month."""
     since = (today - timedelta(days=45)).isoformat()
