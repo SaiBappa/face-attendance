@@ -507,6 +507,7 @@
         <p class="notice span2" id="consentNote" style="margin:0">With consent, the kiosk reads a mood estimate (on-device, from the face) at each visit. Turning it off stops mood tracking for this person <b>and erases all their past mood readings</b>.</p>
         <label class="field span2"><span>Notes</span><textarea id="pf_notes" placeholder="Private notes for admins"></textarea></label>
       </div>
+      <div id="pGallery" class="photo-gal" hidden></div>
       <h3>Actions</h3>
       <div class="row" style="margin:0">
         <a class="btn ghost sm" id="pInsights" target="_blank" rel="noopener">Open in Insights ↗</a>
@@ -545,13 +546,7 @@
       </div>
     </div>
     <p id="enrolMsg" class="muted"></p>
-    <div id="enrolGallery" hidden>
-      <h3 class="gal-h">Enrolled photos <span class="muted" id="galEnrolledN"></span></h3>
-      <div class="thumbs" id="galEnrolled"></div>
-      <h3 class="gal-h">Learned at the kiosk <span class="muted" id="galLearnedN"></span></h3>
-      <p class="hint" id="galLearnedHint" style="margin-top:0">Each day the kiosk keeps the 2 sharpest, most front-facing photos of this person from confident matches, for 7 days. They are matched alongside the enrolled photos so a new beard, glasses or haircut is still recognised. Remove any that look wrong.</p>
-      <div class="thumbs" id="galLearned"></div>
-    </div>
+    <div id="enrolGallery" class="photo-gal" hidden></div>
   </div>
 </section>
 
@@ -1050,6 +1045,7 @@
     $('pInsights').href = '/insights#person=' + enc(x.name);
     $('pActHint').textContent = 'Delete removes face data (if enrolled), profile, mood readings and conversations. Attendance records are kept for payroll.';
     $('pDlg').showModal();
+    profileGal.load(x.enrolled ? x.name : '');
   }
   function consentUi() {
     const on = $('pf_consent').checked, was = +(current?.mood_consent ?? 1) !== 0;
@@ -1125,41 +1121,53 @@
     await api('/api/people/' + enc(name), jsonBody('PUT', body));
     return name;
   }
-  // ---- photo gallery for the person being enrolled ----
-  let galUrls = [], galName = '';
+  // ---- photo gallery (Enrol tab and People profile): enrolled photos + daily bests learned at the kiosk ----
   const fmtDay = d => new Date(d + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-  async function loadGallery(name, fresh = []) {
-    galName = name || '';
-    galUrls.forEach(URL.revokeObjectURL); galUrls = [];
-    if (!name) { $('enrolGallery').hidden = true; return; }
-    let j;
-    try { j = await api(`/api/employees/${enc(name)}/photos`); } catch (e) { $('enrolGallery').hidden = true; return; }
-    if (name !== galName) return;  // a newer name was picked meanwhile
-    const enrolled = j.photos.filter(p => p.kind !== 'learned'), learned = j.photos.filter(p => p.kind === 'learned');
-    $('enrolGallery').hidden = !j.photos.length;
-    const tile = p => {
-      const cap = p.kind === 'learned'
-        ? `<b>${esc(fmtDay(p.day))}</b>${p.ts ? ' · ' + esc(p.ts.slice(11, 16)) : ''}<br>quality ${Math.round((p.quality || 0) * 100)}%`
-        : (fresh.includes(p.image_id) ? '<b>Just added</b>' : 'Enrolled');
-      const img = p.has_image ? `<img alt="Face photo of ${esc(name)}" data-img="${esc(p.image_id)}">` : '<div class="ph">Vector only<br>(added before previews)</div>';
-      return `<div class="thumb${fresh.includes(p.image_id) ? ' new' : ''}">${img}<button class="rm" data-rm="${esc(p.image_id)}" aria-label="Remove this photo" title="Remove this photo">✕</button><div class="cap">${cap}</div></div>`;
-    };
-    $('galEnrolledN').textContent = `· ${enrolled.length}` + (enrolled.length < 3 ? ' — add a few more' : '');
-    $('galEnrolled').innerHTML = enrolled.map(tile).join('') || '<div class="empty" style="grid-column:1/-1">None yet.</div>';
-    $('galLearnedN').textContent = learned.length ? `· ${learned.length}` : '';
-    $('galLearned').innerHTML = learned.map(tile).join('') || `<div class="empty" style="grid-column:1/-1">${j.learning ? 'Nothing yet — photos appear here after this person is recognised at a kiosk.' : 'Daily learning is off (ADAPTIVE_LEARNING=off).'}</div>`;
-    // images need the PIN header, so load them as blobs
-    for (const el of $('enrolGallery').querySelectorAll('img[data-img]')) {
-      fetch(`/api/employees/${enc(name)}/photos/${enc(el.dataset.img)}`, { headers: { 'X-Admin-Pin': PIN } })
-        .then(r => r.ok ? r.blob() : null).then(b => { if (b && name === galName) { const u = URL.createObjectURL(b); galUrls.push(u); el.src = u; } }).catch(() => {});
+  function photoGallery(root, { onChange, onError } = {}) {
+    root.innerHTML = `<h3 class="gal-h">Enrolled photos <span class="muted" data-n="enrolled"></span></h3>
+      <div class="thumbs" data-list="enrolled"></div>
+      <h3 class="gal-h">Learned at the kiosk <span class="muted" data-n="learned"></span></h3>
+      <p class="hint" style="margin-top:0">Each day the kiosk keeps the 2 sharpest, most front-facing photos of this person from confident matches, for 7 days. They are matched alongside the enrolled photos so a new beard, glasses or haircut is still recognised. Remove any that look wrong.</p>
+      <div class="thumbs" data-list="learned"></div>`;
+    const q = sel => root.querySelector(sel);
+    let urls = [], who = '';
+    async function load(name, fresh = []) {
+      who = name || '';
+      urls.forEach(URL.revokeObjectURL); urls = [];
+      if (!name) { root.hidden = true; return; }
+      let j;
+      try { j = await api(`/api/employees/${enc(name)}/photos`); } catch (e) { root.hidden = true; return; }
+      if (name !== who) return;  // a newer name was picked meanwhile
+      const enrolled = j.photos.filter(p => p.kind !== 'learned'), learned = j.photos.filter(p => p.kind === 'learned');
+      root.hidden = !j.photos.length;
+      const tile = p => {
+        const cap = p.kind === 'learned'
+          ? `<b>${esc(fmtDay(p.day))}</b>${p.ts ? ' · ' + esc(p.ts.slice(11, 16)) : ''}<br>quality ${Math.round((p.quality || 0) * 100)}%`
+          : (fresh.includes(p.image_id) ? '<b>Just added</b>' : 'Enrolled');
+        const img = p.has_image ? `<img alt="Face photo of ${esc(name)}" data-img="${esc(p.image_id)}">` : '<div class="ph">Vector only<br>(added before previews)</div>';
+        return `<div class="thumb${fresh.includes(p.image_id) ? ' new' : ''}">${img}<button type="button" class="rm" data-rm="${esc(p.image_id)}" aria-label="Remove this photo" title="Remove this photo">✕</button><div class="cap">${cap}</div></div>`;
+      };
+      q('[data-n=enrolled]').textContent = `· ${enrolled.length}` + (enrolled.length < 3 ? ' — add a few more' : '');
+      q('[data-list=enrolled]').innerHTML = enrolled.map(tile).join('') || '<div class="empty" style="grid-column:1/-1">None yet.</div>';
+      q('[data-n=learned]').textContent = learned.length ? `· ${learned.length}` : '';
+      q('[data-list=learned]').innerHTML = learned.map(tile).join('') || `<div class="empty" style="grid-column:1/-1">${j.learning ? 'Nothing yet — photos appear here after this person is recognised at a kiosk.' : 'Daily learning is off (ADAPTIVE_LEARNING=off).'}</div>`;
+      // images need the PIN header, so load them as blobs
+      for (const el of root.querySelectorAll('img[data-img]')) {
+        fetch(`/api/employees/${enc(name)}/photos/${enc(el.dataset.img)}`, { headers: { 'X-Admin-Pin': PIN } })
+          .then(r => r.ok ? r.blob() : null).then(b => { if (b && name === who) { const u = URL.createObjectURL(b); urls.push(u); el.src = u; } }).catch(() => {});
+      }
     }
+    root.onclick = async evt => {
+      const b = evt.target.closest('[data-rm]'); if (!b) return;
+      if (!confirm('Remove this photo? The kiosk will no longer match against it.')) return;
+      try { await api(`/api/employees/${enc(who)}/photos/${enc(b.dataset.rm)}`, { method: 'DELETE' }); await load(who); onChange?.(); }
+      catch (e) { onError ? onError(e) : toast(e.message, true); }
+    };
+    return { load };
   }
-  $('enrolGallery').onclick = async evt => {
-    const b = evt.target.closest('[data-rm]'); if (!b) return;
-    if (!confirm('Remove this photo? The kiosk will no longer match against it.')) return;
-    try { await api(`/api/employees/${enc(galName)}/photos/${enc(b.dataset.rm)}`, { method: 'DELETE' }); loadGallery(galName); }
-    catch (e) { $('enrolMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
-  };
+  const profileGal = photoGallery($('pGallery'), { onChange: () => loadPeople() });
+  const enrolGal = photoGallery($('enrolGallery'), { onError: e => { $('enrolMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; } });
+  const loadGallery = enrolGal.load;
 
   async function addPhoto(name, blob) {
     const fd = new FormData(); fd.append('file', blob, 'face.jpg');
