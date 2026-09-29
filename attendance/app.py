@@ -26,8 +26,10 @@ Admin (X-Admin-Pin):
   /api/insights, /api/insights/person/{name}, /api/status/mood, /api/interactions(.csv), /api/demo, /api/engines
   /api/roster…  (CSV import, JSON push from HR systems, edit, coverage)   /api/alerts…  (feed, ack, routing)
 
-Camera frames and voice clips are processed in memory and discarded. Only face vectors
-(recognizer), names, timestamps, derived mood labels and conversation text are stored.
+Camera frames and voice clips are processed in memory and discarded. Stored: face vectors plus a
+small face crop per enrolled photo and per daily-best kiosk photo of recognised staff (recognizer;
+daily bests are kept DAILY_KEEP_DAYS, default 7), names, timestamps, derived mood labels and
+conversation text. Visitor faces are never kept.
 """
 import asyncio
 import contextlib
@@ -70,6 +72,8 @@ MEDIA_DIR = os.environ.get("MEDIA_DIR", os.path.join(os.path.dirname(os.environ.
 # on = staff (with consent) + anonymous visitors; staff_only; visitors_only; off
 MOOD_TRACKING = os.environ.get("MOOD_TRACKING", "on").lower()
 RETENTION_DAYS = int(os.environ.get("INTERACTION_RETENTION_DAYS", "365"))
+# let the recognizer keep each recognised person's best 2 photos a day (for a week) to track changes
+ADAPTIVE_LEARNING = os.environ.get("ADAPTIVE_LEARNING", "on").lower() not in ("off", "0", "false", "no")
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
 ACTIONS = ("IN", "BREAK", "BACK", "OUT")
@@ -309,7 +313,8 @@ async def recognize(request: Request):
         "POST",
         "/recognize",
         params={"limit": 1, "prediction_count": 1, "det_prob_threshold": 0.8,
-                "extras": int(_wants_extras(encounter)), "extras_min_similarity": THRESHOLD},
+                "extras": int(_wants_extras(encounter)), "extras_min_similarity": THRESHOLD,
+                "learn": int(ADAPTIVE_LEARNING)},
         files={"file": upload},
     )
     t2 = time.perf_counter()
@@ -919,13 +924,40 @@ async def employees(request: Request):
     subjects = (await cf("GET", "/subjects")).json().get("subjects", [])
     faces = (await cf("GET", "/faces", params={"size": 10000})).json().get("faces", [])
     counts: dict = {}
+    learned: dict = {}
     for f in faces:
-        counts[f["subject"]] = counts.get(f["subject"], 0) + 1
+        c = learned if f.get("kind") == "learned" else counts
+        c[f["subject"]] = c.get(f["subject"], 0) + 1
     with db() as conn:
         profs = {r["name"]: dict(r) for r in conn.execute("SELECT * FROM people")}
     return JSONResponse(
-        {"employees": [{"name": s, "photos": counts.get(s, 0), "profile": profs.get(s)} for s in sorted(subjects, key=str.lower)]}
+        {"employees": [{"name": s, "photos": counts.get(s, 0), "learned": learned.get(s, 0), "profile": profs.get(s)}
+                       for s in sorted(subjects, key=str.lower)]}
     )
+
+
+async def employee_photos(request: Request):
+    """One person's photos: enrolled ones and the daily bests learned at the kiosk (newest first)."""
+    require_pin(request)
+    name = request.path_params["name"]
+    if not await _enrolled(name):
+        return JSONResponse({"photos": [], "learning": ADAPTIVE_LEARNING})
+    faces = (await cf("GET", "/faces", params={"subject": name})).json().get("faces", [])
+    enrolled = [f for f in faces if f.get("kind") != "learned"]
+    learned = sorted((f for f in faces if f.get("kind") == "learned"), key=lambda f: f.get("ts") or "", reverse=True)
+    return JSONResponse({"photos": enrolled + learned, "learning": ADAPTIVE_LEARNING})
+
+
+async def employee_photo_image(request: Request):
+    require_pin(request)
+    r = await cf("GET", f"/faces/{request.path_params['image_id']}/img", params={"subject": request.path_params["name"]})
+    return Response(r.content, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+async def employee_photo_delete(request: Request):
+    require_pin(request)
+    await cf("DELETE", f"/faces/{request.path_params['image_id']}", params={"subject": request.path_params["name"]})
+    return JSONResponse({"ok": True})
 
 
 async def enrol_photo(request: Request):
@@ -1309,6 +1341,9 @@ routes = [
     Route("/api/export.csv", export_csv),
     Route("/api/employees", employees),
     Route("/api/employees/{name}/photo", enrol_photo, methods=["POST"]),
+    Route("/api/employees/{name}/photos", employee_photos),
+    Route("/api/employees/{name}/photos/{image_id}", employee_photo_image),
+    Route("/api/employees/{name}/photos/{image_id}", employee_photo_delete, methods=["DELETE"]),
     Route("/api/employees/{name}", delete_employee, methods=["DELETE"]),
     Route("/api/employees/{name}", rename_employee, methods=["PUT"]),
     Route("/api/people", people_list),

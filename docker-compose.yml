@@ -20,6 +20,14 @@ services:
     build: ./recognizer
     restart: always
     container_name: "recognizer"
+    environment:
+      - TZ=${TZ:-Indian/Maldives}   # "today" for the daily best photos
+      # keep each recognised person's best photos per day, for a week (see README "Enrol staff")
+      - DAILY_BEST=${DAILY_BEST:-2}
+      - DAILY_KEEP_DAYS=${DAILY_KEEP_DAYS:-7}
+      - LEARN_MIN_SIMILARITY=${LEARN_MIN_SIMILARITY:-0.45}
+      - LEARN_MARGIN=${LEARN_MARGIN:-0.08}
+      - LEARN_ANCHOR_SIMILARITY=${LEARN_ANCHOR_SIMILARITY:-0.28}
     volumes:
       - recognizer-data:/data
     expose:
@@ -65,6 +73,7 @@ services:
       - LATE_GRACE_MINUTES=${LATE_GRACE_MINUTES:-5}
       - MOOD_TRACKING=${MOOD_TRACKING:-on}
       - INTERACTION_RETENTION_DAYS=${INTERACTION_RETENTION_DAYS:-365}
+      - ADAPTIVE_LEARNING=${ADAPTIVE_LEARNING:-on}
       # ---- live flights + assistance requests ----
       - FLIGHT_PROVIDER=${FLIGHT_PROVIDER:-}
       - FLIGHT_AIRPORT=${FLIGHT_AIRPORT:-MLE}

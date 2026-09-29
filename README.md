@@ -16,7 +16,7 @@ Everything except the optional language services runs on one Mac (or any Docker 
 
 | Part | What it is |
 |---|---|
-| `recognizer/` | YuNet detection + SFace 128-d embeddings + **FER+ emotion** + dominant **outfit colour**, all OpenCV/ONNX, ARM-native. Stores one vector per enrolled photo — no photos kept. |
+| `recognizer/` | YuNet detection + SFace 128-d embeddings + **FER+ emotion** + dominant **outfit colour**, all OpenCV/ONNX, ARM-native. Stores one vector + a small face crop per enrolled photo, and learns each person's 2 best kiosk photos a day (kept 7 days) to follow changes in appearance. |
 | `listener/` | **faster-whisper** (base, int8) — turns a voice clip into text and detects the language (99 languages). Model is baked into the image, works offline. |
 | `attendance/` | `app.py` routes · `brain.py` conversation + greetings · `phrases.py` multilingual templates · `insights.py` analytics · `store.py` schema · `demo.py` demo data · `static/` kiosk, admin, insights pages |
 | `caddy` | HTTPS with a local CA. iPad Safari only allows camera + microphone on HTTPS pages. |
@@ -129,8 +129,12 @@ another airport before enrolling anyone; "Remove demo data" deletes only demo ro
 
 ## Privacy & compliance — read before deploying
 
-* Camera frames and voice clips are processed in memory and discarded. Only face *vectors*,
-  names, timestamps, mood *labels*, outfit colour names and conversation text are stored.
+* Camera frames and voice clips are processed in memory and discarded. Stored: face *vectors*
+  and a small **face crop** (face only, no background) per enrolled photo; for recognised staff,
+  the **2 best kiosk photos per day, deleted after 7 days** (`DAILY_BEST`, `DAILY_KEEP_DAYS`), used
+  to keep recognising people whose look changes; names, timestamps, mood *labels*, outfit colour
+  names and conversation text. Visitor faces are never kept. Set `ADAPTIVE_LEARNING=off` to stop
+  collecting daily photos; admins can review and remove any photo under **Admin → Enrol**.
 * Only text and derived signals go to Jev / Claude — never images or audio.
 * Each staff member can opt out of mood tracking (Admin → People); opting out also erases past
   mood readings. "Forget conversations" wipes their chat history and memories. Deleting a person
@@ -172,7 +176,13 @@ Settings** → enable full trust for *Caddy Local Authority*.
 
 Open `https://<mac-ip>:8443/admin` (or `http://localhost:8181/admin` on the Mac), PIN, **Enrol** tab:
 type the name → **Start camera** → **Capture & add** 3–5 times (front, slight left/right,
-with/without glasses), or upload photos. Good frontal light, one face in frame.
+with/without glasses), or upload photos. Good frontal light, one face in frame. Each photo shows
+up below the camera as a face-crop thumbnail (✕ removes a bad one). The same screen shows the
+**Learned at the kiosk** photos: every day the recognizer keeps the person's 2 sharpest,
+most front-facing photos from confident matches, for 7 days, and matches against them too — so
+a new beard, glasses or haircut keeps being recognised. A frame is only learned when it matches
+clearly (`LEARN_MIN_SIMILARITY`), beats every other person by `LEARN_MARGIN`, and still resembles
+the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't drift to someone else.
 
 ## 4. Set up each iPad kiosk
 
@@ -205,6 +215,11 @@ with/without glasses), or upload photos. Good frontal light, one face in frame.
 | `DUPLICATE_WINDOW_SECONDS` | `60` | Same action for same person within this window is ignored |
 | `ADMIN_PIN` | `2468` | Change it |
 | `TZ` | `Indian/Maldives` | Timestamps stored in this zone |
+| `ADAPTIVE_LEARNING` | `on` | Let the recognizer keep daily best photos of recognised staff |
+
+Recognizer (`recognizer.environment`): `DAILY_BEST` (2 photos/person/day), `DAILY_KEEP_DAYS` (7),
+`LEARN_MIN_SIMILARITY` (0.45), `LEARN_MARGIN` (0.08 over the next person), `LEARN_ANCHOR_SIMILARITY`
+(0.28 against enrolled photos), `LEARN_COOLDOWN_SECONDS` (15).
 
 After a change: `docker compose up -d attendance` (or double-click `start.command`).
 

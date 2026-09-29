@@ -12,7 +12,19 @@ Implements the subset of CompreFace's /api/v1/recognition/* API that attendance 
   PUT    /subjects/NAME  {"subject": new}
 
 Similarity is SFace cosine (0..1); same-person pairs score ~0.4–0.8, different people <~0.3.
-Employee face vectors are stored under /data; raw photos are not kept.
+Employee face vectors are stored under /data, each with a small face-crop JPEG (the face only, no
+background) so admins can see what was enrolled. Visitor frames are never kept.
+
+Daily learning (POST /recognize?learn=1): when a staff member is matched confidently, the
+recognizer keeps the DAILY_BEST (2) best-quality face crops + vectors of that person per day and
+drops them after DAILY_KEEP_DAYS (7). They are matched alongside the enrolled photos, so gradual
+changes (beard, glasses, haircut, weight) keep being recognised. To stop drift or poisoning, a frame
+is only learned when it matches the person clearly (LEARN_MIN_SIMILARITY), beats every other person by
+LEARN_MARGIN, and still resembles their *enrolled* photos (LEARN_ANCHOR_SIMILARITY).
+
+Extra routes:  GET /faces?subject=NAME (kind/day/quality per photo),
+               GET /faces/{image_id}/img?subject=NAME (face crop JPEG),
+               DELETE /faces/{image_id}?subject=NAME
 
 Each recognised face also carries two on-device signals, computed from the same frame and
 then discarded with it:
@@ -20,11 +32,12 @@ then discarded with it:
   * attire   — dominant clothing colour from the region below the chin, plus `hivis`: the share
                of fluorescent yellow/lime/orange pixels (a high-visibility vest) in the torso area
 """
-import os, uuid, threading, json, time
+import os, re, uuid, threading, json, time, fcntl
+from datetime import date, datetime, timedelta
 import numpy as np
 import cv2
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.requests import Request
 from starlette.routing import Route
 
@@ -43,6 +56,14 @@ _lock = threading.Lock()
 _det = cv2.FaceDetectorYN.create(DET_MODEL, "", (320, 320), 0.6, 0.3, 5000)
 _rec = cv2.FaceRecognizerSF.create(REC_MODEL, "")
 _emo = cv2.dnn.readNetFromONNX(EMO_MODEL) if os.path.exists(EMO_MODEL) else None
+# daily learning (see module docstring)
+DAILY_BEST = int(os.environ.get("DAILY_BEST", "2"))
+DAILY_KEEP_DAYS = int(os.environ.get("DAILY_KEEP_DAYS", "7"))
+LEARN_MIN = float(os.environ.get("LEARN_MIN_SIMILARITY", "0.45"))
+LEARN_ANCHOR = float(os.environ.get("LEARN_ANCHOR_SIMILARITY", "0.28"))
+LEARN_MARGIN = float(os.environ.get("LEARN_MARGIN", "0.08"))
+LEARN_COOLDOWN = float(os.environ.get("LEARN_COOLDOWN_SECONDS", "15"))
+_ID_RE = re.compile(r"^(d\d{8}-)?[0-9a-f]{32}$")  # enrolled: <hex>; learned: d<YYYYMMDD>-<hex>
 EMOTIONS = ("neutral", "happiness", "surprise", "sadness", "anger", "disgust", "fear", "contempt")
 
 # in-memory index: {subject: [(image_id, np.float32[128]), ...]}
@@ -66,19 +87,34 @@ def _touch_stamp():
     _sync_index()
 
 
+_purged_day = None
+
+
 def _sync_index():
-    global _loaded_at
+    global _loaded_at, _purged_day
+    if _purged_day != date.today():
+        _purged_day = date.today()
+        _purge_daily()
     m = _stamp_mtime()
     if m != _loaded_at:
         _load_index()
         _loaded_at = m
 
 
+_dir_mtime: dict = {}  # subject dir -> mtime when this worker last read it
+
+
 def _load_index():
-    _index.clear()
-    for subj in sorted(os.listdir(FACES)):
+    """Re-read only the subject folders that changed (learning adds files several times a day)."""
+    seen = set()
+    for subj in os.listdir(FACES):
         d = os.path.join(FACES, subj)
         if not os.path.isdir(d):
+            continue
+        name = _unslug(subj)
+        seen.add(name)
+        m = os.stat(d).st_mtime
+        if _dir_mtime.get(name) == m and name in _index:
             continue
         vecs = []
         for fn in os.listdir(d):
@@ -87,11 +123,64 @@ def _load_index():
                     vecs.append((fn[:-4], np.load(os.path.join(d, fn))))
                 except Exception:
                     pass
-        _index[_unslug(subj)] = vecs
+        _index[name] = vecs
+        _dir_mtime[name] = m
+    for name in list(_index):
+        if name not in seen:
+            _index.pop(name, None)
+            _dir_mtime.pop(name, None)
+
+
+def _is_learned(image_id: str) -> bool:
+    return image_id[:1] == "d" and image_id[9:10] == "-"
+
+
+def _day_of(image_id: str):
+    """Learned photos carry their day in the id; enrolled photos return None."""
+    if _is_learned(image_id):
+        try:
+            return datetime.strptime(image_id[1:9], "%Y%m%d").date()
+        except ValueError:
+            return None
+    return None
+
+
+def _purge_daily():
+    """Drop learned photos older than DAILY_KEEP_DAYS (today counts as day 1)."""
+    cut = date.today() - timedelta(days=DAILY_KEEP_DAYS - 1)
+    removed = False
+    for subj in os.listdir(FACES):
+        d = os.path.join(FACES, subj)
+        if not os.path.isdir(d):
+            continue
+        for fn in os.listdir(d):
+            day = _day_of(fn.split(".")[0])
+            if day is not None and day < cut:
+                with _quiet():
+                    os.remove(os.path.join(d, fn))
+                    removed = True
+    if removed:
+        _touch_stamp()
+
+
+class _quiet:
+    """Ignore missing files: several workers may purge/replace the same file at once."""
+    def __enter__(self):
+        return self
+
+    def __exit__(self, et, e, tb):
+        return et is not None and issubclass(et, FileNotFoundError)
 
 
 def _slug(name: str) -> str:
     return name.replace("/", "_")
+
+
+def _subject_dir(name: str) -> str:
+    d = os.path.realpath(os.path.join(FACES, _slug(name)))
+    if os.path.dirname(d) != os.path.realpath(FACES):
+        raise ValueError("bad subject")
+    return d
 
 
 def _unslug(s: str) -> str:
@@ -104,7 +193,7 @@ def _decode(data: bytes):
 
 
 def _detect_all(img, timing: dict = None, limit: int = 0):
-    """Return list of (box[x,y,w,h], score, aligned_feature) sorted by score desc.
+    """Return list of (box[x,y,w,h], score, aligned_feature, raw_detection) sorted by score desc.
     Only the first `limit` faces (0 = all) get an embedding; `timing` collects stage times in ms."""
     h, w = img.shape[:2]
     with _lock:
@@ -118,7 +207,7 @@ def _detect_all(img, timing: dict = None, limit: int = 0):
             for f in ranked[:limit] if limit > 0 else ranked:
                 aligned = _rec.alignCrop(img, f)
                 feat = _rec.feature(aligned).flatten().astype(np.float32).copy()
-                results.append((f[:4].tolist(), float(f[-1]), feat))
+                results.append((f[:4].tolist(), float(f[-1]), feat, f))
         t2 = time.perf_counter()
     if timing is not None:
         timing["detect"] = (t1 - t0) * 1000
@@ -215,14 +304,125 @@ def _cos(a, b) -> float:
 
 
 def _best_matches(feat, top=1):
+    """[(subject, best similarity over all photos, best over enrolled photos only)], best first."""
     scores = []
     for subj, vecs in _index.items():
         if not vecs:
             continue
-        s = max(_cos(feat, v) for _, v in vecs)
-        scores.append((subj, s))
+        best, base = 0.0, 0.0
+        for image_id, v in vecs:
+            s = _cos(feat, v)
+            best = max(best, s)
+            if not _is_learned(image_id):
+                base = max(base, s)
+        scores.append((subj, best, base))
     scores.sort(key=lambda x: -x[1])
     return scores[:top]
+
+
+def _face_crop(img, box, size=224):
+    """Square face crop with a little margin, for the admin gallery (never the whole frame)."""
+    x, y, w, h = [int(v) for v in box]
+    H, W = img.shape[:2]
+    side = int(max(w, h) * 1.4)
+    cx, cy = x + w // 2, y + h // 2
+    x0, y0 = max(0, cx - side // 2), max(0, cy - side // 2)
+    x1, y1 = min(W, x0 + side), min(H, y0 + side)
+    crop = img[y0:y1, x0:x1]
+    if crop.size == 0:
+        return None
+    s = size / max(crop.shape[:2])
+    if s < 1:
+        crop = cv2.resize(crop, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return buf.tobytes() if ok else None
+
+
+def _quality(img, f) -> float:
+    """0..1 score for how useful a frame is as a reference photo: sharp, large, frontal,
+    well lit and confidently detected. Deliberately ignores similarity so that a good photo of a
+    changed look is not penalised."""
+    x, y, w, h = [float(v) for v in f[:4]]
+    size = min(1.0, w / 160.0)
+    xi, yi = max(0, int(x)), max(0, int(y))
+    face = img[yi:yi + int(h), xi:xi + int(w)]
+    if face.size == 0:
+        return 0.0
+    gray = cv2.cvtColor(cv2.resize(face, (112, 112)), cv2.COLOR_BGR2GRAY)
+    sharp = min(1.0, cv2.Laplacian(gray, cv2.CV_64F).var() / 250.0)
+    mean = float(gray.mean())
+    light = max(0.0, 1.0 - abs(mean - 125) / 90.0)
+    # yaw proxy from YuNet landmarks: nose tip should sit midway between the eyes
+    rex, lex, nx = float(f[4]), float(f[6]), float(f[8])
+    eye = abs(lex - rex) or 1.0
+    frontal = max(0.0, 1.0 - abs(nx - (rex + lex) / 2) / (eye / 2))
+    det = float(f[-1])
+    return round(det * (0.35 + 0.65 * size) * (0.3 + 0.7 * sharp) * (0.4 + 0.6 * light) * (0.3 + 0.7 * frontal), 4)
+
+
+_last_learn: dict = {}  # subject -> time this worker last considered a frame
+
+
+def _maybe_learn(img, box, f, feat, subs):
+    """Keep this frame as one of today's DAILY_BEST reference photos for the matched person,
+    if it is a confident, unambiguous match and better than what is already kept for today."""
+    if not subs:
+        return None
+    subj, sim, base = subs[0]
+    second = subs[1][1] if len(subs) > 1 else 0.0
+    if sim < LEARN_MIN or sim - second < LEARN_MARGIN or base < LEARN_ANCHOR:
+        return None
+    now = time.time()
+    if now - _last_learn.get(subj, 0) < LEARN_COOLDOWN:
+        return None
+    q = _quality(img, f)
+    if q < 0.25:
+        return None
+    _last_learn[subj] = now
+    try:
+        d = _subject_dir(subj)
+    except ValueError:
+        return None
+    if not os.path.isdir(d):
+        return None
+    tag = "d" + date.today().strftime("%Y%m%d")
+    with open(os.path.join(d, ".lock"), "a") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        kept = []  # (quality, image_id, vector)
+        for fn in os.listdir(d):
+            if fn.startswith(tag) and fn.endswith(".json"):
+                iid = fn[:-5]
+                try:
+                    with open(os.path.join(d, fn)) as fh:
+                        meta = json.load(fh)
+                    kept.append((meta.get("quality", 0), iid, np.load(os.path.join(d, iid + ".npy"))))
+                except Exception:
+                    pass
+        # a near-identical frame replaces its twin rather than taking a second slot (keeps variety)
+        twin = next((k for k in kept if _cos(feat, k[2]) > 0.93), None)
+        if twin is not None:
+            drop = twin if q > twin[0] else None
+        elif len(kept) >= DAILY_BEST:
+            worst = min(kept, key=lambda k: k[0])
+            drop = worst if q > worst[0] else None
+        else:
+            drop = ()
+        if drop is None:
+            return None
+        iid = f"{tag}-{uuid.uuid4().hex}"
+        jpg = _face_crop(img, box)
+        if jpg:
+            with open(os.path.join(d, iid + ".jpg"), "wb") as fh:
+                fh.write(jpg)
+        with open(os.path.join(d, iid + ".json"), "w") as fh:
+            json.dump({"quality": q, "similarity": round(sim, 4), "ts": datetime.now().isoformat(timespec="seconds")}, fh)
+        np.save(os.path.join(d, iid + ".npy"), feat)
+        if drop:
+            for ext in (".npy", ".jpg", ".json"):
+                with _quiet():
+                    os.remove(os.path.join(d, drop[1] + ext))
+    _touch_stamp()
+    return iid
 
 
 # --------------------------------------------------------------------------- routes
@@ -236,12 +436,58 @@ async def get_subjects(request):
 
 
 async def get_faces(request):
+    """All photos, or one person's (?subject=) with details: kind is "enrolled" or "learned"
+    (a daily best from the kiosk, with its day, quality and time)."""
     _sync_index()
+    only = request.query_params.get("subject")
     faces = []
     for subj, vecs in _index.items():
+        if only is not None and subj != only:
+            continue
         for image_id, _ in vecs:
-            faces.append({"image_id": image_id, "subject": subj})
+            day = _day_of(image_id)
+            item = {"image_id": image_id, "subject": subj, "kind": "learned" if day else "enrolled"}
+            if only is not None:
+                d = _subject_dir(subj)
+                item["has_image"] = os.path.exists(os.path.join(d, image_id + ".jpg"))
+                if day:
+                    item["day"] = day.isoformat()
+                    try:
+                        with open(os.path.join(d, image_id + ".json")) as fh:
+                            item.update(json.load(fh))
+                    except Exception:
+                        pass
+            faces.append(item)
     return JSONResponse({"faces": faces})
+
+
+def _photo_path(request: Request, ext: str):
+    image_id = request.path_params["image_id"]
+    if not _ID_RE.match(image_id):
+        return None
+    try:
+        return os.path.join(_subject_dir(request.query_params.get("subject", "")), image_id + ext)
+    except ValueError:
+        return None
+
+
+async def face_image(request: Request):
+    p = _photo_path(request, ".jpg")
+    if not p or not os.path.exists(p):
+        return JSONResponse({"message": "No image for this photo"}, status_code=404)
+    with open(p, "rb") as fh:
+        return Response(fh.read(), media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+async def delete_face(request: Request):
+    p = _photo_path(request, ".npy")
+    if not p or not os.path.exists(p):
+        return JSONResponse({"message": "Photo not found"}, status_code=404)
+    for ext in (".npy", ".jpg", ".json"):
+        with _quiet():
+            os.remove(p[:-4] + ext)
+    _touch_stamp()
+    return JSONResponse({"deleted": 1})
 
 
 async def add_face(request: Request):
@@ -258,10 +504,17 @@ async def add_face(request: Request):
     faces = _detect_all(img)
     if not faces:
         return JSONResponse({"message": "No face is found in the given image"}, status_code=400)
-    _, _, feat = faces[0]
+    box, _, feat, _ = faces[0]
     image_id = uuid.uuid4().hex
-    d = os.path.join(FACES, _slug(subject))
+    try:
+        d = _subject_dir(subject)
+    except ValueError:
+        return JSONResponse({"message": "Invalid subject name"}, status_code=400)
     os.makedirs(d, exist_ok=True)
+    jpg = _face_crop(img, box)
+    if jpg:
+        with open(os.path.join(d, image_id + ".jpg"), "wb") as fh:
+            fh.write(jpg)
     np.save(os.path.join(d, image_id + ".npy"), feat)
     _index.setdefault(subject, []).append((image_id, feat))
     _touch_stamp()
@@ -272,6 +525,7 @@ async def recognize(request: Request):
     """Query params (CompreFace-compatible plus two extras):
       extras=0|1               compute emotion + clothing for the top face (default 1)
       extras_min_similarity=x  ...or compute them only when the top match reaches x
+      learn=0|1                keep the frame as a daily best for the matched person (see top)
     The response carries "timing" (ms per stage) for latency monitoring."""
     t_start = time.perf_counter()
     limit = int(request.query_params.get("limit", 0) or 0)
@@ -279,6 +533,7 @@ async def recognize(request: Request):
     want_extras = request.query_params.get("extras", "1") not in ("0", "false")
     extras_min = request.query_params.get("extras_min_similarity")
     extras_min = float(extras_min) if extras_min else None
+    learn = request.query_params.get("learn", "0") in ("1", "true")
     form = await request.form()
     up = form.get("file")
     if up is None:
@@ -296,10 +551,12 @@ async def recognize(request: Request):
     result = []
     H, W = img.shape[:2]
     extras_ms = 0.0
-    for i, (box, score, feat) in enumerate(faces):
+    learned = None
+    for i, (box, score, feat, raw) in enumerate(faces):
         x, y, w, h = box
+        matches = _best_matches(feat, top=max(2, pred))
         subs = [{"subject": s, "similarity": round(max(0.0, min(1.0, sim)), 5)}
-                for s, sim in _best_matches(feat, top=max(1, pred))]
+                for s, sim, _ in matches[:max(1, pred)]]
         # extra signals for the largest face only (the person standing at the kiosk)
         top = subs[0]["similarity"] if subs else 0.0
         extras = i == 0 and (want_extras or (extras_min is not None and top >= extras_min))
@@ -307,6 +564,13 @@ async def recognize(request: Request):
         emotion = _emotion(img, box) if extras else None
         attire = _attire(img, box) if extras else None
         extras_ms += (time.perf_counter() - te) * 1000
+        if learn and i == 0:
+            tl = time.perf_counter()
+            try:
+                learned = _maybe_learn(img, box, raw, feat, matches)
+            except OSError:
+                learned = None
+            timing["learn"] = (time.perf_counter() - tl) * 1000
         result.append({
             "box": {"probability": round(score, 4),
                     "x_min": int(x), "y_min": int(y),
@@ -319,13 +583,16 @@ async def recognize(request: Request):
     timing["match"] = (time.perf_counter() - t0) * 1000 - extras_ms
     timing["extras"] = extras_ms
     timing["total"] = (time.perf_counter() - t_start) * 1000
-    return JSONResponse({"result": result, "timing": {k: round(v, 2) for k, v in timing.items()}})
+    return JSONResponse({"result": result, "learned": learned, "timing": {k: round(v, 2) for k, v in timing.items()}})
 
 
 async def delete_subject(request: Request):
     name = request.path_params["name"]
     _index.pop(name, None)
-    d = os.path.join(FACES, _slug(name))
+    try:
+        d = _subject_dir(name)
+    except ValueError:
+        return JSONResponse({"message": "Invalid subject name"}, status_code=400)
     if os.path.isdir(d):
         for fn in os.listdir(d):
             os.remove(os.path.join(d, fn))
@@ -339,7 +606,10 @@ async def rename_subject(request: Request):
     new = ((await request.json()).get("subject") or "").strip()
     if not new:
         return JSONResponse({"message": "subject is required"}, status_code=400)
-    od, nd = os.path.join(FACES, _slug(old)), os.path.join(FACES, _slug(new))
+    try:
+        od, nd = _subject_dir(old), _subject_dir(new)
+    except ValueError:
+        return JSONResponse({"message": "Invalid subject name"}, status_code=400)
     if os.path.isdir(od):
         os.rename(od, nd)
     _index[new] = _index.pop(old, [])
@@ -353,6 +623,8 @@ routes = [
     Route("/api/v1/recognition/subjects/", get_subjects, methods=["GET"]),
     Route("/api/v1/recognition/faces", get_faces, methods=["GET"]),
     Route("/api/v1/recognition/faces", add_face, methods=["POST"]),
+    Route("/api/v1/recognition/faces/{image_id}/img", face_image, methods=["GET"]),
+    Route("/api/v1/recognition/faces/{image_id}", delete_face, methods=["DELETE"]),
     Route("/api/v1/recognition/recognize", recognize, methods=["POST"]),
     Route("/api/v1/recognition/subjects/{name}", delete_subject, methods=["DELETE"]),
     Route("/api/v1/recognition/subjects/{name}", rename_subject, methods=["PUT"]),

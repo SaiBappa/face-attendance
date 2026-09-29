@@ -349,6 +349,17 @@
   .zdot { width:12px; height:12px; border-radius:50%; flex:none; border:1px solid rgba(0,0,0,.25); display:inline-block; }
   .z-green { background:#16a34a; } .z-red { background:#dc2626; } .z-orange { background:#ea580c; }
   .z-blue { background:#2563eb; } .z-yellow { background:#eab308; } .z-white { background:#fff; }
+  .gal-h { margin:22px 0 8px; font-size:15px; }
+  .thumbs { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px; }
+  .thumb { position:relative; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface-2); }
+  .thumb .ph { aspect-ratio:1; display:grid; place-items:center; background:#000; color:#9ca3af; font-size:12px; text-align:center; padding:6px; }
+  .thumb img { width:100%; aspect-ratio:1; object-fit:cover; display:block; transform:scaleX(-1); }
+  .thumb .cap { padding:5px 8px; font-size:12px; color:var(--muted); line-height:1.35; }
+  .thumb .cap b { color:var(--fg); font-weight:600; }
+  .thumb .rm { position:absolute; top:6px; right:6px; width:28px; height:28px; border-radius:50%; border:0; background:rgba(0,0,0,.6); color:#fff; font-size:15px; cursor:pointer; display:grid; place-items:center; }
+  .thumb .rm:hover, .thumb .rm:focus-visible { background:var(--bad); }
+  .thumb.new { outline:2px solid var(--accent); outline-offset:1px; }
+  .thumb.new::after { content:'new'; position:absolute; top:6px; left:6px; background:var(--accent); color:#fff; font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; }
   @media (max-width:900px) { .enrol-form { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media (max-width:600px) { .enrol-form { grid-template-columns:minmax(0,1fr); } }
 
@@ -513,7 +524,7 @@
 <section id="s-enrol">
   <div class="card">
     <h2>Enrol / add photos</h2>
-    <p class="muted" style="margin-top:0">Pick an existing profile or type a new name, fill in the pass details, then add photos. Fields marked <span class="err">*</span> are required. Only face vectors are stored — the photos themselves are discarded after processing.</p>
+    <p class="muted" style="margin-top:0">Pick an existing profile or type a new name, fill in the pass details, then add photos. Fields marked <span class="err">*</span> are required. Each photo is kept as a face vector plus a small face crop so you can check it below; the rest of the picture is discarded.</p>
     <div class="enrol-form" id="enrolForm">
       <label class="field"><span>Name <span class="req">*</span></span><input id="enrolName" placeholder="e.g. Aishath Ali" list="nameList" autocomplete="off" required></label>
       <label class="field"><span>Record card number <span class="req">*</span></span><input id="en_card" placeholder="e.g. RC-10234" autocomplete="off" required></label>
@@ -534,6 +545,13 @@
       </div>
     </div>
     <p id="enrolMsg" class="muted"></p>
+    <div id="enrolGallery" hidden>
+      <h3 class="gal-h">Enrolled photos <span class="muted" id="galEnrolledN"></span></h3>
+      <div class="thumbs" id="galEnrolled"></div>
+      <h3 class="gal-h">Learned at the kiosk <span class="muted" id="galLearnedN"></span></h3>
+      <p class="hint" id="galLearnedHint" style="margin-top:0">Each day the kiosk keeps the 2 sharpest, most front-facing photos of this person from confident matches, for 7 days. They are matched alongside the enrolled photos so a new beard, glasses or haircut is still recognised. Remove any that look wrong.</p>
+      <div class="thumbs" id="galLearned"></div>
+    </div>
   </div>
 </section>
 
@@ -989,7 +1007,7 @@
     const [p, e] = await Promise.all([api('/api/people'), api('/api/employees').catch(err => ({ employees: [], err }))]);
     const m = new Map();
     p.people.forEach(x => m.set(x.name, { ...x, enrolled: false, photos: 0 }));
-    e.employees.forEach(x => m.set(x.name, { mood_consent: 1, ...(x.profile || {}), ...(m.get(x.name) || {}), name: x.name, enrolled: true, photos: x.photos }));
+    e.employees.forEach(x => m.set(x.name, { mood_consent: 1, ...(x.profile || {}), ...(m.get(x.name) || {}), name: x.name, enrolled: true, photos: x.photos, learned: x.learned || 0 }));
     PEOPLE = [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
     $('peopleWarn').hidden = !e.err;
     if (e.err) $('peopleWarn').textContent = `Face recognizer unavailable (${e.err.message}) — photo counts are not shown.`;
@@ -1019,7 +1037,7 @@
     current = x;
     $('pAv').outerHTML = avatar(x.name).replace('class="avatar ', 'id="pAv" class="avatar ');
     $('pName').textContent = x.name;
-    $('pMeta').textContent = (x.enrolled ? `Face enrolled · ${x.photos} photo${x.photos === 1 ? '' : 's'}` : 'Face not enrolled') + (x.demo ? ' · demo profile' : '');
+    $('pMeta').textContent = (x.enrolled ? `Face enrolled · ${x.photos} photo${x.photos === 1 ? '' : 's'}` + (x.learned ? ` + ${x.learned} learned this week` : '') : 'Face not enrolled') + (x.demo ? ' · demo profile' : '');
     $('pf_role').value = x.role || ''; $('pf_department').value = x.department || '';
     $('pf_card').value = x.record_card || ''; $('pf_zone').value = x.zone || ''; $('pf_expiry').value = x.pass_expiry || ''; $('pf_dob').value = x.dob || '';
     $('pf_shift').value = x.shift_start || ''; $('pf_nick').value = x.nickname || '';
@@ -1084,6 +1102,7 @@
     const name = $('enrolName').value.trim(); if (!name || name === enrolFilled) return;
     let x;
     try { x = (await api('/api/people')).people.find(p => p.name.toLowerCase() === name.toLowerCase()); } catch (e) { return; }
+    loadGallery(x ? x.name : '');
     if (!x) return;
     enrolFilled = $('enrolName').value = x.name;
     $('en_card').value = x.record_card || ''; $('en_role').value = x.role || ''; $('en_dob').value = x.dob || ''; $('en_expiry').value = x.pass_expiry || '';
@@ -1106,6 +1125,42 @@
     await api('/api/people/' + enc(name), jsonBody('PUT', body));
     return name;
   }
+  // ---- photo gallery for the person being enrolled ----
+  let galUrls = [], galName = '';
+  const fmtDay = d => new Date(d + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  async function loadGallery(name, fresh = []) {
+    galName = name || '';
+    galUrls.forEach(URL.revokeObjectURL); galUrls = [];
+    if (!name) { $('enrolGallery').hidden = true; return; }
+    let j;
+    try { j = await api(`/api/employees/${enc(name)}/photos`); } catch (e) { $('enrolGallery').hidden = true; return; }
+    if (name !== galName) return;  // a newer name was picked meanwhile
+    const enrolled = j.photos.filter(p => p.kind !== 'learned'), learned = j.photos.filter(p => p.kind === 'learned');
+    $('enrolGallery').hidden = !j.photos.length;
+    const tile = p => {
+      const cap = p.kind === 'learned'
+        ? `<b>${esc(fmtDay(p.day))}</b>${p.ts ? ' · ' + esc(p.ts.slice(11, 16)) : ''}<br>quality ${Math.round((p.quality || 0) * 100)}%`
+        : (fresh.includes(p.image_id) ? '<b>Just added</b>' : 'Enrolled');
+      const img = p.has_image ? `<img alt="Face photo of ${esc(name)}" data-img="${esc(p.image_id)}">` : '<div class="ph">Vector only<br>(added before previews)</div>';
+      return `<div class="thumb${fresh.includes(p.image_id) ? ' new' : ''}">${img}<button class="rm" data-rm="${esc(p.image_id)}" aria-label="Remove this photo" title="Remove this photo">✕</button><div class="cap">${cap}</div></div>`;
+    };
+    $('galEnrolledN').textContent = `· ${enrolled.length}` + (enrolled.length < 3 ? ' — add a few more' : '');
+    $('galEnrolled').innerHTML = enrolled.map(tile).join('') || '<div class="empty" style="grid-column:1/-1">None yet.</div>';
+    $('galLearnedN').textContent = learned.length ? `· ${learned.length}` : '';
+    $('galLearned').innerHTML = learned.map(tile).join('') || `<div class="empty" style="grid-column:1/-1">${j.learning ? 'Nothing yet — photos appear here after this person is recognised at a kiosk.' : 'Daily learning is off (ADAPTIVE_LEARNING=off).'}</div>`;
+    // images need the PIN header, so load them as blobs
+    for (const el of $('enrolGallery').querySelectorAll('img[data-img]')) {
+      fetch(`/api/employees/${enc(name)}/photos/${enc(el.dataset.img)}`, { headers: { 'X-Admin-Pin': PIN } })
+        .then(r => r.ok ? r.blob() : null).then(b => { if (b && name === galName) { const u = URL.createObjectURL(b); galUrls.push(u); el.src = u; } }).catch(() => {});
+    }
+  }
+  $('enrolGallery').onclick = async evt => {
+    const b = evt.target.closest('[data-rm]'); if (!b) return;
+    if (!confirm('Remove this photo? The kiosk will no longer match against it.')) return;
+    try { await api(`/api/employees/${enc(galName)}/photos/${enc(b.dataset.rm)}`, { method: 'DELETE' }); loadGallery(galName); }
+    catch (e) { $('enrolMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  };
+
   async function addPhoto(name, blob) {
     const fd = new FormData(); fd.append('file', blob, 'face.jpg');
     return api(`/api/employees/${enc(name)}/photo`, { method: 'POST', body: fd });
@@ -1116,7 +1171,7 @@
     const c = document.createElement('canvas'); c.width = ev.videoWidth; c.height = ev.videoHeight; c.getContext('2d').drawImage(ev, 0, 0);
     c.toBlob(async blob => {
       $('enrolMsg').textContent = 'Saving…';
-      try { await addPhoto(name, blob); $('enrolMsg').textContent = `✓ Photo added for ${name}. Take 2–4 more from slightly different angles.`; }
+      try { const r = await addPhoto(name, blob); $('enrolMsg').textContent = `✓ Photo added for ${name}. Take 2–4 more from slightly different angles.`; loadGallery(name, [r.image_id]); }
       catch (e) { $('enrolMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
     }, 'image/jpeg', 0.92);
   };
@@ -1124,10 +1179,11 @@
     const files = [...$('files').files]; if (!files.length) return $('enrolMsg').textContent = 'Choose photos first';
     let name; try { name = await saveEnrolProfile(); } catch (e) { return $('enrolMsg').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
     if (!name) return;
-    let ok = 0; const errs = [];
+    let ok = 0; const errs = [], added = [];
     $('enrolMsg').textContent = 'Uploading…';
-    for (const f of files) { try { await addPhoto(name, f); ok++; } catch (e) { errs.push(`${f.name}: ${e.message}`); } }
+    for (const f of files) { try { added.push((await addPhoto(name, f)).image_id); ok++; } catch (e) { errs.push(`${f.name}: ${e.message}`); } }
     $('enrolMsg').innerHTML = `✓ ${ok} photo(s) added for ${esc(name)}.` + (errs.length ? `<br><span class="err">${errs.map(esc).join('<br>')}</span>` : '');
+    loadGallery(name, added);
   };
 
   // ---- locations ----
@@ -1373,7 +1429,7 @@
     ].join('');
     const li = (ic, html) => `<li><span class="ic">${ic}</span><span>${html}</span></li>`;
     $('privacy').innerHTML = [
-      li('🔒', '<b>Faces are never stored.</b> Camera frames are processed in memory; only a numeric face vector is kept for enrolled staff.'),
+      li('🔒', '<b>Visitor faces are never stored.</b> Camera frames are processed in memory. For enrolled staff a face vector and a small face crop are kept per enrolled photo, plus their 2 best kiosk photos a day for 7 days (to keep up with changes in appearance); older ones are deleted automatically.'),
       li('👤', '<b>Visitors are anonymous.</b> Nobody is identified unless enrolled; a visitor\'s conversation context ends when they walk away.'),
       li('😊', `<b>Mood tracking:</b> ${esc(MOOD_MODES[e.mood_tracking] || e.mood_tracking)}.`),
       li('🗓', `<b>Retention:</b> conversations and sightings are kept for ${esc(e.retention_days)} days, then deleted.`),
