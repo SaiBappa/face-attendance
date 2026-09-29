@@ -719,17 +719,17 @@
   <div class="card">
     <h2>🦺 How the ramp safety pack works</h2>
     <ul class="how">
-      <li>At clock-in, staff in the departments below <b>confirm their PPE</b> with one tap per item — the <b>hi-vis vest is auto-detected</b> by the camera.</li>
+      <li><b>Each location decides</b> (Locations → a kiosk → <b>Safety rule to enter</b>): <b>None</b> (no safety check there), <b>Each worker's department rule</b>, or one named rule. Staff <b>confirm their PPE</b> with one tap per item — the <b>hi-vis vest is auto-detected</b> by the camera.</li>
       <li>Where the fatigue check is on, they also <b>rate how rested they feel</b> (1–5). Aura shows a <b>fatigue-risk score</b> with its reasons: rest since last shift, hours in the last 24 h / 7 days, consecutive days, night work, recent “tired” remarks and the self-rating.</li>
-      <li><b>Locations</b> can be linked to a rule (e.g. a “Hangar” rule with a hard hat). Anyone scanning there must meet it when they clock in <b>or return from a break</b>, whatever their department.</li>
-      <li>Missing PPE or a <b>HIGH</b> fatigue score is flagged to supervisors (Insights, and <code>SAFETY_WEBHOOK_URL</code> if set). It doesn't block clock-in — <b>unless the location is set to Enforce</b>: then entry is refused until all required PPE is confirmed.</li>
+      <li>A location linked to a named rule (e.g. a “Hangar” rule with a hard hat) asks everyone scanning there when they clock in <b>or return from a break</b>, whatever their department. A department rule is asked on clock-in only.</li>
+      <li>Missing PPE or a <b>HIGH</b> fatigue score is flagged to supervisors (Insights, and <code>SAFETY_WEBHOOK_URL</code> if set). It doesn't block clock-in — <b>unless the location is set to Enforce</b>: then entry is refused until the required PPE is confirmed.</li>
     </ul>
     <p class="notice" style="margin:12px 0 0">The fatigue score is a transparent risk indicator to prompt a conversation — not a medical assessment or a certified fatigue risk management system (FRMS).</p>
   </div>
   <div class="card">
     <div class="card-h"><h2>Safety rules</h2>
       <input id="sNew" placeholder="New rule, e.g. Hangar or a department…" list="deptList" style="width:260px"><button class="btn ghost sm" id="sAdd">+ Add</button></div>
-    <p class="muted" style="margin-top:0">A rule named after a department applies to that department's staff when they clock in. Any rule can also be linked to locations (Locations → a kiosk → <b>Safety rule</b>): everyone entering there must meet it, and <b>Enforce</b> refuses entry until all required PPE is confirmed. Departments and locations without a rule work as normal. Limits are used for the fatigue score.</p>
+    <p class="muted" style="margin-top:0">Rules only apply where a location uses them (Locations → a kiosk → <b>Safety rule to enter</b>). A rule named after a department is used for that department's staff at locations set to <b>Each worker's department rule</b>; any rule can also be picked for a location directly. <b>Enforce</b> refuses entry until the rule's PPE is confirmed. Limits are used for the fatigue score.</p>
     <div class="srules" id="sRules"><div class="muted">Loading…</div></div>
   </div>
 </section>
@@ -1243,9 +1243,10 @@
     renderAnns(a.announcements);
   }
   function renderKList() {
-    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media${k.safety_rule ? ` · ${+k.safety_enforce ? '⛔' : '🦺'} ${esc(k.safety_rule)}` : ''}</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
+    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media${k.safety_rule ? ` · ${+k.safety_enforce ? '⛔' : '🦺'} ${k.safety_rule === DEPT_RULE ? 'Department rules' : esc(k.safety_rule)}` : ''}</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
     $('kList').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { SEL = b.dataset.k; renderKList(); renderEditor(); if (innerWidth < 900) $('kEditor').scrollIntoView({ behavior: 'smooth' }); });
   }
+  const DEPT_RULE = '@department';   // location setting: each worker's own department rule (safety.DEPT_RULE)
   const ruleSummary = name => {
     const r = (SAFE.rules || []).find(x => x.department === name);
     if (!r) return 'no checks';
@@ -1269,9 +1270,9 @@
         <div class="field span2"><span>Theme</span><div class="themes">${Object.entries(THEMES).map(([v, l]) => `<label class="theme-opt"><input type="radio" name="k_theme" value="${v}"${(k.theme || 'lagoon') === v ? ' checked' : ''}><span><i class="th-${v}"></i>${l}</span></label>`).join('')}</div></div>
         <label class="field"><span>Flight board</span><select id="k_flights">${Object.entries(FLIGHT_OPTS).map(([v, l]) => `<option value="${v}"${(k.flights || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <div class="field span2"><span>Voice</span><label class="switch"><input type="checkbox" id="k_voice"${+k.voice !== 0 ? ' checked' : ''}><span class="sl"></span><span>Aura speaks replies aloud and listens for questions</span></label></div>
-        <label class="field"><span>Safety rule to enter</span><select id="k_srule"><option value="">None — department rules only</option>${(SAFE.rules || []).map(r => `<option value="${esc(r.department)}"${k.safety_rule === r.department ? ' selected' : ''}>${esc(r.department)} — ${esc(ruleSummary(r.department))}</option>`).join('')}</select></label>
-        <div class="field"><span>Enforce</span><label class="switch"><input type="checkbox" id="k_senforce"${+k.safety_enforce === 1 ? ' checked' : ''}><span class="sl"></span><span>Refuse entry unless all required PPE is confirmed</span></label></div>
-        <div class="field span2"><div class="hint" style="margin:0">Applies to everyone clocking in or returning from a break here, on top of their department rule. A HIGH fatigue score is flagged to supervisors, never a lockout. <a href="#safety">Create or edit rules in Safety →</a></div></div>
+        <label class="field"><span>Safety rule to enter</span><select id="k_srule"><option value="">None — no safety check here</option><option value="${DEPT_RULE}"${k.safety_rule === DEPT_RULE ? ' selected' : ''}>Each worker's department rule</option>${(SAFE.rules || []).map(r => `<option value="${esc(r.department)}"${k.safety_rule === r.department ? ' selected' : ''}>${esc(r.department)} — ${esc(ruleSummary(r.department))}</option>`).join('')}</select></label>
+        <div class="field"><span>Enforce</span><label class="switch"><input type="checkbox" id="k_senforce"${+k.safety_enforce === 1 ? ' checked' : ''}><span class="sl"></span><span>Refuse entry unless this rule's PPE is confirmed</span></label></div>
+        <div class="field span2"><div class="hint" style="margin:0">This is the only safety check asked here. <b>None</b>: no check. <b>Department rule</b>: each worker's own rule, on clock-in. A named rule: everyone clocking in or returning from a break here. A HIGH fatigue score is flagged to supervisors, never a lockout. <a href="#safety">Create or edit rules in Safety →</a></div></div>
       </div>
       <h3>Info cards</h3>
       <p class="muted" style="margin-top:0">Shown on the kiosk screen — and they're also what Aura uses to answer visitors' questions ("where is the prayer room?"), so keep them accurate and specific.</p>
@@ -1795,7 +1796,8 @@
   }, 30000);
 
   // ---- safety rules ----
-  const SDEF = { ppe: [], fatigue: 0, min_rest_h: 10, max_24h_h: 12, max_7d_h: 60, max_days: 6 };
+  const CAMERA_PPE = ['hi_vis'];   // PPE the camera confirms on its own (safety.CAMERA_ITEMS)
+  const SDEF = { ppe: [], fatigue: 0, auto_pass: 0, min_rest_h: 10, max_24h_h: 12, max_7d_h: 60, max_days: 6 };
   let SEXTRA = [];
   async function loadSafety() {
     SAFE = await api('/api/safety/rules');
@@ -1809,11 +1811,13 @@
     $('sRules').innerHTML = depts.map((d, i) => {
       const r = byDept[d], v = { ...SDEF, ...(r || {}) };
       const fat = +v.fatigue === 1;
-      const locs = (SAFE.locations || []).filter(l => l.rule === d);
+      const locs = (SAFE.locations || []).filter(l => l.rule === d || (l.rule === DEPT_RULE && SAFE.departments.includes(d)));
       const kind = SAFE.departments.includes(d) ? '' : ' <span class="muted" style="font-weight:500">· location rule</span>';
       return `<div class="srule${r ? ' on' : ''}" data-d="${esc(d)}">
         <div class="sh"><b>${esc(d)}${kind}</b>${r ? (r.ppe.length || fat ? '<span class="pill ok">Checks on</span>' : '<span class="pill">Rule saved · no checks</span>') : '<span class="pill">No rule</span>'}</div>
         <div class="field"><span>PPE to confirm</span><div class="ppe-opts">${Object.entries(SAFE.catalog).map(([k, c]) => `<label class="ppe-opt"><input type="checkbox" data-ppe="${esc(k)}"${v.ppe.includes(k) ? ' checked' : ''}><span>${esc(c.icon)} ${esc(c.label)}${k === 'hi_vis' ? ' <small class="muted">· auto</small>' : ''}</span></label>`).join('')}</div></div>
+        <label class="switch"><input type="checkbox" data-f="auto_pass"${+v.auto_pass === 1 ? ' checked' : ''}><span class="sl"></span><span>Allow automatically when the camera sees all PPE — no checklist</span></label>
+        <div class="hint" data-autohint style="margin:-4px 0 6px"></div>
         <label class="switch"><input type="checkbox" data-f="fatigue"${fat ? ' checked' : ''}><span class="sl"></span><span>Fatigue check (rested rating + risk score)</span></label>
         <div class="lims"${fat ? '' : ' hidden'}>${num(i, 'min_rest_h', 'Min rest between shifts (h)', '0.5', v.min_rest_h)}${num(i, 'max_24h_h', 'Max hours in 24 h', '0.5', v.max_24h_h)}${num(i, 'max_7d_h', 'Max hours in 7 days', '1', v.max_7d_h)}${num(i, 'max_days', 'Max consecutive days', '1', v.max_days)}</div>
         ${locs.length ? `<div class="field"><span>Linked locations</span><div class="ppe-opts">${locs.map(l => `<a class="pill${+l.enforce ? ' bad' : ''}" href="#locations" data-loc="${esc(l.name)}">${+l.enforce ? '⛔ ' : ''}${esc(l.name)}${+l.enforce ? ' · enforced' : ''}</a>`).join('')}</div></div>` : ''}
@@ -1822,10 +1826,22 @@
     }).join('') || '<div class="empty">No departments yet — add departments to staff profiles, or add one above.</div>';
     $('sRules').querySelectorAll('.srule').forEach(card => {
       const d = card.dataset.d;
-      card.querySelector('[data-f=fatigue]').onchange = e => { card.querySelector('.lims').hidden = !e.target.checked; };
+      card.querySelector('[data-f=fatigue]').onchange = e => { card.querySelector('.lims').hidden = !e.target.checked; autoHint(); };
+      // auto-pass only fires when every chosen item is one the camera can confirm (hi-vis today)
+      const autoHint = () => {
+        const on = card.querySelector('[data-f=auto_pass]').checked;
+        const picked = [...card.querySelectorAll('[data-ppe]:checked')].map(x => x.dataset.ppe);
+        const manual = picked.filter(k => !CAMERA_PPE.includes(k)).map(k => SAFE.catalog[k]?.label || k);
+        card.querySelector('[data-autohint]').innerHTML = !on ? 'Only hi-vis can be seen by the camera today.'
+          : !picked.length ? 'Pick at least one PPE item for auto-allow to apply.'
+          : manual.length ? `⚠️ Won't apply: ${esc(manual.join(', '))} can't be seen by the camera — the checklist is still shown.`
+          : `On: people seen wearing it go straight through.${card.querySelector('[data-f=fatigue]').checked ? ' The rested question is skipped; a HIGH fatigue score from the roster is still flagged.' : ''}`;
+      };
+      card.querySelectorAll('[data-ppe], [data-f=auto_pass]').forEach(x => x.addEventListener('change', autoHint)); autoHint();
       card.querySelector('[data-a=save]').onclick = async () => {
         const f = k => Number(card.querySelector(`[data-f=${k}]`).value) || SDEF[k];
         const body = { ppe: [...card.querySelectorAll('[data-ppe]:checked')].map(x => x.dataset.ppe), fatigue: card.querySelector('[data-f=fatigue]').checked,
+                       auto_pass: card.querySelector('[data-f=auto_pass]').checked,
                        min_rest_h: f('min_rest_h'), max_24h_h: f('max_24h_h'), max_7d_h: f('max_7d_h'), max_days: Math.round(f('max_days')) };
         try { await api('/api/safety/rules/' + enc(d), jsonBody('PUT', body)); toast(`Saved safety rule for ${d}`); await loadSafety(); } catch (e) { fail(e); }
       };

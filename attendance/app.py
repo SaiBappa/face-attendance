@@ -16,8 +16,9 @@ Kiosk (no PIN, LAN only):
   POST /api/assist           raise an assistance request; GET /api/assist/{id} its live status
   POST /api/safety/precheck  PPE items + fatigue risk for a worker about to clock in
   POST /api/safety/check     record the confirmed checklist + self-rated restedness
-  A location can link a safety rule (PUT /api/kiosks/{name} {safety_rule, safety_enforce}) that everyone entering
-  there (IN / BACK) must meet; when enforced, /api/event refuses entry without a recent passing check at that kiosk
+  Each location decides its safety check (PUT /api/kiosks/{name} {safety_rule, safety_enforce}): none, "@department"
+  (each worker's own department rule, on IN) or one named rule everyone entering (IN / BACK) must meet; when
+  enforced, /api/event refuses entry without a recent passing check at that kiosk
   An expired security pass (people.pass_expiry before today) blocks /api/event and the safety endpoints
   (403), and each approach is logged as a `pass_expired` supervisor alert.
   Liveness: a match only counts once the recognizer scores the face as a live person, not a photo or
@@ -415,6 +416,17 @@ def _spoof_alert(encounter: str, employee: str, kiosk: str):
         task.add_done_callback(_bg.discard)
 
 
+# (employee, kiosk) -> (hi-vis share, time) from the latest matched camera frame. Safety checks use this
+# server-side reading, never a value sent by the kiosk page, so hi-vis can't be "confirmed" without being seen.
+_hivis_seen: dict = {}
+HIVIS_FRESH_S = 180
+
+
+def camera_hivis(employee: str, kiosk: str):
+    v = _hivis_seen.get((employee, kiosk))
+    return v[0] if v and time.time() - v[1] <= HIVIS_FRESH_S else None
+
+
 # ----------------------------------------------------------------------------- kiosk API
 # encounter id -> {"frames": n, "logged": bool, "t": last seen}; one sighting per approach
 _encounters: dict = {}
@@ -491,7 +503,8 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
     if not faces:
         return JSONResponse({"face": False, "matched": False})
     face = faces[0]
-    base = {"face": True, "size": face.get("size"), "emotion": face.get("emotion"), "attire": face.get("attire")}
+    base = {"face": True, "size": face.get("size"), "emotion": face.get("emotion"), "attire": face.get("attire"),
+            "hivis": face.get("hivis")}
     subjects = face.get("subjects") or []
     sim = float(subjects[0]["similarity"]) if subjects else 0.0
     if not subjects or sim < THRESHOLD:
@@ -518,6 +531,12 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
             pass_incident(conn, employee, prof, kiosk)
     if encounter:
         _log_sighting(encounter, kiosk, employee, face, consent)
+    hv = face.get("hivis")   # None: torso not in frame — keep the last real reading rather than forget it
+    if hv is not None:
+        if len(_hivis_seen) > 500:
+            for k in [k for k, v in _hivis_seen.items() if time.time() - v[1] > HIVIS_FRESH_S]:
+                _hivis_seen.pop(k, None)
+        _hivis_seen[(employee, kiosk)] = (float(hv), time.time())
     if not mood_allowed("staff", consent):
         base["emotion"] = None
     if expired:  # the kiosk locks the screen; no actions are offered
@@ -845,7 +864,8 @@ async def safety_precheck(request: Request):
         raise HTTPException(400, "employee required")
     with db() as conn:
         refuse_expired_pass(conn, employee, (p.get("kiosk") or "").strip() or None)
-        return JSONResponse(safety.precheck(conn, employee, profile(conn, employee), p.get("hivis"),
+        return JSONResponse(safety.precheck(conn, employee, profile(conn, employee),
+                                            camera_hivis(employee, (p.get("kiosk") or "Main").strip()),
                                             kiosk=(p.get("kiosk") or "").strip() or None, action=p.get("action") or "IN"))
 
 
@@ -857,11 +877,17 @@ async def safety_check(request: Request):
     rested = p.get("rested")
     rested = int(rested) if rested in (1, 2, 3, 4, 5, "1", "2", "3", "4", "5") else None
     kiosk = (p.get("kiosk") or "").strip() or None
+    # same proof as /api/event: a check that clears an enforced entry must come from the camera, not a script
+    if not event_token_ok(p.get("token"), employee, kiosk or "Main"):
+        raise HTTPException(403, "Not verified by the camera — please step in front of the kiosk again.")
     with db() as conn:
         refuse_expired_pass(conn, employee, kiosk)
         prof = profile(conn, employee)
-        out = safety.record(conn, employee, prof, kiosk, p.get("items") or {}, p.get("hivis"), rested,
-                            action=p.get("action") or "IN")
+        try:
+            out = safety.record(conn, employee, prof, kiosk, p.get("items") or {}, camera_hivis(employee, kiosk or "Main"), rested,
+                                action=p.get("action") or "IN", auto=bool(p.get("auto")))
+        except ValueError as e:
+            raise HTTPException(409, str(e))
     if out["result"] == "flagged" and SAFETY_WEBHOOK_URL:
         bits = []
         if out["missing"]:
@@ -1314,7 +1340,7 @@ async def kiosk_save(request: Request):
             fields["info"] = json.dumps(p["info"] or [], ensure_ascii=False)
         if "safety_rule" in p:
             rule = (p["safety_rule"] or "").strip() or None
-            if rule and not conn.execute("SELECT 1 FROM safety_rules WHERE department=?", (rule,)).fetchone():
+            if rule and rule != safety.DEPT_RULE and not conn.execute("SELECT 1 FROM safety_rules WHERE department=?", (rule,)).fetchone():
                 raise HTTPException(400, f"No safety rule named {rule!r}")
             fields["safety_rule"] = rule
         if "safety_enforce" in p:

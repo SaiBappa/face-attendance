@@ -232,7 +232,10 @@ MIGRATIONS = {
     "kiosks": {"flights": "TEXT DEFAULT 'both'",
                # safety rule everyone entering this area must meet; enforce = refuse entry when PPE is missing
                "safety_rule": "TEXT", "safety_enforce": "INTEGER NOT NULL DEFAULT 0"},
-    "safety_checks": {"action": "TEXT", "blocked": "INTEGER NOT NULL DEFAULT 0"},
+    "safety_checks": {"action": "TEXT", "blocked": "INTEGER NOT NULL DEFAULT 0",
+                      "auto": "INTEGER NOT NULL DEFAULT 0"},   # passed by camera alone, no checklist shown
+    # allow entry without the checklist when the camera confirms every PPE item of the rule
+    "safety_rules": {"auto_pass": "INTEGER NOT NULL DEFAULT 0"},
     # enrolment / security pass details (role doubles as designation)
     "people": {"record_card": "TEXT", "dob": "TEXT", "pass_expiry": "TEXT", "zone": "TEXT"},
 }

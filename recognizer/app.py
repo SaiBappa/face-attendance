@@ -29,8 +29,9 @@ Extra routes:  GET /faces?subject=NAME or ?details=1 (kind/day/quality per photo
 Each recognised face also carries two on-device signals, computed from the same frame and
 then discarded with it:
   * emotion  — FER+ (ONNX model zoo, 8 classes) on the face crop
-  * attire   — dominant clothing colour from the region below the chin, plus `hivis`: the share
-               of fluorescent yellow/lime/orange pixels (a high-visibility vest) in the torso area
+  * attire   — dominant clothing colour from the region below the chin
+  * hivis    — share of fluorescent yellow/lime/orange pixels (a high-visibility vest) in the torso
+               area, or null when too little of the torso is in frame to tell (face too close / low)
 
 Liveness (anti-spoofing): MiniFASNet (Silent-Face-Anti-Spoofing, two models at 2.7x and 4x the face box)
 scores how likely the top face is a real person rather than a photo, print or screen held up to the
@@ -332,22 +333,23 @@ def _attire(img, box):
     b, g, r = [int(c) for c in centers[k]]
     hh, ss, vv = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0, 0]
     return {"name": _colour_name(int(hh), int(ss), int(vv)), "hex": f"#{r:02x}{g:02x}{b:02x}",
-            "share": round(float(counts[k] / counts.sum()), 2), "hivis": _hivis(img, box)}
+            "share": round(float(counts[k] / counts.sum()), 2)}
 
 
-def _hivis(img, box) -> float:
+def _hivis(img, box):
     """Share of fluorescent (hi-vis) pixels on the torso: a wider/taller region than attire,
     because vests are often open at the front. Fluorescent yellow-lime is very saturated and
-    bright at hue ~25-45 (OpenCV scale); fluorescent orange at ~5-18."""
+    bright at hue ~27-40 (OpenCV scale); fluorescent orange at ~5-16. Hue 41+ is ordinary lime/green
+    clothing (e.g. #8BC34A is 44) and must not count; the orange floor keeps skin tones (S ~135) out."""
     x, y, w, h = [int(v) for v in box]
     H, W = img.shape[:2]
     x0, x1 = max(0, x - w), min(W, x + 2 * w)
     y0, y1 = min(H, y + int(1.2 * h)), min(H, y + int(3.2 * h))
-    if y1 - y0 < 16 or x1 - x0 < 16:
-        return 0.0
+    if y1 - y0 < max(16, int(0.6 * h)) or x1 - x0 < 16:
+        return None   # not enough torso in frame to say either way — never "0% hi-vis"
     hsv = cv2.cvtColor(cv2.resize(img[y0:y1, x0:x1], (64, 48), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2HSV)
-    lime = cv2.inRange(hsv, (24, 110, 150), (45, 255, 255))
-    orange = cv2.inRange(hsv, (4, 150, 170), (18, 255, 255))
+    lime = cv2.inRange(hsv, (27, 140, 170), (40, 255, 255))
+    orange = cv2.inRange(hsv, (5, 180, 180), (16, 255, 255))
     return round(float(((lime > 0) | (orange > 0)).mean()), 3)
 
 
@@ -629,6 +631,7 @@ async def recognize(request: Request):
         te = time.perf_counter()
         emotion = _emotion(img, box) if extras else None
         attire = _attire(img, box) if extras else None
+        hivis = _hivis(img, box) if extras else None
         extras_ms += (time.perf_counter() - te) * 1000
         live = None
         if i == 0 and live_min_sim is not None and top >= live_min_sim:
@@ -649,6 +652,7 @@ async def recognize(request: Request):
             "subjects": subs,
             "emotion": emotion,
             "attire": attire,
+            "hivis": hivis,
             "liveness": live,
             "size": round(float(w) / W, 3),
         })

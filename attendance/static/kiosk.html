@@ -1119,12 +1119,23 @@
     let safetyOut = null;
     if (action === 'IN' || action === 'BACK') {
       try {
-        const pre = await post('/api/safety/precheck', { employee: j.employee, kiosk: KIOSK, action, hivis: j.attire?.hivis ?? null });
-        if (pre.required) {
+        const pre = await post('/api/safety/precheck', { employee: j.employee, kiosk: KIOSK, action });
+        if (pre.required && pre.auto_pass) {
+          // every required item was seen by the camera: straight through, no checklist
+          safetyOut = await post('/api/safety/check', { employee: j.employee, kiosk: KIOSK, action, items: {}, auto: true, token: j.token })
+            .catch(() => null);   // camera no longer sure: fall back to the checklist below
+          if (safetyOut) pre.items.forEach(it => { S.ppeLabels[it.key] = it.label; });
+        }
+        if (pre.required && !safetyOut) {
           safetyOut = await safetySheet(j, pre, action);
           if (!safetyOut) { startCountdown(STAFF_TIMEOUT_S); return; }   // cancelled
         }
       } catch (_) { /* safety service unavailable: the server still refuses entry at enforced locations */ }
+    }
+    if (safetyOut && safetyOut.failed) {
+      flash('Safety check not saved', `${safetyOut.failed} You are not clocked in.`, 'var(--out)'); beep(220, 300, 'square');
+      setTimeout(toAmbient, 4000);
+      return;
     }
     if (safetyOut && safetyOut.blocked) {
       const bits = safetySummary(safetyOut);
@@ -1149,7 +1160,7 @@
         flash(`${LABEL[action]} · ${time}`, line, '#d97706');
         beep(440, 200, 'triangle'); speak(`${LABEL[action]}. ${line}`);
       } else {
-        if (safetyOut) line = `Safety check passed ✓ ${line}`;
+        if (safetyOut) line = `${safetyOut.auto ? 'PPE seen by camera' : 'Safety check passed'} ✓ ${line}`;
         flash(`${LABEL[action]} · ${time}`, line, COLOR[action]);
         chime(); speak(`${LABEL[action]}, ${j.employee.split(' ')[0]}. ${line}`);
       }
@@ -1169,31 +1180,43 @@
     if (out.fatigue?.level === 'high') bits.push('Fatigue risk is HIGH — your supervisor has been told. Look after yourself today.');
     return bits;
   }
+  function ppeHint(it) {
+    if (it.auto === true) return 'seen by camera';
+    if (it.camera === 'unseen_torso') return it.locked ? 'camera can’t see your chest — step back, then scan again'
+                                                       : 'camera can’t see it · tap to confirm';
+    if (it.locked) return 'not seen by camera — put it on, then scan again';
+    return it.gate ? 'required to enter · tap to confirm' : it.location ? 'required here · tap to confirm' : 'tap to confirm';
+  }
   function safetySheet(j, pre, action) {
     return new Promise(resolve => {
       const el = $('safety'), sheet = el.querySelector('.sheet');
       const items = {}; let rested = null;
       pre.items.forEach(it => { S.ppeLabels[it.key] = it.label; items[it.key] = it.auto === true ? 'ok' : 'missing'; });
       const fat = pre.fatigue;
+      const gated = pre.items.filter(it => it.gate);
       const faces = [[1, '😫', 'Exhausted'], [2, '😴', 'Tired'], [3, '😐', 'OK'], [4, '🙂', 'Rested'], [5, '😄', 'Very rested']];
       const verb = action === 'BACK' ? 'return' : 'clock in';
       sheet.innerHTML = `<h2>Safety check</h2><div class="sub">${esc(j.employee.split(' ')[0])} · ${esc(pre.department || '')} — confirm before ${pre.location ? 'entering ' + esc(pre.location) : 'going airside'}</div>` +
-        (pre.enforce ? `<div class="enforce">⛔ <b>${esc(pre.location || 'This area')}</b> requires all of this PPE — entry is refused if any is missing</div>` : '') +
+        (gated.length ? `<div class="enforce">⛔ <b>${esc(pre.location || 'This area')}</b> requires ${esc(gated.map(it => it.label).join(', '))} — entry is refused without ${gated.length > 1 ? 'them' : 'it'}</div>` : '') +
         (pre.items.length ? `<h3>Your PPE</h3><div class="ppe">${pre.items.map(it => `<button data-k="${esc(it.key)}" class="${it.auto === true ? 'on' : it.auto === false ? 'warn' : ''}"><i>${it.icon}</i>${esc(it.label)}` +
-          `<small>${it.auto === true ? 'seen by camera' : it.auto === false ? 'not seen — please put it on' : it.location ? 'required here · tap to confirm' : 'tap to confirm'}</small></button>`).join('')}</div>` : '') +
+          `<small>${ppeHint(it)}</small></button>`).join('')}</div>` : '') +
         (pre.ask_rested ? `<h3>How rested do you feel?</h3><div class="rest">${faces.map(([v, e, l]) => `<button data-r="${v}"><i>${e}</i>${l}</button>`).join('')}</div>` : '') +
         (fat ? `<div class="risk">Fatigue risk from your roster: <b class="${fat.level}">${fat.level.toUpperCase()}</b>${fat.factors.length ? `<ul>${fat.factors.map(f => `<li>${esc(f.text)}</li>`).join('')}</ul>` : ' — well rested, nice.'}</div>` : '') +
         `<div class="go"><button class="pill ghost" data-x>Cancel</button><button class="pill primary" data-ok>Confirm &amp; ${verb}</button></div>`;
       const okBtn = sheet.querySelector('[data-ok]');
       const refresh = () => {
         const missing = Object.values(items).filter(v => v !== 'ok').length;
+        const stop = gated.some(it => items[it.key] !== 'ok');   // a location item is missing: entry will be refused
         okBtn.disabled = pre.ask_rested && rested == null;
         okBtn.style.opacity = okBtn.disabled ? .5 : 1;
-        okBtn.textContent = !missing ? `Confirm & ${verb}` : pre.enforce ? `Report ${missing} missing · can't enter` : `${verb[0].toUpperCase() + verb.slice(1)} · report ${missing} missing`;
-        okBtn.classList.toggle('danger', !!(missing && pre.enforce));
+        okBtn.textContent = !missing ? `Confirm & ${verb}` : stop ? `Report ${missing} missing · can't enter` : `${verb[0].toUpperCase() + verb.slice(1)} · report ${missing} missing`;
+        okBtn.classList.toggle('danger', stop);
       };
+      const locked = new Set(pre.items.filter(it => it.locked).map(it => it.key));
       sheet.querySelectorAll('.ppe button').forEach(b => b.onclick = () => {
-        touch(); const k = b.dataset.k; items[k] = items[k] === 'ok' ? 'missing' : 'ok';
+        touch(); const k = b.dataset.k;
+        if (locked.has(k)) { beep(220, 120, 'square'); return; }   // the camera decides this one
+        items[k] = items[k] === 'ok' ? 'missing' : 'ok';
         b.classList.toggle('on', items[k] === 'ok'); b.classList.remove('warn'); refresh();
       });
       sheet.querySelectorAll('.rest button').forEach(b => b.onclick = () => {
@@ -1204,12 +1227,12 @@
       okBtn.onclick = async () => {
         if (okBtn.disabled) return;
         okBtn.disabled = true;
-        try { close(await post('/api/safety/check', { employee: j.employee, kiosk: KIOSK, action, items, hivis: j.attire?.hivis ?? null, rested })); }
-        catch (_) { close({ result: 'pass', missing: [], fatigue: null, blocked: false }); }
+        try { close(await post('/api/safety/check', { employee: j.employee, kiosk: KIOSK, action, items, rested, token: j.token })); }
+        catch (e) { close({ failed: e.message || 'Please try again.' }); }
       };
       const idle = setTimeout(() => close(null), 90000);
       refresh(); el.classList.add('show');
-      speak(pre.enforce ? `Safety check for ${pre.location || 'this area'}. All items are required to enter.`
+      speak(gated.length ? `Safety check for ${pre.location || 'this area'}. ${gated.map(it => it.label).join(', ')} required to enter.`
         : pre.items.length ? 'Quick safety check. Confirm your P P E.' : 'Quick check: how rested do you feel?');
     });
   }

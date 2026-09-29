@@ -58,21 +58,26 @@ shows someone needs help. The traveller sees live status ("Fathimath is on the w
 requests on the **Assist board** (`/assist`, its own `ASSIST_PIN`) with SLA timers and a chime; new
 requests can also be pushed to Slack/Teams/a WhatsApp gateway via `ASSIST_WEBHOOK_URL`.
 
-**Ramp safety pack** — departments with safety rules (Admin → Setup; demo: Ground Handling, Security,
-Facilities) get a checklist when they clock IN: PPE items (the camera auto-detects a hi-vis vest)
-and "how rested do you feel?". A transparent fatigue-risk score (rest since last shift, hours in
+**Ramp safety pack** — at locations set to use department rules (Admin → Safety; demo: Ground Handling,
+Security, Facilities), staff get a checklist when they clock IN: PPE items (the camera auto-detects a hi-vis vest;
+its reading is taken server-side and a tap can't override "not seen" — at an enforced location hi-vis must
+be seen by the camera) and "how rested do you feel?". A transparent fatigue-risk score (rest since last shift, hours in
 24 h / 7 days, consecutive days, night work, recently telling Aura they were tired, the self-rating)
 is shown to the worker with its reasons. Missing PPE or HIGH fatigue is flagged to supervisors
 (`SAFETY_WEBHOOK_URL`, defaults to the assist webhook) and in Insights. By default it never blocks
 clocking in — it's a prompt and a record, not a gate. The score is a rule-of-thumb risk indicator,
 not a medical or regulatory fatigue-risk-management system.
 
-**Location safety** — any safety rule can be linked to a location (Admin → Locations → a kiosk →
-**Safety rule to enter**; create rules such as "Hangar" in Admin → Safety). Everyone entering there
-(on IN and BACK) must meet it, on top of their department rule. Turn on **Enforce** and entry is
-refused until all required PPE is confirmed: the kiosk shows "Entry refused", the server rejects
+**Location safety** — each location decides its safety check (Admin → Locations → a kiosk →
+**Safety rule to enter**): **None** (no check there), **Each worker's department rule** (the rule named
+after their department, on clock-in), or one named rule such as "Hangar" (create it in Admin → Safety)
+that everyone entering must meet on IN and BACK. Rules are never merged. Turn on **Enforce** and entry is
+refused until that rule's PPE is confirmed: the kiosk shows "Entry refused", the server rejects
 `/api/event` without a passing check at that kiosk in the last 15 minutes, and supervisors get a
-"refused entry" alert. HIGH fatigue is still flagged only, never a lockout.
+"refused entry" alert. HIGH fatigue is still flagged only, never a lockout. A rule can also **allow automatically when
+the camera sees all PPE**: no checklist, the person goes straight through (recorded as an automatic
+pass). It only applies when every item in the rule is camera-detectable — today that's the hi-vis
+vest — and the server re-checks the camera itself; a HIGH roster fatigue score is still flagged.
 
 **Roster + supervisor alerts** — import the roster (Admin → Roster: CSV upload with preview, or
 `POST /api/roster` from your HR/rostering system; overnight and split shifts supported). Punctuality
