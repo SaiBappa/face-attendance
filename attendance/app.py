@@ -237,6 +237,28 @@ async def kiosk_page(request):
     return page("kiosk.html")
 
 
+async def kiosk_manifest(request):
+    # Built per kiosk: iPadOS launches a Home Screen web app at the manifest's start_url, so it must
+    # carry this screen's ?kiosk=… (and ?autostart=1 etc.) or every iPad would open as "Main".
+    query = request.url.query
+    kiosk = request.query_params.get("kiosk", "")
+    return JSONResponse({
+        "name": f"Aura · {kiosk}" if kiosk else "Aura",
+        "short_name": "Aura",
+        "start_url": "/" + (f"?{query}" if query else ""),
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "any",
+        "background_color": "#031a2b",
+        "theme_color": "#031a2b",
+        "icons": [
+            {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+    }, media_type="application/manifest+json", headers=NO_CACHE)
+
+
 async def admin_page(request):
     return page("admin.html")
 
@@ -1302,6 +1324,7 @@ async def on_http_exception(request, exc: HTTPException):
 
 routes = [
     Route("/", kiosk_page),
+    Route("/manifest.webmanifest", kiosk_manifest),
     Route("/admin", admin_page),
     Route("/insights", insights_page),
     Route("/assist", assist_page),

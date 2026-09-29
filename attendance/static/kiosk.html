@@ -4,8 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aura">
 <meta name="theme-color" content="#031a2b">
+<link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+<link rel="icon" type="image/png" href="/static/icons/icon-192.png">
+<!-- the manifest's start_url keeps this screen's ?kiosk=…, so "Add to Home Screen" reopens the same kiosk -->
+<script>{ const m = document.createElement('link'); m.rel = 'manifest'; m.href = '/manifest.webmanifest' + location.search; document.head.appendChild(m); }</script>
 <title>Aura</title>
 <style>
   /* ------------------------------------------------------------------ theme */
@@ -337,6 +343,18 @@
     body.acting:not(.chatting) #actions button.suggest::after { top:-.9em; font-size:clamp(10px,1.6vh,17px); }
     body.acting:not(.chatting) #tools, body.acting:not(.chatting) #countdown { flex:none; }
     body.acting:not(.chatting) .pill { padding:clamp(8px,1.6vh,14px) clamp(16px,2vw,24px); font-size:clamp(15px,2.4vh,26px); }
+  }
+  /* iPads in landscape (mini 744pt tall up to 13" at 1032pt): the full-size orb and headline push the greeting lines
+     and chips off the bottom of the left column, so trim them until the whole greeting fits */
+  @media (min-aspect-ratio: 1/1) and (max-height: 1100px) {
+    body.acting:not(.chatting) #orbWrap { width:min(17vh,300px,32cqh); }
+    body.acting:not(.chatting) #who { gap:clamp(6px,1.1vh,12px); padding-top:calc(min(17vh,300px,32cqh) * .24); }
+    body.acting:not(.chatting) #headline { font-size:clamp(26px,min(4.6vw,6.4vh),104px); }
+    body.acting:not(.chatting) #sub { font-size:clamp(15px,min(2vw,2.5vh),34px); margin-top:0; }
+    body.acting:not(.chatting) #lines { gap:2px; margin-top:clamp(4px,.8vh,8px); }
+    body.acting:not(.chatting) #lines div { font-size:clamp(15px,min(1.8vw,2.4vh),32px); }
+    body.acting:not(.chatting) #chips { margin-top:clamp(4px,.8vh,8px); }
+    body.acting:not(.chatting) .chip { font-size:clamp(13px,1.8vh,22px); padding:.4em .9em; }
   }
   @media (max-width: 820px) {
     #clock { font-size:44px; }
