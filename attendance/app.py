@@ -22,11 +22,13 @@ Admin (X-Admin-Pin):
   /api/status, /api/events, /api/export.csv, /api/employees…   (original attendance admin)
   /api/people…, /api/kiosks…, /api/media…, /api/announcements…
   /api/insights, /api/insights/person/{name}, /api/interactions(.csv), /api/demo, /api/engines
+  /api/roster…  (CSV import, JSON push from HR systems, edit, coverage)   /api/alerts…  (feed, ack, routing)
 
 Camera frames and voice clips are processed in memory and discarded. Only face vectors
 (recognizer), names, timestamps, derived mood labels and conversation text are stored.
 """
 import asyncio
+import contextlib
 import csv
 import io
 import json
@@ -40,14 +42,16 @@ import httpx
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+import alerts
 import brain
 import flights
 import insights
 import phrases
+import roster
 import safety
 from store import db, init_db
 
@@ -635,6 +639,136 @@ async def safety_rule_delete(request: Request):
     return JSONResponse({"ok": True})
 
 
+# ---- roster
+async def roster_list(request: Request):
+    require_pin(request)
+    date_from, date_to = _range(request, default_days=0)
+    person = request.query_params.get("person") or None
+    dept = request.query_params.get("department") or None
+    with db() as conn:
+        rows = roster.adherence(conn, date_from, date_to)
+        people = [dict(r) for r in conn.execute("SELECT name, department, role FROM people ORDER BY name COLLATE NOCASE")]
+    rows = [r for r in rows if (not person or r["person"] == person) and (not dept or r["department"] == dept)]
+    return JSONResponse({"shifts": rows, "people": people, "from": date_from, "to": date_to})
+
+
+async def roster_import(request: Request):
+    """CSV upload (multipart 'file'); replace=1 (default) swaps existing shifts for the same person+day."""
+    require_pin(request)
+    form = await request.form()
+    up = form.get("file")
+    if up is None:
+        raise HTTPException(400, "file field required")
+    raw = await up.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+    shifts, errors = roster.parse_csv(text)
+    if request.query_params.get("dry") in ("1", "true"):
+        return JSONResponse({"preview": shifts[:50], "count": len(shifts), "errors": errors})
+    with db() as conn:
+        out = roster.save(conn, shifts, "csv", replace=form.get("replace", "1") in ("1", "true", "on"))
+    unknown = _unknown_people(shifts)
+    return JSONResponse({**out, "errors": errors, "unknown_people": unknown})
+
+
+def _unknown_people(shifts) -> list:
+    with db() as conn:
+        known = {r["name"] for r in conn.execute("SELECT name FROM people")}
+    return sorted({s["person"] for s in shifts} - known)
+
+
+async def roster_push(request: Request):
+    """JSON push from an HR / rostering system: {"shifts": [{person, day, start, end, position?, location?, department?}], "replace": true}"""
+    require_pin(request)
+    p = await request.json()
+    shifts, errors = roster.validate(p.get("shifts") if isinstance(p, dict) else p)
+    with db() as conn:
+        out = roster.save(conn, shifts, "api", replace=(p.get("replace", True) if isinstance(p, dict) else True))
+    return JSONResponse({**out, "errors": errors, "unknown_people": _unknown_people(shifts)})
+
+
+async def roster_shift(request: Request):
+    """POST = add one shift, PUT /{id} = edit, DELETE /{id} = remove."""
+    require_pin(request)
+    with db() as conn:
+        if request.method == "DELETE":
+            conn.execute("DELETE FROM shifts WHERE id=?", (int(request.path_params["shift_id"]),))
+            return JSONResponse({"ok": True})
+        shifts, errors = roster.validate([await request.json()])
+        if errors:
+            raise HTTPException(400, errors[0])
+        s1 = shifts[0]
+        if request.method == "PUT":
+            conn.execute("UPDATE shifts SET person=?, day=?, start=?, end=?, position=?, location=?, department=?, notes=?, source='manual' WHERE id=?",
+                         (s1["person"], s1["day"], s1["start"], s1["end"], s1.get("position"), s1.get("location"),
+                          s1.get("department"), s1.get("notes"), int(request.path_params["shift_id"])))
+        else:
+            roster.save(conn, shifts, "manual", replace=False)
+    return JSONResponse({"ok": True})
+
+
+async def roster_template(request: Request):
+    d = date.today()
+    body = "name,date,start,end,position,location,department\n" + "\n".join(
+        f"Aishath Shiuna,{(d + timedelta(days=i)).isoformat()},07:00,16:00,Immigration desk 3,Arrivals-Hall,Immigration" for i in range(3)) + \
+        f"\nAhmed Naseem,{d.isoformat()},22:00,06:30,Ramp lead night,Apron,Ground Handling\n"
+    return PlainTextResponse(body, media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="roster_template.csv"'})
+
+
+async def roster_coverage(request: Request):
+    require_pin(request)
+    day = request.query_params.get("day") or date.today().isoformat()
+    with db() as conn:
+        return JSONResponse({"day": day, "department": request.query_params.get("department"),
+                             "hours": roster.coverage(conn, day, request.query_params.get("department") or None)})
+
+
+# ---- supervisor alerts
+async def alerts_list(request: Request):
+    require_staff(request)
+    statuses = [x for x in (request.query_params.get("status") or "new,ack").split(",") if x]
+    date_from, date_to = _range(request, default_days=6)
+    with db() as conn:
+        alerts.scan(conn)  # make the feed current even between background scans
+        rows = [dict(r) for r in conn.execute(
+            f"SELECT * FROM alerts WHERE status IN ({','.join('?' * len(statuses))}) AND day BETWEEN ? AND ? ORDER BY id DESC LIMIT 300",
+            (*statuses, date_from, date_to))]
+        counts = {r["status"]: r["n"] for r in conn.execute("SELECT status, COUNT(*) n FROM alerts WHERE day>=? GROUP BY status",
+                                                              ((date.today() - timedelta(days=6)).isoformat(),))}
+    return JSONResponse({"rows": rows, "counts": counts, "settings": alerts.settings(), "now": stamp()})
+
+
+async def alert_update(request: Request):
+    require_staff(request)
+    p = await request.json()
+    status = p.get("status")
+    if status not in ("new", "ack", "resolved"):
+        raise HTTPException(400, "status must be new, ack or resolved")
+    with db() as conn:
+        conn.execute("UPDATE alerts SET status=?, ack_by=COALESCE(?, ack_by), ack_ts=COALESCE(ack_ts, ?), notes=COALESCE(?, notes) WHERE id=?",
+                     (status, p.get("by"), stamp() if status != "new" else None, p.get("notes"), int(request.path_params["alert_id"])))
+    return JSONResponse({"ok": True})
+
+
+async def alert_routes(request: Request):
+    require_pin(request)
+    with db() as conn:
+        if request.method == "PUT":
+            p = await request.json()
+            dept = request.path_params["department"]
+            conn.execute("INSERT INTO alert_routes (department, supervisor, webhook) VALUES (?,?,?) "
+                         "ON CONFLICT(department) DO UPDATE SET supervisor=excluded.supervisor, webhook=excluded.webhook",
+                         (dept, (p.get("supervisor") or "").strip() or None, (p.get("webhook") or "").strip() or None))
+            return JSONResponse({"ok": True})
+        if request.method == "DELETE":
+            conn.execute("DELETE FROM alert_routes WHERE department=?", (request.path_params["department"],))
+            return JSONResponse({"ok": True})
+        return JSONResponse({"routes": [dict(r) for r in conn.execute("SELECT * FROM alert_routes ORDER BY department")],
+                             "departments": [r[0] for r in conn.execute("SELECT DISTINCT department FROM people WHERE department IS NOT NULL AND department!='' ORDER BY 1")]})
+
+
 # ----------------------------------------------------------------------------- admin API
 async def status(request: Request):
     """Current state of every employee who has an event on the given day (default today)."""
@@ -1006,6 +1140,17 @@ routes = [
     Route("/api/assist/{req_id:int}", assist_status),
     Route("/api/assist/{req_id:int}/cancel", assist_cancel, methods=["POST"]),
     Route("/api/requests", requests_list),
+    Route("/api/roster", roster_list),
+    Route("/api/roster", roster_push, methods=["POST"]),
+    Route("/api/roster/import", roster_import, methods=["POST"]),
+    Route("/api/roster/template.csv", roster_template),
+    Route("/api/roster/coverage", roster_coverage),
+    Route("/api/roster/shift", roster_shift, methods=["POST"]),
+    Route("/api/roster/shift/{shift_id:int}", roster_shift, methods=["PUT", "DELETE"]),
+    Route("/api/alerts", alerts_list),
+    Route("/api/alerts/{alert_id:int}", alert_update, methods=["PUT"]),
+    Route("/api/alerts/routes", alert_routes),
+    Route("/api/alerts/routes/{department}", alert_routes, methods=["PUT", "DELETE"]),
     Route("/api/safety/precheck", safety_precheck, methods=["POST"]),
     Route("/api/safety/check", safety_check, methods=["POST"]),
     Route("/api/safety/rules", safety_rules),
@@ -1048,4 +1193,11 @@ routes = [
     Mount("/static", StaticFiles(directory=STATIC), name="static"),
 ]
 
-app = Starlette(routes=routes, exception_handlers={HTTPException: on_http_exception})
+@contextlib.asynccontextmanager
+async def lifespan(app):
+    task = asyncio.create_task(alerts.loop())  # supervisor alerts: scan every ALERT_SCAN_SECONDS
+    yield
+    task.cancel()
+
+
+app = Starlette(routes=routes, exception_handlers={HTTPException: on_http_exception}, lifespan=lifespan)

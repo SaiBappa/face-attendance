@@ -463,6 +463,8 @@ def greeting_candidates(g: dict) -> dict:
         behaviour.append("You stayed late yesterday — thank you for going the extra mile.")
     if action == "OUT" and stats.get("worked_today"):
         behaviour.append(f"{stats['worked_today']} on shift today — well-earned rest.")
+    if action == "OUT" and stats.get("next_shift"):
+        behaviour.append(f"See you {stats['next_shift']}.")
     if action == "BREAK":
         behaviour.append("Enjoy your break — hydrate and stretch!")
     if action == "BACK":
@@ -483,6 +485,10 @@ def greeting_candidates(g: dict) -> dict:
         chips.append({"icon": "●", "color": attire.get("hex"), "text": colour.title()})
     if streak >= 2:
         chips.append({"icon": "🔥", "text": f"{streak}-day streak"})
+    if stats.get("shift_today"):
+        chips.append({"icon": "🗓", "text": stats["shift_today"]})
+    elif stats.get("next_shift") and action in ("OUT", None):
+        chips.append({"icon": "🗓", "text": "Next: " + stats["next_shift"]})
     if stats.get("days_this_month"):
         chips.append({"icon": "📅", "text": f"{stats['days_this_month']} days this month"})
     return {"headline": headline, "special": special, "compliments": compliments, "behaviour": behaviour, "chips": chips}

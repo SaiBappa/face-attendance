@@ -73,6 +73,14 @@ services:
       - ASSIST_SLA_MINUTES=${ASSIST_SLA_MINUTES:-5}
       - SAFETY_WEBHOOK_URL=${SAFETY_WEBHOOK_URL:-}
       - HIVIS_MIN_SHARE=${HIVIS_MIN_SHARE:-0.12}
+      # ---- roster + supervisor alerts ----
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_SCAN_SECONDS=${ALERT_SCAN_SECONDS:-60}
+      - NO_SHOW_MINUTES=${NO_SHOW_MINUTES:-15}
+      - LATE_ALERT_MINUTES=${LATE_ALERT_MINUTES:-10}
+      - CLOCKOUT_GRACE_MINUTES=${CLOCKOUT_GRACE_MINUTES:-60}
+      - BREAK_MAX_MINUTES=${BREAK_MAX_MINUTES:-60}
+      - UNDERSTAFF_MIN=${UNDERSTAFF_MIN:-2}
     volumes:
       - attendance-data:/data
     depends_on:

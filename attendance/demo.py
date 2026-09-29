@@ -7,6 +7,8 @@ import json
 import random
 from datetime import date, datetime, timedelta
 
+import alerts
+import roster
 import safety
 from brain import MOODS
 from store import db
@@ -137,8 +139,12 @@ def seed(days: int = 60) -> dict:
             wd = day.weekday()  # Mon=0
             for i, (name, dept, role, shift, lang) in enumerate(STAFF):
                 # personalities: 0 = always early star, 5 = chronically late, 7 = mood sliding in the last week
-                # two rest days a week (staggered), plus the odd sick/leave day; Ali (6) skips rest lately
-                if (wd in (i % 7, (i + 1) % 7) and not (i == 6 and d <= 10)) or rng.random() < 0.04:
+                # two rest days a week (staggered); Ali (6) skips rest lately. Everyone else is rostered.
+                if wd in (i % 7, (i + 1) % 7) and not (i == 6 and d <= 10):
+                    continue
+                _roster_shift(conn, name, dept, role, shift, day)
+                counts["shifts"] = counts.get("shifts", 0) + 1
+                if rng.random() < 0.035 or (i == 5 and d in (3, 9)):   # the odd no-show (Ahmed a couple of times)
                     continue
                 sh, sm = int(shift[:2]), int(shift[3:])
                 offset = rng.gauss(-6, 5)
@@ -199,6 +205,7 @@ def seed(days: int = 60) -> dict:
                              f"Good morning, {name.split()[0]}! Navy suits you — very professional.", "greet:IN",
                              mood if consent else None, "jev+templates"))
                         counts["interactions"] += 1
+            # (today's staff who haven't arrived yet are simply "upcoming" on the roster)
             # visitors at the public kiosks
             for kiosk, peak in (("Arrivals-Hall", (10, 14, 22)), ("Departures-Gate-3", (7, 12, 18))):
                 for _ in range(rng.randint(35, 70)):
@@ -259,6 +266,14 @@ def seed(days: int = 60) -> dict:
                      rng.choice(["voice", "voice", "text"]), lang, text, REPLIES.get(intent, "Happy to help!"), intent,
                      round(min(1, max(0, rng.gauss(senti, 0.08))), 2), rng.choice(["jev+templates", "jev+claude"])))
                 counts["interactions"] += 1
+        # the next two weeks of roster, same pattern
+        for d in range(1, 15):
+            day = today + timedelta(days=d)
+            for i, (name, dept, role, shift, lang) in enumerate(STAFF):
+                if day.weekday() not in (i % 7, (i + 1) % 7):
+                    _roster_shift(conn, name, dept, role, shift, day)
+                    counts["shifts"] = counts.get("shifts", 0) + 1
+        alerts.scan(conn)  # today's live alerts (tagged demo, never sent to webhooks)
         conn.execute("INSERT INTO memories (person, ts, fact, kind, demo) VALUES (?,?,?,?,1)",
                      ("Mariyam Leena", (datetime.now() - timedelta(days=1)).isoformat(timespec="seconds"), "said they were tired", "tired"))
         conn.execute("INSERT INTO memories (person, ts, fact, kind, demo) VALUES (?,?,?,?,1)",
@@ -266,12 +281,24 @@ def seed(days: int = 60) -> dict:
     return {"ok": True, **counts, "people": len(STAFF), "kiosks": len(KIOSKS)}
 
 
+POSTS = {"Immigration": ("Arrivals-Hall", "Immigration desk"), "Security": ("Departures-Gate-3", "Screening lane"),
+         "Ground Handling": ("Apron", "Ramp"), "Customer Service": ("Arrivals-Hall", "Info desk"),
+         "Duty Free": ("Departures-Gate-3", "Store"), "F&B": ("Staff-Canteen", "Café"), "Facilities": ("Terminal", "Rounds")}
+
+
+def _roster_shift(conn, name, dept, role, shift, day):
+    st = datetime.strptime(shift, "%H:%M")
+    loc, pos = POSTS.get(dept, ("Terminal", role))
+    roster.save(conn, [{"person": name, "day": day.isoformat(), "start": shift, "end": (st + timedelta(hours=9)).strftime("%H:%M"),
+                        "position": pos, "location": loc, "department": dept}], "demo", replace=False, demo=1)
+
+
 def clear(conn=None) -> dict:
     own = conn is None
     conn = conn or db()
     try:
         n = 0
-        for t in ("events", "sightings", "interactions", "memories", "people", "kiosks", "requests", "safety_checks"):
+        for t in ("events", "sightings", "interactions", "memories", "people", "kiosks", "requests", "safety_checks", "shifts", "alerts"):
             n += conn.execute(f"DELETE FROM {t} WHERE demo=1").rowcount
         conn.execute("DELETE FROM announcements WHERE text LIKE '%(demo)'")
         if own:

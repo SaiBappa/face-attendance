@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 GRACE_MIN = int(os.environ.get("LATE_GRACE_MINUTES", "5"))
+EARLY_LEAVE_MIN = int(os.environ.get("EARLY_LEAVE_MINUTES", "15"))   # leaving earlier than this before the end counts
 EARLY_WINDOW_H = 3        # a clock-in up to 3 h before a shift belongs to that shift
 LATE_OUT_WINDOW_H = 6     # a clock-out up to 6 h after the end belongs to that shift
 
@@ -215,7 +216,7 @@ def adherence(conn, date_from: str, date_to: str, now: datetime = None) -> list:
             "in": first_in.isoformat(timespec="minutes") if first_in else None,
             "out": last_out.isoformat(timespec="minutes") if last_out else None,
             "late_min": late if late and late > GRACE_MIN else 0,
-            "early_leave_min": max(0, int((en - last_out).total_seconds() // 60)) if last_out and last_out < en - timedelta(minutes=GRACE_MIN) else 0,
+            "early_leave_min": max(0, int((en - last_out).total_seconds() // 60)) if last_out and last_out < en - timedelta(minutes=EARLY_LEAVE_MIN) else 0,
             "overtime_min": max(0, int((last_out - en).total_seconds() // 60)) if last_out and last_out > en + timedelta(minutes=15) else 0,
             "planned_h": round((en - st).total_seconds() / 3600, 2),
             "status": status, "demo": s.get("demo", 0),
@@ -268,11 +269,15 @@ def coverage(conn, day: str, department: str = None) -> list:
     for r in conn.execute("SELECT employee, ts, action FROM events WHERE day=? ORDER BY ts", (day,)):
         ev[r["employee"]].append((datetime.fromisoformat(r["ts"]), r["action"]))
     d0 = datetime.fromisoformat(day + "T00:00:00")
+    now = datetime.now()
     out = []
     for h in range(24):
         t = d0 + timedelta(hours=h, minutes=30)
         planned = sum(1 for r in rows if (not department or r["department"] == department)
                       and window(r)[0] <= t < window(r)[1])
+        if t > now:  # the future has a plan but no actuals yet
+            out.append({"hour": h, "planned": planned, "actual": None})
+            continue
         actual = 0
         for person, evs in ev.items():
             if department and depts.get(person) != department:

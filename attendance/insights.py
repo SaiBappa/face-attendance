@@ -9,6 +9,7 @@ import statistics
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 
+import roster
 import safety
 from brain import MOODS
 from store import db
@@ -105,12 +106,15 @@ def overview(date_from: str, date_to: str, kiosk: str = None) -> dict:
         p0, p1 = (d0 - timedelta(days=span)).isoformat(), (d0 - timedelta(days=1)).isoformat()
         prev_si = conn.execute(f"SELECT kind, day, valence FROM sightings WHERE valence IS NOT NULL AND day BETWEEN ? AND ? {kf}", [p0, p1] + ka).fetchall()
         prev_ev = conn.execute(f"SELECT * FROM events WHERE day BETWEEN ? AND ? {kf} ORDER BY ts", [p0, p1] + ka).fetchall()
+        starts = roster.starts_map(conn, p0, date_to)          # rostered start beats the profile default
+        roster_block = roster.summary(conn, date_from, date_to)
 
     wd = workdays(ev)
     prev_wd = workdays(prev_ev)
 
     def on_time(key, rec):
-        return rec["in"] is not None and rec["in"] <= _shift_min(profiles.get(key[0])) + GRACE_MIN
+        start = starts.get(key, _shift_min(profiles.get(key[0])))
+        return rec["in"] is not None and rec["in"] <= start + GRACE_MIN
 
     def rate(wdx):
         ins = [(k, r) for k, r in wdx.items() if r["in"] is not None]
@@ -310,6 +314,10 @@ def overview(date_from: str, date_to: str, kiosk: str = None) -> dict:
                        "text": f"{h['person']} clocked in with HIGH fatigue risk ({h['score']}): " + "; ".join(f["text"] for f in h["factors"][:2]) + "."})
 
     # keep kudos meaningful: only the three longest streaks
+    for p in roster_block["people"]:
+        if p["no_show"] >= 2:
+            alerts.append({"person": p["person"], "type": "no_show", "severity": "medium",
+                           "text": f"{p['person']} missed {p['no_show']} rostered shifts without clocking in."})
     concern = {a["person"] for a in alerts if a["severity"] in ("high", "medium")}
     for r in people_rows:
         if any(h["person"] == r["name"] for h in safety_block["high_fatigue"]):
@@ -325,7 +333,7 @@ def overview(date_from: str, date_to: str, kiosk: str = None) -> dict:
         "mood_mix": {"staff": dict(mix_staff), "visitor": dict(mix_vis)},
         "mood_by_hour": by_hour, "by_weekday": by_weekday, "arrivals_heat": heat,
         "locations": locations, "people": people_rows, "departments": departments, "assist": assist,
-        "safety": safety_block,
+        "safety": safety_block, "roster": roster_block,
         "alerts": sorted(alerts, key=lambda a: sev[a["severity"]]),
         "intents": dict(intents.most_common()), "languages": dict(languages.most_common()),
         "engines": dict(engines),
@@ -344,6 +352,8 @@ def person(name: str, date_from: str, date_to: str) -> dict:
                            (name, date_from, date_to)).fetchall()
         checks = [dict(r) for r in conn.execute("SELECT * FROM safety_checks WHERE person=? AND day BETWEEN ? AND ? ORDER BY ts DESC",
                                                 (name, date_from, date_to))]
+        starts = roster.starts_map(conn, date_from, date_to)
+        shifts = [r for r in roster.adherence(conn, date_from, date_to) if r["person"] == name]
     prof = dict(prof) if prof else {"name": name}
     wd = workdays(ev)
     shift = _shift_min(prof)
@@ -352,8 +362,11 @@ def person(name: str, date_from: str, date_to: str) -> dict:
         if s["valence"] is not None:
             moods_by_day[s["day"]].append(s)
     days = []
-    for d in sorted(set(k[1] for k in wd) | set(moods_by_day)):
+    planned = {r["day"]: r for r in shifts}
+    for d in sorted(set(k[1] for k in wd) | set(moods_by_day) | {r["day"] for r in shifts if r["status"] != "upcoming"}):
         r = wd.get((name, d), {})
+        shift = starts.get((name, d), _shift_min(prof))
+        sh = planned.get(d)
         ms = moods_by_day.get(d, [])
         days.append({
             "day": d, "in": _hhmm(r.get("in")), "out": _hhmm(r.get("out")),
@@ -363,12 +376,15 @@ def person(name: str, date_from: str, date_to: str) -> dict:
             "mood": _avg([s["valence"] for s in ms]),
             "dominant": Counter(s["mood"] for s in ms).most_common(1)[0][0] if ms else None,
             "attire": Counter(s["attire"] for s in ms if s["attire"]).most_common(1)[0][0] if any(s["attire"] for s in ms) else None,
+            "shift": f"{sh['start']}–{sh['end']}" if sh else None, "shift_status": sh["status"] if sh else None,
+            "overtime_min": sh["overtime_min"] if sh else 0, "early_leave_min": sh["early_leave_min"] if sh else 0,
         })
     return {
         "profile": prof, "days": days,
         "mood_mix": dict(Counter(s["mood"] for s in si if s["mood"])),
         "attire_mix": dict(Counter(s["attire"] for s in si if s["attire"])),
         "interactions": [dict(r) for r in it], "memories": [dict(r) for r in mem], "safety_checks": checks,
+        "upcoming_shifts": [r for r in shifts if r["status"] == "upcoming"][:10],
         "moods_meta": {k: {"valence": v[0], "word": v[1], "emoji": v[2]} for k, v in MOODS.items()},
     }
 
@@ -378,15 +394,21 @@ def person_stats(conn, name: str, today: date, profile: dict) -> dict:
     since = (today - timedelta(days=45)).isoformat()
     ev = conn.execute("SELECT * FROM events WHERE employee=? AND day>=? ORDER BY ts", (name, since)).fetchall()
     wd = workdays(ev)
-    shift = _shift_min(profile)
+    starts = roster.starts_map(conn, since, today.isoformat())
+    default = _shift_min(profile)
     stats = {}
     t = wd.get((name, today.isoformat()))
     if t and t["in"] is not None:
-        stats["early_minutes"] = shift - t["in"]
+        stats["early_minutes"] = starts.get((name, today.isoformat()), default) - t["in"]
+    cur, nxt = roster.current_and_next(conn, name, datetime.now())
+    if cur:
+        stats["shift_today"] = f"{cur['start']}–{cur['end']}" + (f" · {cur['location']}" if cur.get("location") else "")
+    if nxt:
+        stats["next_shift"] = roster.describe(nxt, datetime.now())
     streak = 0
     for d in sorted((k[1] for k in wd), reverse=True):
         r = wd[(name, d)]
-        if r["in"] is not None and r["in"] <= shift + GRACE_MIN:
+        if r["in"] is not None and r["in"] <= starts.get((name, d), default) + GRACE_MIN:
             streak += 1
         else:
             break
@@ -402,8 +424,11 @@ def person_stats(conn, name: str, today: date, profile: dict) -> dict:
 
 def attendance_text(conn, name: str, today: date) -> str:
     ev = conn.execute("SELECT * FROM events WHERE employee=? AND day=? ORDER BY ts", (name, today.isoformat())).fetchall()
+    cur, nxt = roster.current_and_next(conn, name, datetime.now())
+    plan = (f" Your rostered shift is {roster.describe(cur, datetime.now())}." if cur else "") + \
+           (f" Next shift: {roster.describe(nxt, datetime.now())}." if nxt else "")
     if not ev:
-        return "You haven't clocked in yet today."
+        return "You haven't clocked in yet today." + plan
     r = workdays(ev)[(name, today.isoformat())]
     parts = []
     if r["in"] is not None:
@@ -412,4 +437,4 @@ def attendance_text(conn, name: str, today: date) -> str:
         parts.append(f"{_dur(end - r['in'] - r['break'])} on shift so far" if r["out"] is None else f"worked {_dur(r['worked'])}")
     if r["breaks"]:
         parts.append(f"{r['breaks']} break{'s' if r['breaks'] > 1 else ''} ({_dur(r['break'])})")
-    return ", ".join(parts) + f". Last action: {ev[-1]['action']} at {ev[-1]['ts'][11:16]}."
+    return ", ".join(parts) + f". Last action: {ev[-1]['action']} at {ev[-1]['ts'][11:16]}." + plan
