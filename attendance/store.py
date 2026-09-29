@@ -12,6 +12,7 @@ SQLite schema for Aura. One file, created/migrated on start-up.
   announcements  ticker messages per kiosk ('*' = every kiosk)
   requests       passenger/staff assistance requests (wheelchair, medical, lost item…) and their SLA
   safety_rules   per-department PPE items + fatigue-check limits (ramp safety pack)
+                 (named profiles; locations link one via kiosks.safety_rule)
   safety_checks  one row per clock-in safety check: PPE confirmed/missing, hi-vis share, fatigue score
   shifts         the roster: rostered shifts per person/day (CSV import, HR push or manual)
   alerts         supervisor alerts (no-show, late, understaffed, …) with ack/resolve state
@@ -228,7 +229,10 @@ CREATE TABLE IF NOT EXISTS announcements (
 MIGRATIONS = {
     "events": {"mood": "TEXT", "attire": "TEXT", "demo": "INTEGER NOT NULL DEFAULT 0"},
     # flight board on the ambient screen: departures | arrivals | both | off
-    "kiosks": {"flights": "TEXT DEFAULT 'both'"},
+    "kiosks": {"flights": "TEXT DEFAULT 'both'",
+               # safety rule everyone entering this area must meet; enforce = refuse entry when PPE is missing
+               "safety_rule": "TEXT", "safety_enforce": "INTEGER NOT NULL DEFAULT 0"},
+    "safety_checks": {"action": "TEXT", "blocked": "INTEGER NOT NULL DEFAULT 0"},
     # enrolment / security pass details (role doubles as designation)
     "people": {"record_card": "TEXT", "dob": "TEXT", "pass_expiry": "TEXT", "zone": "TEXT"},
 }

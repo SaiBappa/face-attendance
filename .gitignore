@@ -2,3 +2,7 @@
 .env
 caddy-root.crt
 __pycache__/
+attendance/.event_secret
+*.db
+*.db-wal
+*.db-shm

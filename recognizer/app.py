@@ -22,7 +22,7 @@ changes (beard, glasses, haircut, weight) keep being recognised. To stop drift o
 is only learned when it matches the person clearly (LEARN_MIN_SIMILARITY), beats every other person by
 LEARN_MARGIN, and still resembles their *enrolled* photos (LEARN_ANCHOR_SIMILARITY).
 
-Extra routes:  GET /faces?subject=NAME (kind/day/quality per photo),
+Extra routes:  GET /faces?subject=NAME or ?details=1 (kind/day/quality per photo),
                GET /faces/{image_id}/img?subject=NAME (face crop JPEG),
                DELETE /faces/{image_id}?subject=NAME
 
@@ -31,6 +31,13 @@ then discarded with it:
   * emotion  — FER+ (ONNX model zoo, 8 classes) on the face crop
   * attire   — dominant clothing colour from the region below the chin, plus `hivis`: the share
                of fluorescent yellow/lime/orange pixels (a high-visibility vest) in the torso area
+
+Liveness (anti-spoofing): MiniFASNet (Silent-Face-Anti-Spoofing, two models at 2.7x and 4x the face box)
+scores how likely the top face is a real person rather than a photo, print or screen held up to the
+camera: "liveness" 0..1 (probability of "real", averaged over both models). It only runs when the top
+match reaches ?liveness_min_similarity= (the attendance app passes its match threshold), so frames of
+visitors and empty scenes cost nothing extra. With ?learn_min_liveness=x a frame scoring below x is
+never learned as a daily best, so a photo can't poison someone's reference photos.
 """
 import os, re, uuid, threading, json, time, fcntl
 from datetime import date, datetime, timedelta
@@ -56,6 +63,10 @@ _lock = threading.Lock()
 _det = cv2.FaceDetectorYN.create(DET_MODEL, "", (320, 320), 0.6, 0.3, 5000)
 _rec = cv2.FaceRecognizerSF.create(REC_MODEL, "")
 _emo = cv2.dnn.readNetFromONNX(EMO_MODEL) if os.path.exists(EMO_MODEL) else None
+# liveness: [(face-box zoom, net)]; empty if the models are missing (liveness is then reported as None)
+LIVENESS_MODELS = os.environ.get("LIVENESS_MODELS", "2.7:/models/liveness_2.7.onnx,4.0:/models/liveness_4.0.onnx")
+_live = [(float(z), cv2.dnn.readNetFromONNX(p)) for z, p in
+         (item.split(":", 1) for item in LIVENESS_MODELS.split(",") if ":" in item) if os.path.exists(p)]
 # daily learning (see module docstring)
 DAILY_BEST = int(os.environ.get("DAILY_BEST", "2"))
 DAILY_KEEP_DAYS = int(os.environ.get("DAILY_KEEP_DAYS", "7"))
@@ -235,6 +246,50 @@ def _emotion(img, box):
     i = int(p.argmax())
     return {"label": EMOTIONS[i], "confidence": round(float(p[i]), 3),
             "scores": {e: round(float(v), 3) for e, v in zip(EMOTIONS, p)}}
+
+
+def _liveness_crop(img, box, zoom, size=80):
+    """The face box scaled by `zoom` around its centre, shifted (not clipped) to stay inside the frame,
+    resized to size x size: the crop MiniFASNet was trained on."""
+    H, W = img.shape[:2]
+    x, y, w, h = [float(v) for v in box]
+    if w <= 0 or h <= 0:
+        return None
+    zoom = min((H - 1) / h, (W - 1) / w, zoom)
+    nw, nh = w * zoom, h * zoom
+    cx, cy = x + w / 2, y + h / 2
+    x0, y0, x1, y1 = cx - nw / 2, cy - nh / 2, cx + nw / 2, cy + nh / 2
+    if x0 < 0:
+        x1 -= x0; x0 = 0
+    if y0 < 0:
+        y1 -= y0; y0 = 0
+    if x1 > W - 1:
+        x0 -= x1 - W + 1; x1 = W - 1
+    if y1 > H - 1:
+        y0 -= y1 - H + 1; y1 = H - 1
+    crop = img[int(y0):int(y1) + 1, int(x0):int(x1) + 1]
+    if crop.size == 0:
+        return None
+    return cv2.resize(crop, (size, size))
+
+
+def _liveness(img, box):
+    """Probability (0..1) that the face is a live person, not a photo/screen; None if unavailable."""
+    if not _live:
+        return None
+    total, n = 0.0, 0
+    for zoom, net in _live:
+        crop = _liveness_crop(img, box, zoom)
+        if crop is None:
+            continue
+        blob = crop.astype(np.float32).transpose(2, 0, 1)[None]  # BGR, 0..255, NCHW (as trained)
+        with _lock:
+            net.setInput(blob)
+            logits = net.forward().flatten()
+        p = np.exp(logits - logits.max())
+        total += float(p[1] / p.sum())  # classes: 0 spoof (print), 1 real, 2 spoof (screen)
+        n += 1
+    return round(total / n, 4) if n else None
 
 
 def _colour_name(h, s, v):
@@ -427,7 +482,7 @@ def _maybe_learn(img, box, f, feat, subs):
 
 # --------------------------------------------------------------------------- routes
 async def healthcheck(request):
-    return JSONResponse({"status": "OK", "emotion": _emo is not None})
+    return JSONResponse({"status": "OK", "emotion": _emo is not None, "liveness": bool(_live)})
 
 
 async def get_subjects(request):
@@ -437,9 +492,11 @@ async def get_subjects(request):
 
 async def get_faces(request):
     """All photos, or one person's (?subject=) with details: kind is "enrolled" or "learned"
-    (a daily best from the kiosk, with its day, quality and time)."""
+    (a daily best from the kiosk, with its day, quality and time). ?details=1 adds the same details
+    to the full listing; enrolled photos then also carry "ts" (when the crop was saved)."""
     _sync_index()
     only = request.query_params.get("subject")
+    details = only is not None or request.query_params.get("details") in ("1", "true")
     faces = []
     for subj, vecs in _index.items():
         if only is not None and subj != only:
@@ -447,9 +504,12 @@ async def get_faces(request):
         for image_id, _ in vecs:
             day = _day_of(image_id)
             item = {"image_id": image_id, "subject": subj, "kind": "learned" if day else "enrolled"}
-            if only is not None:
+            if details:
                 d = _subject_dir(subj)
-                item["has_image"] = os.path.exists(os.path.join(d, image_id + ".jpg"))
+                jpg = os.path.join(d, image_id + ".jpg")
+                item["has_image"] = os.path.exists(jpg)
+                if item["has_image"] and not day:
+                    item["ts"] = datetime.fromtimestamp(os.path.getmtime(jpg)).isoformat(timespec="seconds")
                 if day:
                     item["day"] = day.isoformat()
                     try:
@@ -526,6 +586,8 @@ async def recognize(request: Request):
       extras=0|1               compute emotion + clothing for the top face (default 1)
       extras_min_similarity=x  ...or compute them only when the top match reaches x
       learn=0|1                keep the frame as a daily best for the matched person (see top)
+      liveness_min_similarity=x  score liveness for the top face when its top match reaches x
+      learn_min_liveness=x     never learn a frame whose liveness is below x (or unknown)
     The response carries "timing" (ms per stage) for latency monitoring."""
     t_start = time.perf_counter()
     limit = int(request.query_params.get("limit", 0) or 0)
@@ -534,6 +596,10 @@ async def recognize(request: Request):
     extras_min = request.query_params.get("extras_min_similarity")
     extras_min = float(extras_min) if extras_min else None
     learn = request.query_params.get("learn", "0") in ("1", "true")
+    live_min_sim = request.query_params.get("liveness_min_similarity")
+    live_min_sim = float(live_min_sim) if live_min_sim else None
+    learn_min_live = request.query_params.get("learn_min_liveness")
+    learn_min_live = float(learn_min_live) if learn_min_live else None
     form = await request.form()
     up = form.get("file")
     if up is None:
@@ -564,7 +630,12 @@ async def recognize(request: Request):
         emotion = _emotion(img, box) if extras else None
         attire = _attire(img, box) if extras else None
         extras_ms += (time.perf_counter() - te) * 1000
-        if learn and i == 0:
+        live = None
+        if i == 0 and live_min_sim is not None and top >= live_min_sim:
+            tv = time.perf_counter()
+            live = _liveness(img, box)
+            timing["liveness"] = (time.perf_counter() - tv) * 1000
+        if learn and i == 0 and (learn_min_live is None or (live is not None and live >= learn_min_live)):
             tl = time.perf_counter()
             try:
                 learned = _maybe_learn(img, box, raw, feat, matches)
@@ -578,9 +649,10 @@ async def recognize(request: Request):
             "subjects": subs,
             "emotion": emotion,
             "attire": attire,
+            "liveness": live,
             "size": round(float(w) / W, 3),
         })
-    timing["match"] = (time.perf_counter() - t0) * 1000 - extras_ms
+    timing["match"] = (time.perf_counter() - t0) * 1000 - extras_ms - timing.get("liveness", 0)
     timing["extras"] = extras_ms
     timing["total"] = (time.perf_counter() - t_start) * 1000
     return JSONResponse({"result": result, "learned": learned, "timing": {k: round(v, 2) for k, v in timing.items()}})

@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Insights">
+<meta name="theme-color" content="#f3f4f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#08090c" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/insights/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+<link rel="icon" type="image/png" href="/static/icons/icon-192.png">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));</script>
 <title>Aura Insights</title>
 <style>
   /* ------------------------------------------------------------------ tokens
@@ -1526,7 +1535,7 @@
       return `<button class="sitem" data-person="${esc(f.person)}">
         <span>${f.fatigue ? `<span class="fscore ${esc(f.fatigue)}" title="Fatigue level">${esc(FLEVEL[f.fatigue] ? FLEVEL[f.fatigue][0][0] : '?')}</span>` : '<span class="fscore" style="background:var(--hover)">—</span>'}</span>
         <span class="who"><b>${esc(f.person)}</b> <span class="muted" style="font-size:12px">${esc(f.kiosk || '')}</span></span><span class="when">${esc(whenOf(f.ts))}</span>
-        <span class="miss">${miss.map(m => `<span class="pill red">${esc(ppeOf(m).icon)} ${esc(ppeOf(m).label)}</span>`).join('')}${f.fatigue === 'high' ? '<span class="pill red">HIGH fatigue</span>' : ''}</span></button>`;
+        <span class="miss">${miss.map(m => `<span class="pill red">${esc(ppeOf(m).icon)} ${esc(ppeOf(m).label)}</span>`).join('')}${f.fatigue === 'high' ? '<span class="pill red">HIGH fatigue</span>' : ''}${f.blocked ? '<span class="pill red">⛔ Entry refused</span>' : ''}</span></button>`;
     }).join('') : '<div class="empty">No flagged checks in this range</div>';
   }
   document.addEventListener('click', e => { const b = e.target.closest('#sHigh [data-person], #sFlags [data-person]'); if (b) openPerson(b.dataset.person); });

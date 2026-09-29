@@ -1,14 +1,21 @@
 """
 Ramp safety pack: PPE check and fatigue watch at clock-in.
 
-  * Rules are per department (safety_rules): which PPE items must be confirmed, whether the
-    fatigue check runs, and the rest/hours limits used for scoring.
+  * Rules (safety_rules) are named profiles: which PPE items must be confirmed, whether the
+    fatigue check runs, and the rest/hours limits used for scoring. A rule named after a
+    department applies to that department's staff; any rule can also be linked to locations.
   * Hi-vis is detected by the recognizer (share of fluorescent pixels on the torso); every
     other item is confirmed by the worker with one tap.
   * Fatigue risk is a transparent, rule-based score (0-100) — not a medical assessment:
       short rest since last shift, long hours in the last 24 h / 7 days, many consecutive
       days, night work, a recent "tired / unwell" remark to Aura, and the worker's own
       rating of how rested they feel. Each factor is listed so supervisors see *why*.
+  * A location (kiosk) can be linked to one rule (kiosks.safety_rule): everyone entering that area
+    must meet it. It is merged with the worker's department rule and applies on IN and BACK
+    (entering the area), while a department rule alone applies on IN only.
+  * A location set to "enforce" refuses entry when required PPE is missing (HIGH fatigue is still only
+    flagged — the score is an indicator, not a fitness-for-duty decision): the check is recorded
+    as blocked and /api/event rejects the clock-in until a passing check is made there.
   * A check with missing PPE or HIGH fatigue is "flagged" and pushed to supervisors.
 """
 import json
@@ -29,6 +36,8 @@ PPE = {  # key -> (icon, label)
 HIVIS_MIN = float(os.environ.get("HIVIS_MIN_SHARE", "0.12"))  # share of fluorescent torso pixels
 RESTED = {1: "Exhausted", 2: "Tired", 3: "OK", 4: "Rested", 5: "Very rested"}
 DEFAULTS = {"ppe": [], "fatigue": 0, "min_rest_h": 10.0, "max_24h_h": 12.0, "max_7d_h": 60.0, "max_days": 6}
+ENTRY_ACTIONS = ("IN", "BACK")   # actions that enter a location's area
+CHECK_VALID_S = 900              # an enforced location accepts a passing check this recent
 
 
 def rules_for(conn, department: str) -> dict:
@@ -59,6 +68,51 @@ def save_rule(conn, department: str, p: dict):
         (department, json.dumps(ppe), 1 if p.get("fatigue") else 0,
          float(p.get("min_rest_h") or DEFAULTS["min_rest_h"]), float(p.get("max_24h_h") or DEFAULTS["max_24h_h"]),
          float(p.get("max_7d_h") or DEFAULTS["max_7d_h"]), int(p.get("max_days") or DEFAULTS["max_days"])))
+
+
+def location_rule(conn, kiosk: str) -> dict:
+    """The rule linked to a location, or no requirements."""
+    r = conn.execute("SELECT name, zone, safety_rule, safety_enforce FROM kiosks WHERE name=?", (kiosk or "",)).fetchone()
+    linked = (r["safety_rule"] or None) if r else None
+    rule = rules_for(conn, linked) if linked else dict(DEFAULTS)
+    return {"name": kiosk, "zone": r["zone"] if r else None, "rule": linked, "ppe": rule["ppe"],
+            "fatigue": int(rule["fatigue"] or 0), "enforce": int(r["safety_enforce"] or 0) if r else 0}
+
+
+def all_locations(conn) -> list:
+    return [location_rule(conn, r["name"]) for r in conn.execute("SELECT name FROM kiosks ORDER BY name COLLATE NOCASE")]
+
+
+def link_location(conn, kiosk: str, rule: str, enforce: bool):
+    conn.execute("INSERT OR IGNORE INTO kiosks (name, zone, headline) VALUES (?,?,?)", (kiosk, kiosk, kiosk))
+    conn.execute("UPDATE kiosks SET safety_rule=?, safety_enforce=? WHERE name=?",
+                 ((rule or "").strip() or None, 1 if enforce else 0, kiosk))
+
+
+def effective(conn, department: str, kiosk: str, action: str = "IN") -> dict:
+    """Department rule (on IN) merged with the location's linked rule (on IN / BACK)."""
+    action = (action or "IN").upper()
+    dept = rules_for(conn, department)   # DEFAULTS (no checks) when the department has no rule
+    if action != "IN":
+        dept = {**dept, "ppe": [], "fatigue": 0}
+    loc = location_rule(conn, kiosk) if action in ENTRY_ACTIONS else {"ppe": [], "fatigue": 0, "enforce": 0, "zone": None, "rule": None}
+    # fatigue limits: the worker's department rule when it runs the check, else the location's rule
+    limits = dept if dept["fatigue"] or not loc["rule"] else rules_for(conn, loc["rule"])
+    want = set(dept["ppe"]) | set(loc["ppe"])
+    return {**limits,
+            "ppe": [k for k in PPE if k in want],
+            "fatigue": 1 if dept["fatigue"] or loc["fatigue"] else 0,
+            "enforce": bool(loc["enforce"]) and bool(want),
+            "location": loc.get("zone") or kiosk, "location_rule": loc["rule"],
+            "location_ppe": loc["ppe"]}
+
+
+def entry_cleared(conn, name: str, kiosk: str, now: datetime = None) -> bool:
+    """For an enforced location: the latest check here in the last CHECK_VALID_S seconds passed."""
+    now = now or datetime.now()
+    r = conn.execute("SELECT ts, blocked FROM safety_checks WHERE person=? AND kiosk=? ORDER BY id DESC LIMIT 1",
+                     (name, kiosk)).fetchone()
+    return bool(r) and not r["blocked"] and (now - datetime.fromisoformat(r["ts"])).total_seconds() <= CHECK_VALID_S
 
 
 # ----------------------------------------------------------------------------- fatigue
@@ -143,8 +197,8 @@ def fatigue(conn, name: str, rules: dict, now: datetime = None, rested: int = No
 
 
 # ----------------------------------------------------------------------------- checks
-def precheck(conn, name: str, profile: dict, hivis_share: float = None) -> dict:
-    rules = rules_for(conn, profile.get("department"))
+def precheck(conn, name: str, profile: dict, hivis_share: float = None, kiosk: str = None, action: str = "IN") -> dict:
+    rules = effective(conn, profile.get("department"), kiosk, action)
     required = bool(rules["ppe"]) or bool(rules["fatigue"])
     items = []
     for k in rules["ppe"]:
@@ -152,26 +206,30 @@ def precheck(conn, name: str, profile: dict, hivis_share: float = None) -> dict:
         auto = None
         if k == "hi_vis" and hivis_share is not None:
             auto = hivis_share >= HIVIS_MIN
-        items.append({"key": k, "icon": icon, "label": label, "auto": auto})
+        items.append({"key": k, "icon": icon, "label": label, "auto": auto, "location": k in rules["location_ppe"]})
     return {"required": required, "department": profile.get("department"), "items": items,
+            "location": rules["location"], "enforce": rules["enforce"],
             "ask_rested": bool(rules["fatigue"]),
             "fatigue": fatigue(conn, name, rules) if rules["fatigue"] else None}
 
 
-def record(conn, name: str, profile: dict, kiosk: str, items: dict, hivis_share, rested, demo: int = 0, now: datetime = None) -> dict:
+def record(conn, name: str, profile: dict, kiosk: str, items: dict, hivis_share, rested, demo: int = 0, now: datetime = None,
+           action: str = "IN") -> dict:
     now = now or datetime.now()
-    rules = rules_for(conn, profile.get("department"))
+    rules = effective(conn, profile.get("department"), kiosk, action)
     fat = fatigue(conn, name, rules, now=now, rested=rested) if rules["fatigue"] else None
     missing = [k for k in rules["ppe"] if items.get(k) != "ok"]
-    flagged = bool(missing) or (fat and fat["level"] == "high")
+    flagged = bool(missing) or bool(fat and fat["level"] == "high")
+    blocked = bool(missing) and rules["enforce"]   # fatigue is a risk indicator: flagged, never a lockout
     conn.execute(
-        """INSERT INTO safety_checks (ts, day, person, department, kiosk, items, missing, hivis, rested, fatigue_score, fatigue_level, factors, result, demo)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        """INSERT INTO safety_checks (ts, day, person, department, kiosk, items, missing, hivis, rested, fatigue_score, fatigue_level, factors, result, demo, action, blocked)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (now.isoformat(timespec="seconds"), now.date().isoformat(), name, profile.get("department"), kiosk,
          json.dumps(items), ",".join(missing) or None, hivis_share, rested,
          fat["score"] if fat else None, fat["level"] if fat else None, json.dumps(fat["factors"]) if fat else None,
-         "flagged" if flagged else "pass", demo))
-    return {"result": "flagged" if flagged else "pass", "missing": missing, "fatigue": fat}
+         "flagged" if flagged else "pass", demo, (action or "IN").upper(), 1 if blocked else 0))
+    return {"result": "flagged" if flagged else "pass", "missing": missing, "fatigue": fat,
+            "blocked": blocked, "enforce": rules["enforce"], "location": rules["location"]}
 
 
 def summary(conn, date_from: str, date_to: str) -> dict:
@@ -189,6 +247,7 @@ def summary(conn, date_from: str, date_to: str) -> dict:
         "checks": len(rows),
         "ppe_compliance_pct": round(100 * sum(1 for r in rows if not r["missing"]) / len(rows), 1) if rows else None,
         "flagged": sum(1 for r in rows if r["result"] == "flagged"),
+        "blocked": sum(1 for r in rows if r["blocked"]),
         "missing_items": {k: {"count": v, "icon": PPE.get(k, ("", k))[0], "label": PPE.get(k, ("", k))[1]} for k, v in miss.most_common()},
         "fatigue_levels": dict(Counter(r["fatigue_level"] for r in rows if r["fatigue_level"])),
         "avg_fatigue": round(sum(r["fatigue_score"] for r in rows if r["fatigue_score"] is not None) / max(1, sum(1 for r in rows if r["fatigue_score"] is not None)), 1) if rows else None,
@@ -199,7 +258,8 @@ def summary(conn, date_from: str, date_to: str) -> dict:
                            "high_fatigue": sum(1 for r in v if r["fatigue_level"] == "high")} for d, v in sorted(by_dept.items())],
         "high_fatigue": [{"person": p, "ts": r["ts"], "score": r["fatigue_score"], "factors": json.loads(r["factors"] or "[]")}
                          for p, r in sorted(latest_high.items(), key=lambda kv: kv[1]["ts"], reverse=True)][:12],
-        "recent_flags": [{"person": r["person"], "ts": r["ts"], "missing": r["missing"], "fatigue": r["fatigue_level"], "kiosk": r["kiosk"]}
+        "recent_flags": [{"person": r["person"], "ts": r["ts"], "missing": r["missing"], "fatigue": r["fatigue_level"], "kiosk": r["kiosk"],
+                          "blocked": bool(r["blocked"])}
                          for r in reversed(rows) if r["result"] == "flagged"][:15],
         "catalog": {k: {"icon": v[0], "label": v[1]} for k, v in PPE.items()},
     }

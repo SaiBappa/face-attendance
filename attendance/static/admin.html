@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Admin">
+<meta name="theme-color" content="#f4f6f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0e16" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/admin/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+<link rel="icon" type="image/png" href="/static/icons/icon-192.png">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));</script>
 <title>Aura Admin</title>
 <style>
   :root {
@@ -40,7 +49,7 @@
 
   /* ---------- shell ---------- */
   #app { display:flex; min-height:100vh; }
-  .side { position:sticky; top:0; height:100vh; width:var(--side); flex:none; background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:18px 12px; gap:4px; }
+  .side { position:sticky; top:0; height:100vh; width:var(--side); flex:none; background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:calc(18px + env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); gap:4px; }
   .brand { display:flex; align-items:center; gap:10px; padding:4px 8px 16px; }
   .brand .logo { width:34px; height:34px; border-radius:10px; font-size:16px; }
   .brand b { font-size:17px; display:block; line-height:1.1; }
@@ -166,8 +175,13 @@
   .person .who b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .person .who .muted { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .person .badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .person .badges .pill { white-space:normal; max-width:100%; }
+  .person .avatar { width:56px; height:56px; border-radius:14px; font-size:18px; }
   .avatar { width:40px; height:40px; border-radius:12px; display:grid; place-items:center; font-weight:700; font-size:14px; color:#fff; flex:none; }
   .avatar.sm { width:30px; height:30px; border-radius:9px; font-size:12px; }
+  .avatar { position:relative; overflow:hidden; }
+  .avatar img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .2s; }
+  .avatar img.on { opacity:1; }
 
   /* ---------- dialog ---------- */
   dialog { border:1px solid var(--line); border-radius:18px; padding:0; width:min(680px, calc(100vw - 24px)); max-height:calc(100vh - 32px); background:var(--surface); color:var(--fg); box-shadow:0 20px 60px rgba(0,0,0,.35); }
@@ -364,7 +378,7 @@
   @media (max-width:600px) { .enrol-form { grid-template-columns:minmax(0,1fr); } }
 
   /* ---------- toast ---------- */
-  #toasts { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:1000; max-width:calc(100vw - 32px); }
+  #toasts { position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:8px; z-index:1000; max-width:calc(100vw - 32px); }
   .toast { background:var(--fg); color:var(--bg); padding:10px 14px; border-radius:10px; font-size:14px; box-shadow:0 8px 24px rgba(0,0,0,.25); animation:fade .18s ease; overflow-wrap:anywhere; }
   .toast.bad { background:var(--bad); color:#fff; }
 
@@ -707,14 +721,15 @@
     <ul class="how">
       <li>At clock-in, staff in the departments below <b>confirm their PPE</b> with one tap per item — the <b>hi-vis vest is auto-detected</b> by the camera.</li>
       <li>Where the fatigue check is on, they also <b>rate how rested they feel</b> (1–5). Aura shows a <b>fatigue-risk score</b> with its reasons: rest since last shift, hours in the last 24 h / 7 days, consecutive days, night work, recent “tired” remarks and the self-rating.</li>
-      <li>Missing PPE or a <b>HIGH</b> fatigue score is flagged to supervisors (Insights, and <code>SAFETY_WEBHOOK_URL</code> if set) — it <b>never blocks clock-in</b>.</li>
+      <li><b>Locations</b> can be linked to a rule (e.g. a “Hangar” rule with a hard hat). Anyone scanning there must meet it when they clock in <b>or return from a break</b>, whatever their department.</li>
+      <li>Missing PPE or a <b>HIGH</b> fatigue score is flagged to supervisors (Insights, and <code>SAFETY_WEBHOOK_URL</code> if set). It doesn't block clock-in — <b>unless the location is set to Enforce</b>: then entry is refused until all required PPE is confirmed.</li>
     </ul>
     <p class="notice" style="margin:12px 0 0">The fatigue score is a transparent risk indicator to prompt a conversation — not a medical assessment or a certified fatigue risk management system (FRMS).</p>
   </div>
   <div class="card">
-    <div class="card-h"><h2>Department rules</h2>
-      <input id="sNew" placeholder="Other department…" list="deptList" style="width:200px"><button class="btn ghost sm" id="sAdd">+ Add</button></div>
-    <p class="muted" style="margin-top:0">Departments without a rule clock in as normal. Limits are used for the fatigue score.</p>
+    <div class="card-h"><h2>Safety rules</h2>
+      <input id="sNew" placeholder="New rule, e.g. Hangar or a department…" list="deptList" style="width:260px"><button class="btn ghost sm" id="sAdd">+ Add</button></div>
+    <p class="muted" style="margin-top:0">A rule named after a department applies to that department's staff when they clock in. Any rule can also be linked to locations (Locations → a kiosk → <b>Safety rule</b>): everyone entering there must meet it, and <b>Enforce</b> refuses entry until all required PPE is confirmed. Departments and locations without a rule work as normal. Limits are used for the fatigue score.</p>
     <div class="srules" id="sRules"><div class="muted">Loading…</div></div>
   </div>
 </section>
@@ -1002,7 +1017,7 @@
     const [p, e] = await Promise.all([api('/api/people'), api('/api/employees').catch(err => ({ employees: [], err }))]);
     const m = new Map();
     p.people.forEach(x => m.set(x.name, { ...x, enrolled: false, photos: 0 }));
-    e.employees.forEach(x => m.set(x.name, { mood_consent: 1, ...(x.profile || {}), ...(m.get(x.name) || {}), name: x.name, enrolled: true, photos: x.photos, learned: x.learned || 0 }));
+    e.employees.forEach(x => m.set(x.name, { mood_consent: 1, ...(x.profile || {}), ...(m.get(x.name) || {}), name: x.name, enrolled: true, photos: x.photos, learned: x.learned || 0, cover: x.cover || null }));
     PEOPLE = [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
     $('peopleWarn').hidden = !e.err;
     if (e.err) $('peopleWarn').textContent = `Face recognizer unavailable (${e.err.message}) — photo counts are not shown.`;
@@ -1019,9 +1034,25 @@
       const sub = [x.role, x.department].filter(Boolean).join(' · ') || 'No role set';
       const photos = x.enrolled ? `<span class="pill ${x.photos < 3 ? 'warn' : 'ok'}">${x.photos} photo${x.photos === 1 ? '' : 's'}${x.photos < 3 ? ' · add more' : ''}</span>` : '<span class="pill">not enrolled</span>';
       const consent = +x.mood_consent === 0 ? '<span class="pill bad plain">Mood off</span>' : '<span class="pill acc plain">Mood consent</span>';
-      return `<button class="person" data-n="${esc(x.name)}">${avatar(x.name)}<div class="who"><b>${esc(x.name)}</b><div class="muted">${esc(sub)}</div><div class="badges">${photos}${zonePill(x.zone)}${passPill(x.pass_expiry)}${consent}${x.demo ? '<span class="chip">demo</span>' : ''}</div></div></button>`;
+      return `<button class="person" data-n="${esc(x.name)}">${photoAvatar(x)}<div class="who"><b>${esc(x.name)}</b><div class="muted">${esc(sub)}</div><div class="badges">${photos}${zonePill(x.zone)}${passPill(x.pass_expiry)}${consent}${x.demo ? '<span class="chip">demo</span>' : ''}</div></div></button>`;
     }).join('') || `<div class="empty" style="grid-column:1/-1">${PEOPLE.length ? 'No matches.' : 'Nobody here yet — enrol someone in the Enrol tab, or load demo data in Setup.'}</div>`;
     $('peopleGrid').querySelectorAll('[data-n]').forEach(b => b.onclick = () => openPerson(b.dataset.n));
+    fillCovers($('peopleGrid'));
+  }
+  // profile picture: the photo /api/employees picked (latest good kiosk photo, else newest enrolled one),
+  // drawn over the initials once loaded. Images need the PIN header, so they are fetched as blobs and cached.
+  const covers = new Map();  // "name/image_id" -> Promise<objectURL|null>
+  const photoAvatar = (x, cls = '') => {
+    const av = avatar(x.name, cls);
+    return x.cover ? av.replace(/<\/div>$/, `<img alt="" data-cover="${esc(x.name)}/${esc(x.cover)}"></div>`) : av;
+  };
+  function fillCovers(root) {
+    for (const el of root.querySelectorAll('img[data-cover]')) {
+      const k = el.dataset.cover, [n, id] = [k.slice(0, k.lastIndexOf('/')), k.slice(k.lastIndexOf('/') + 1)];
+      if (!covers.has(k)) covers.set(k, fetch(`/api/employees/${enc(n)}/photos/${enc(id)}`, { headers: { 'X-Admin-Pin': PIN } })
+        .then(r => r.ok ? r.blob() : null).then(b => b && URL.createObjectURL(b)).catch(() => null));
+      covers.get(k).then(u => { if (u) { el.onload = () => el.classList.add('on'); el.src = u; } else el.remove(); });
+    }
   }
   $('peopleQ').oninput = renderPeople; $('peopleF').onchange = renderPeople;
   $('empRefresh').onclick = () => loadPeople().catch(fail);
@@ -1030,7 +1061,8 @@
   function openPerson(name) {
     const x = PEOPLE.find(p => p.name === name); if (!x) return;
     current = x;
-    $('pAv').outerHTML = avatar(x.name).replace('class="avatar ', 'id="pAv" class="avatar ');
+    $('pAv').outerHTML = photoAvatar(x).replace('class="avatar ', 'id="pAv" class="avatar ');
+    fillCovers($('pAv'));
     $('pName').textContent = x.name;
     $('pMeta').textContent = (x.enrolled ? `Face enrolled · ${x.photos} photo${x.photos === 1 ? '' : 's'}` + (x.learned ? ` + ${x.learned} learned this week` : '') : 'Face not enrolled') + (x.demo ? ' · demo profile' : '');
     $('pf_role').value = x.role || ''; $('pf_department').value = x.department || '';
@@ -1197,9 +1229,11 @@
   // ---- locations ----
   const THEMES = { lagoon: 'Lagoon', sunset: 'Sunset', aurora: 'Aurora', mono: 'Mono' };
   let KIOSKS = [], SHARED = [], SEL = null, CARDS = [];
+  let SAFE = { rules: [], departments: [], locations: [], catalog: {} };
   const online = k => k.last_seen && (Date.now() - new Date(k.last_seen)) < 120000;
   async function loadLocations() {
-    const [k, a] = await Promise.all([api('/api/kiosks'), api('/api/announcements')]);
+    const [k, a, sr] = await Promise.all([api('/api/kiosks'), api('/api/announcements'), api('/api/safety/rules').catch(() => null)]);
+    if (sr) SAFE = sr;
     KIOSKS = k.kiosks; SHARED = k.shared_media || [];
     if (SEL && !KIOSKS.some(x => x.name === SEL)) SEL = null;
     if (!SEL && KIOSKS.length) SEL = KIOSKS[0].name;
@@ -1209,9 +1243,15 @@
     renderAnns(a.announcements);
   }
   function renderKList() {
-    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
+    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media${k.safety_rule ? ` · ${+k.safety_enforce ? '⛔' : '🦺'} ${esc(k.safety_rule)}` : ''}</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
     $('kList').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { SEL = b.dataset.k; renderKList(); renderEditor(); if (innerWidth < 900) $('kEditor').scrollIntoView({ behavior: 'smooth' }); });
   }
+  const ruleSummary = name => {
+    const r = (SAFE.rules || []).find(x => x.department === name);
+    if (!r) return 'no checks';
+    const bits = r.ppe.map(k => (SAFE.catalog[k] || {}).icon || k);
+    return [bits.join(' '), +r.fatigue ? 'fatigue check' : ''].filter(Boolean).join(' + ') || 'no checks';
+  };
   const FLIGHT_OPTS = { both: 'Departures + arrivals', departures: 'Departures only', arrivals: 'Arrivals only', off: 'Off — no flight board' };
   function renderEditor() {
     const k = KIOSKS.find(x => x.name === SEL);
@@ -1229,6 +1269,9 @@
         <div class="field span2"><span>Theme</span><div class="themes">${Object.entries(THEMES).map(([v, l]) => `<label class="theme-opt"><input type="radio" name="k_theme" value="${v}"${(k.theme || 'lagoon') === v ? ' checked' : ''}><span><i class="th-${v}"></i>${l}</span></label>`).join('')}</div></div>
         <label class="field"><span>Flight board</span><select id="k_flights">${Object.entries(FLIGHT_OPTS).map(([v, l]) => `<option value="${v}"${(k.flights || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <div class="field span2"><span>Voice</span><label class="switch"><input type="checkbox" id="k_voice"${+k.voice !== 0 ? ' checked' : ''}><span class="sl"></span><span>Aura speaks replies aloud and listens for questions</span></label></div>
+        <label class="field"><span>Safety rule to enter</span><select id="k_srule"><option value="">None — department rules only</option>${(SAFE.rules || []).map(r => `<option value="${esc(r.department)}"${k.safety_rule === r.department ? ' selected' : ''}>${esc(r.department)} — ${esc(ruleSummary(r.department))}</option>`).join('')}</select></label>
+        <div class="field"><span>Enforce</span><label class="switch"><input type="checkbox" id="k_senforce"${+k.safety_enforce === 1 ? ' checked' : ''}><span class="sl"></span><span>Refuse entry unless all required PPE is confirmed</span></label></div>
+        <div class="field span2"><div class="hint" style="margin:0">Applies to everyone clocking in or returning from a break here, on top of their department rule. A HIGH fatigue score is flagged to supervisors, never a lockout. <a href="#safety">Create or edit rules in Safety →</a></div></div>
       </div>
       <h3>Info cards</h3>
       <p class="muted" style="margin-top:0">Shown on the kiosk screen — and they're also what Aura uses to answer visitors' questions ("where is the prayer room?"), so keep them accurate and specific.</p>
@@ -1271,6 +1314,7 @@
       zone: $('k_zone').value.trim(), headline: $('k_head').value.trim(), subtitle: $('k_sub').value.trim(),
       theme: (document.querySelector('input[name=k_theme]:checked') || {}).value || 'lagoon', language: $('k_lang').value,
       voice: $('k_voice').checked, flights: $('k_flights').value,
+      safety_rule: $('k_srule').value, safety_enforce: $('k_senforce').checked,
       info: CARDS.map(c => ({ icon: c.icon.trim(), title: c.title.trim(), text: c.text.trim() })).filter(c => c.title || c.text),
     };
     await api('/api/kiosks/' + enc(name), jsonBody('PUT', body));
@@ -1629,6 +1673,7 @@
     assist_sla: ['ASSIST_SLA_MINUTES', null, 'A traveller’s assistance request has waited more than 2 × the assist SLA.'],
     safety: [null, null, 'A clock-in safety check was flagged (missing PPE or HIGH fatigue risk).'],
     pass_expired: ['PASS_ALERT_MINUTES', 'pass_alert_minutes', 'Someone with an expired security pass was recognised at a kiosk: the screen locked red, the siren sounded and every action was refused. Repeat sightings at the same kiosk within this many minutes count as one incident.'],
+    spoof: ['PASS_ALERT_MINUTES', 'pass_alert_minutes', 'A photo or screen showing a staff member was held up to a kiosk and failed the liveness check, so nothing was recorded. Repeat attempts at the same kiosk within this many minutes count as one incident.'],
   };
   const rel = ts => {
     const s = Math.max(0, (Date.now() + A.skew - new Date(ts)) / 1000);
@@ -1751,7 +1796,7 @@
 
   // ---- safety rules ----
   const SDEF = { ppe: [], fatigue: 0, min_rest_h: 10, max_24h_h: 12, max_7d_h: 60, max_days: 6 };
-  let SAFE = { rules: [], departments: [], catalog: {} }, SEXTRA = [];
+  let SEXTRA = [];
   async function loadSafety() {
     SAFE = await api('/api/safety/rules');
     renderSafety();
@@ -1764,11 +1809,14 @@
     $('sRules').innerHTML = depts.map((d, i) => {
       const r = byDept[d], v = { ...SDEF, ...(r || {}) };
       const fat = +v.fatigue === 1;
+      const locs = (SAFE.locations || []).filter(l => l.rule === d);
+      const kind = SAFE.departments.includes(d) ? '' : ' <span class="muted" style="font-weight:500">· location rule</span>';
       return `<div class="srule${r ? ' on' : ''}" data-d="${esc(d)}">
-        <div class="sh"><b>${esc(d)}</b>${r ? (r.ppe.length || fat ? '<span class="pill ok">Checks on</span>' : '<span class="pill">Rule saved · no checks</span>') : '<span class="pill">No rule</span>'}</div>
+        <div class="sh"><b>${esc(d)}${kind}</b>${r ? (r.ppe.length || fat ? '<span class="pill ok">Checks on</span>' : '<span class="pill">Rule saved · no checks</span>') : '<span class="pill">No rule</span>'}</div>
         <div class="field"><span>PPE to confirm</span><div class="ppe-opts">${Object.entries(SAFE.catalog).map(([k, c]) => `<label class="ppe-opt"><input type="checkbox" data-ppe="${esc(k)}"${v.ppe.includes(k) ? ' checked' : ''}><span>${esc(c.icon)} ${esc(c.label)}${k === 'hi_vis' ? ' <small class="muted">· auto</small>' : ''}</span></label>`).join('')}</div></div>
         <label class="switch"><input type="checkbox" data-f="fatigue"${fat ? ' checked' : ''}><span class="sl"></span><span>Fatigue check (rested rating + risk score)</span></label>
         <div class="lims"${fat ? '' : ' hidden'}>${num(i, 'min_rest_h', 'Min rest between shifts (h)', '0.5', v.min_rest_h)}${num(i, 'max_24h_h', 'Max hours in 24 h', '0.5', v.max_24h_h)}${num(i, 'max_7d_h', 'Max hours in 7 days', '1', v.max_7d_h)}${num(i, 'max_days', 'Max consecutive days', '1', v.max_days)}</div>
+        ${locs.length ? `<div class="field"><span>Linked locations</span><div class="ppe-opts">${locs.map(l => `<a class="pill${+l.enforce ? ' bad' : ''}" href="#locations" data-loc="${esc(l.name)}">${+l.enforce ? '⛔ ' : ''}${esc(l.name)}${+l.enforce ? ' · enforced' : ''}</a>`).join('')}</div></div>` : ''}
         <div class="acts"><button class="btn sm" data-a="save">Save</button>${r ? '<button class="btn danger sm" data-a="del">Remove rule</button>' : ''}</div>
       </div>`;
     }).join('') || '<div class="empty">No departments yet — add departments to staff profiles, or add one above.</div>';
@@ -1783,11 +1831,13 @@
       };
       const del = card.querySelector('[data-a=del]');
       if (del) del.onclick = async () => {
-        if (!confirm(`Remove the safety rule for ${d}?\n\nStaff in ${d} will clock in without PPE or fatigue checks.`)) return;
+        const linked = (SAFE.locations || []).filter(l => l.rule === d).map(l => l.name);
+        if (!confirm(`Remove the safety rule ${d}?\n\nStaff in ${d} will clock in without PPE or fatigue checks.${linked.length ? `\nIt is also unlinked from: ${linked.join(', ')}.` : ''}`)) return;
         try { await api('/api/safety/rules/' + enc(d), { method: 'DELETE' }); toast(`Removed rule for ${d}`); await loadSafety(); } catch (e) { fail(e); }
       };
     });
   }
+  $('sRules').addEventListener('click', e => { const a = e.target.closest('[data-loc]'); if (a) SEL = a.dataset.loc; });
   $('sAdd').onclick = () => {
     const d = $('sNew').value.trim(); if (!d) return;
     if (!SEXTRA.includes(d)) SEXTRA.push(d);

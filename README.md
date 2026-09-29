@@ -63,9 +63,16 @@ Facilities) get a checklist when they clock IN: PPE items (the camera auto-detec
 and "how rested do you feel?". A transparent fatigue-risk score (rest since last shift, hours in
 24 h / 7 days, consecutive days, night work, recently telling Aura they were tired, the self-rating)
 is shown to the worker with its reasons. Missing PPE or HIGH fatigue is flagged to supervisors
-(`SAFETY_WEBHOOK_URL`, defaults to the assist webhook) and in Insights. It never blocks clocking in —
-it's a prompt and a record, not a gate. The score is a rule-of-thumb risk indicator, not a medical
-or regulatory fatigue-risk-management system.
+(`SAFETY_WEBHOOK_URL`, defaults to the assist webhook) and in Insights. By default it never blocks
+clocking in — it's a prompt and a record, not a gate. The score is a rule-of-thumb risk indicator,
+not a medical or regulatory fatigue-risk-management system.
+
+**Location safety** — any safety rule can be linked to a location (Admin → Locations → a kiosk →
+**Safety rule to enter**; create rules such as "Hangar" in Admin → Safety). Everyone entering there
+(on IN and BACK) must meet it, on top of their department rule. Turn on **Enforce** and entry is
+refused until all required PPE is confirmed: the kiosk shows "Entry refused", the server rejects
+`/api/event` without a passing check at that kiosk in the last 15 minutes, and supervisors get a
+"refused entry" alert. HIGH fatigue is still flagged only, never a lockout.
 
 **Roster + supervisor alerts** — import the roster (Admin → Roster: CSV upload with preview, or
 `POST /api/roster` from your HR/rostering system; overnight and split shifts supported). Punctuality
@@ -188,7 +195,12 @@ the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't d
 
 1. Safari → `https://<mac-ip>:8443/?kiosk=Arrivals-Hall` (one `kiosk=` name per location; the admin
    **Setup** tab generates links). Tap "Tap to wake Aura" once, allow camera **and microphone**.
-2. Share → **Add to Home Screen**, open from the icon.
+2. Share → **Add to Home Screen**, open from the icon. It runs full-screen as its own app and
+   reopens on the same `kiosk=` name. `/admin`, `/insights` and `/assist` install the same way
+   (Chrome/Edge/Android also show an **Install** button); each is a separate app. A service worker
+   keeps the last copy of each screen, so reopening it during a brief server outage still loads the
+   page (or a self-retrying "can't reach the server" screen) instead of an error page. The API and
+   photos are never cached.
 3. **Settings → Accessibility → Guided Access → on**; in the kiosk triple-click the top button →
    Start. Staff can't leave the page.
 4. Auto-Lock **Never**, keep on power, mount at face height, light from the front.
@@ -216,6 +228,23 @@ the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't d
 | `ADMIN_PIN` | `2468` | Change it |
 | `TZ` | `Indian/Maldives` | Timestamps stored in this zone |
 | `ADAPTIVE_LEARNING` | `on` | Let the recognizer keep daily best photos of recognised staff |
+| `LIVENESS` | `on` | Anti-spoofing (see below). `monitor` = score and alert but never block; `off` |
+| `LIVENESS_THRESHOLD` | `0.5` | Liveness score (0..1) a matched face needs. Raise to 0.7 if photos ever get through; lower to 0.35 if real staff see "Please step up yourself" |
+| `LIVENESS_FRAMES` | `2` | Matched frames averaged per verdict (a first frame scoring ≥ 0.9 passes straight away) |
+
+### Liveness
+
+A photo, print or phone screen showing a staff member's face is refused. The recognizer runs
+MiniFASNet (Silent-Face-Anti-Spoofing, two small models built into the image from the authors'
+original weights) on the face in front of the kiosk, **only when it already matches someone**, so
+visitors and empty scenes cost nothing; it adds ~2 ms to a matched frame. A spoof shows "Please step
+up yourself — photos and screens can't be used to clock in", reveals no name, is never learned as a
+daily-best photo, and repeated attempts raise a 📵 **Photo / screen at kiosk** supervisor alert.
+Every clock-in also carries a signed token from that live match, so `/api/event` can't be called for
+someone the camera never saw.
+
+To tune on a new camera: open the kiosk with `?debug=1` — the overlay shows each frame's liveness
+score — or run with `LIVENESS=monitor` for a day and check the alerts before switching to `on`.
 
 Recognizer (`recognizer.environment`): `DAILY_BEST` (2 photos/person/day), `DAILY_KEEP_DAYS` (7),
 `LEARN_MIN_SIMILARITY` (0.45), `LEARN_MARGIN` (0.08 over the next person), `LEARN_ANCHOR_SIMILARITY`
@@ -233,9 +262,10 @@ docker run --rm -v face-attendance_recognizer-data:/d  -v "$PWD":/b alpine tar c
 
 ## Known limits
 
-* No liveness check — a printed photo could clock someone in. Fine with supervisors around.
-* Kiosk endpoints (`/api/event`, `/api/talk`) are unauthenticated on the LAN, as before; put the
-  kiosks on their own VLAN before connecting other networks.
+* Liveness is passive (single camera, no depth sensor): it stops photos, prints and phone/tablet
+  screens, not a realistic 3D mask. Keep supervisors around high-security doors.
+* Kiosk endpoints other than `/api/event` (e.g. `/api/talk`) are unauthenticated on the LAN, as before;
+  put the kiosks on their own VLAN before connecting other networks.
 * Info cards are answered in the admin's language; with Claude enabled they are translated on the fly.
 * Dhivehi replies in `phrases.py` should be reviewed by a native speaker; iPads have no Dhivehi voice,
   so Dhivehi replies are shown but not spoken.

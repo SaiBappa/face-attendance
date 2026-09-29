@@ -74,6 +74,10 @@ services:
       - MOOD_TRACKING=${MOOD_TRACKING:-on}
       - INTERACTION_RETENTION_DAYS=${INTERACTION_RETENTION_DAYS:-365}
       - ADAPTIVE_LEARNING=${ADAPTIVE_LEARNING:-on}
+      # ---- liveness: photos / screens held up to the kiosk (see README "Liveness") ----
+      - LIVENESS=${LIVENESS:-on}                        # on | monitor (alert only) | off
+      - LIVENESS_THRESHOLD=${LIVENESS_THRESHOLD:-0.5}
+      - LIVENESS_FRAMES=${LIVENESS_FRAMES:-2}
       # ---- live flights + assistance requests ----
       - FLIGHT_PROVIDER=${FLIGHT_PROVIDER:-}
       - FLIGHT_AIRPORT=${FLIGHT_AIRPORT:-MLE}

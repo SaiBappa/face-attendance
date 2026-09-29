@@ -12,6 +12,22 @@
 <link rel="icon" type="image/png" href="/static/icons/icon-192.png">
 <!-- the manifest's start_url keeps this screen's ?kiosk=…, so "Add to Home Screen" reopens the same kiosk -->
 <script>{ const m = document.createElement('link'); m.rel = 'manifest'; m.href = '/manifest.webmanifest' + location.search; document.head.appendChild(m); }</script>
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));</script>
+<script>
+  // Home Screen app on iPadOS: with the translucent status bar the layout viewport (and so every
+  // position:fixed; inset:0 layer) comes out one status-bar height short of the screen, leaving an
+  // empty strip along the bottom. Measure the real window height and size the full-screen layers to it.
+  if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) {
+    const root = document.documentElement;
+    root.classList.add('pwa');
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:100vh;height:100lvh;visibility:hidden;pointer-events:none';
+    const fit = () => root.style.setProperty('--app-h', Math.max(innerHeight, probe.offsetHeight) + 'px');
+    addEventListener('DOMContentLoaded', () => { document.body.appendChild(probe); fit(); });
+    addEventListener('resize', fit);
+    addEventListener('orientationchange', () => setTimeout(fit, 300));
+  }
+</script>
 <title>Aura</title>
 <style>
   /* ------------------------------------------------------------------ theme */
@@ -32,7 +48,12 @@
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; overflow:hidden; background:var(--bg1); color:var(--fg);
     font-family:-apple-system,"SF Pro Display",system-ui,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
-  body { user-select:none; -webkit-user-select:none; }
+  body { user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; overscroll-behavior:none; touch-action:manipulation; }
+  /* Home Screen app: pin every full-screen layer to the measured window height (see the script in <head>) */
+  html.pwa, html.pwa body { height:var(--app-h, 100%); }
+  html.pwa :is(#bg, #stage, #done, #safety, #passAlert, #start) { bottom:auto; height:var(--app-h, 100%); }
+  html.pwa #chat { bottom:auto; top:calc(var(--app-h, 100vh) - min(62vh,640px)); }
+  html.pwa #status { bottom:auto; top:calc(var(--app-h, 100vh) - 48px - 1.4em); }
   button { font:inherit; color:inherit; cursor:pointer; }
   .hidden { display:none !important; }
 
@@ -263,6 +284,8 @@
   .risk { margin-top:12px; padding:12px 14px; border-radius:14px; font-size:15px; background:var(--glass); border:1px solid var(--line); }
   .risk b.low { color:#4ade80; } .risk b.moderate { color:#fbbf24; } .risk b.high { color:#f87171; }
   .risk ul { margin:6px 0 0; padding-left:20px; color:var(--muted); }
+  #safety .enforce { margin:0 0 6px; padding:10px 14px; border-radius:14px; font-size:16px; background:rgba(239,68,68,.16); border:1px solid rgba(239,68,68,.55); color:#fecaca; }
+  #safety .go .pill.danger { background:#dc2626; border-color:#dc2626; color:#fff; }
   #safety .go { margin-top:22px; display:flex; gap:12px; justify-content:flex-end; flex-wrap:wrap; }
   /* expired security pass: full-screen red lockout, swallows every tap */
   #passAlert { position:fixed; inset:0; z-index:35; display:none; place-items:center; text-align:center; padding:24px;
@@ -495,7 +518,7 @@
     state: 'ambient', encounter: null, noFace: 0, unmatched: 0, face: null, current: null, cfg: null,
     paused: false, chatting: false, lastActivity: Date.now(), cooldownName: null, cooldownUntil: 0,
     deadline: 0, mediaIdx: 0, cardIdx: 0, lang: 'en', voiceOn: true, busy: false, failures: 0,
-    frames: 0, firstUnmatchedAt: 0,
+    frames: 0, firstUnmatchedAt: 0, spoofAt: 0,
   };
   let approachAt = 0;   // when the current walk-up started (first motion, else first frame of the encounter)
 
@@ -527,7 +550,8 @@
         `LATENCY ms        capture  network  server   total\n` +
         `last frame           ${ms(last?.capture)}     ${ms(last?.net)}    ${ms(last?.server)}    ${ms(last?.total)}\n` +
         `median (${String(hist.length).padStart(2)} frames)   ${ms(p50('capture'))}     ${ms(p50('net'))}    ${ms(p50('server'))}    ${ms(p50('total'))}\n` +
-        `server detail   decode ${ms(s.decode)}  detect ${ms(s.detect)}  embed ${ms(s.embed)}  mood+clothes ${ms(s.extras)}\n` +
+        `server detail   decode ${ms(s.decode)}  detect ${ms(s.detect)}  embed ${ms(s.embed)}  mood+clothes ${ms(s.extras)}  liveness ${ms(s.liveness)}\n` +
+        (last?.live != null ? `liveness score ${last.live.toFixed(2)}${last.verdict ? ` → ${last.verdict}` : ' → live'}\n` : '') +
         `capture detail  JPEG encode ${ms(last?.encode)} (median ${ms(p50('encode'))}) · ${Math.round(100 * hist.filter(f => f.early).length / (hist.length || 1))}% pre-captured during the sleep\n` +
         `frame ${last ? Math.round(last.bytes / 1024) : '–'} KB · ${fps.toFixed(1)} fps · next scan ${nextScanMs()} ms · state ${S.state}\n` +
         (walk ? `walk-up → ${walk.label}: ${(walk.ms / 1000).toFixed(2)} s over ${walk.frames} frame${walk.frames === 1 ? '' : 's'}` : 'walk-up → waiting for someone to step up');
@@ -536,9 +560,9 @@
     return {
       // capture = time the loop waited for its frame (near 0 when it was pre-captured during the sleep);
       // encode = how long the JPEG encode itself took, wherever it happened
-      frame({ capture, encode, early, rtt, bytes, timing }) {
+      frame({ capture, encode, early, rtt, bytes, timing, j }) {
         const srv = parse(timing), server = srv.total;
-        last = { at: performance.now(), capture, encode, early, bytes, srv, server,
+        last = { at: performance.now(), capture, encode, early, bytes, srv, server, live: j?.liveness_score, verdict: j?.liveness,
                  net: Number.isFinite(server) ? Math.max(0, rtt - server) : rtt, total: capture + rtt };
         hist.push(last); if (hist.length > 30) hist.shift();
         render();
@@ -771,7 +795,7 @@
     if (S.chatting) closeChat();
     setState('ambient'); clearSay(); show([]);
     S.current = null; S.encounter = null; S.unmatched = 0; S.noFace = 0; S.paused = false; S.deadline = 0;
-    S.firstUnmatchedAt = 0; approachAt = 0;
+    S.firstUnmatchedAt = 0; S.spoofAt = 0; approachAt = 0;
     ambientText(); rotateCard();
   }
 
@@ -873,7 +897,8 @@
 
   // how long to wait before the next frame: fast while someone is arriving, slow otherwise
   function nextScanMs() {
-    if (S.state === 'presence') return SCAN_FACE_MS;
+    // a photo/screen is being held up: no need to scan it back-to-back
+    if (S.state === 'presence') return Date.now() - S.spoofAt < 3000 ? SCAN_VISITOR_MS : SCAN_FACE_MS;
     if (S.state === 'ambient') return Date.now() - motionAt < MOTION_HOLD_MS ? SCAN_ACTIVE_MS : SCAN_IDLE_MS;
     return SCAN_VISITOR_MS;
   }
@@ -949,6 +974,20 @@
     if (j.matched) {
       if (j.employee === S.cooldownName && Date.now() < S.cooldownUntil) return;
       if (S.state !== 'staff' && !S.chatting) showStaff(j);
+      return;
+    }
+    // liveness: a staff face that isn't yet (or can't be) confirmed as a live person. Never a visitor.
+    if (j.liveness === 'checking' || j.liveness === 'spoof') {
+      if (S.state !== 'ambient' && S.state !== 'presence') return;
+      if (S.state === 'ambient') { setState('presence'); clearSay(); $('hint').textContent = ''; }
+      if (j.liveness === 'spoof') {
+        S.spoofAt = Date.now();
+        $('headline').textContent = 'Please step up yourself';
+        $('sub').textContent = 'Photos and screens can’t be used to clock in.';
+      } else if (!S.spoofAt) {
+        $('headline').textContent = 'Hello there';
+        $('sub').textContent = 'One moment…';
+      }
       return;
     }
     if (!S.unmatched++) S.firstUnmatchedAt = Date.now();
@@ -1078,17 +1117,25 @@
     const action = btn.dataset.a;
     S.deadline = 0;
     let safetyOut = null;
-    if (action === 'IN') {
+    if (action === 'IN' || action === 'BACK') {
       try {
-        const pre = await post('/api/safety/precheck', { employee: j.employee, kiosk: KIOSK, hivis: j.attire?.hivis ?? null });
+        const pre = await post('/api/safety/precheck', { employee: j.employee, kiosk: KIOSK, action, hivis: j.attire?.hivis ?? null });
         if (pre.required) {
-          safetyOut = await safetySheet(j, pre);
+          safetyOut = await safetySheet(j, pre, action);
           if (!safetyOut) { startCountdown(STAFF_TIMEOUT_S); return; }   // cancelled
         }
-      } catch (_) { /* safety service unavailable: never block clocking in */ }
+      } catch (_) { /* safety service unavailable: the server still refuses entry at enforced locations */ }
+    }
+    if (safetyOut && safetyOut.blocked) {
+      const bits = safetySummary(safetyOut);
+      flash('Entry refused', `${bits.join(' ')} You are not clocked in. Supervisor notified.`, 'var(--out)');
+      beep(220, 400, 'square'); speak(`Entry refused. Safety requirements for ${safetyOut.location || 'this area'} are not met.`);
+      S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+      setTimeout(toAmbient, 6000);
+      return;
     }
     try {
-      const r = await post('/api/event', { employee: j.employee, action, kiosk: KIOSK, similarity: j.similarity, mood: j.emotion?.label, attire: j.attire?.name });
+      const r = await post('/api/event', { employee: j.employee, action, kiosk: KIOSK, token: j.token, similarity: j.similarity, mood: j.emotion?.label, attire: j.attire?.name });
       const time = new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       let line = r.duplicate ? 'Already recorded a moment ago.' : '';
       if (!r.duplicate) {
@@ -1098,10 +1145,7 @@
         } catch (_) {}
       }
       if (safetyOut && safetyOut.result === 'flagged') {
-        const bits = [];
-        if (safetyOut.missing.length) bits.push(`Missing: ${safetyOut.missing.map(k => S.ppeLabels[k] || k).join(', ')} — please collect before going airside.`);
-        if (safetyOut.fatigue?.level === 'high') bits.push('Fatigue risk is HIGH — your supervisor has been told. Look after yourself today.');
-        line = bits.join(' ') + ' Supervisor notified.';
+        line = safetySummary(safetyOut).join(' ') + ' Supervisor notified.';
         flash(`${LABEL[action]} · ${time}`, line, '#d97706');
         beep(440, 200, 'triangle'); speak(`${LABEL[action]}. ${line}`);
       } else {
@@ -1119,25 +1163,34 @@
 
   // ---- ramp safety pack: PPE checklist + restedness, resolves with the recorded check (or null if cancelled)
   S.ppeLabels = {};
-  function safetySheet(j, pre) {
+  function safetySummary(out) {
+    const bits = [];
+    if (out.missing.length) bits.push(`Missing: ${out.missing.map(k => S.ppeLabels[k] || k).join(', ')}${out.blocked ? '.' : ' — please collect before going airside.'}`);
+    if (out.fatigue?.level === 'high') bits.push('Fatigue risk is HIGH — your supervisor has been told. Look after yourself today.');
+    return bits;
+  }
+  function safetySheet(j, pre, action) {
     return new Promise(resolve => {
       const el = $('safety'), sheet = el.querySelector('.sheet');
       const items = {}; let rested = null;
       pre.items.forEach(it => { S.ppeLabels[it.key] = it.label; items[it.key] = it.auto === true ? 'ok' : 'missing'; });
       const fat = pre.fatigue;
       const faces = [[1, '😫', 'Exhausted'], [2, '😴', 'Tired'], [3, '😐', 'OK'], [4, '🙂', 'Rested'], [5, '😄', 'Very rested']];
-      sheet.innerHTML = `<h2>Safety check</h2><div class="sub">${esc(j.employee.split(' ')[0])} · ${esc(pre.department || '')} — confirm before going airside</div>` +
+      const verb = action === 'BACK' ? 'return' : 'clock in';
+      sheet.innerHTML = `<h2>Safety check</h2><div class="sub">${esc(j.employee.split(' ')[0])} · ${esc(pre.department || '')} — confirm before ${pre.location ? 'entering ' + esc(pre.location) : 'going airside'}</div>` +
+        (pre.enforce ? `<div class="enforce">⛔ <b>${esc(pre.location || 'This area')}</b> requires all of this PPE — entry is refused if any is missing</div>` : '') +
         (pre.items.length ? `<h3>Your PPE</h3><div class="ppe">${pre.items.map(it => `<button data-k="${esc(it.key)}" class="${it.auto === true ? 'on' : it.auto === false ? 'warn' : ''}"><i>${it.icon}</i>${esc(it.label)}` +
-          `<small>${it.auto === true ? 'seen by camera' : it.auto === false ? 'not seen — please put it on' : 'tap to confirm'}</small></button>`).join('')}</div>` : '') +
+          `<small>${it.auto === true ? 'seen by camera' : it.auto === false ? 'not seen — please put it on' : it.location ? 'required here · tap to confirm' : 'tap to confirm'}</small></button>`).join('')}</div>` : '') +
         (pre.ask_rested ? `<h3>How rested do you feel?</h3><div class="rest">${faces.map(([v, e, l]) => `<button data-r="${v}"><i>${e}</i>${l}</button>`).join('')}</div>` : '') +
         (fat ? `<div class="risk">Fatigue risk from your roster: <b class="${fat.level}">${fat.level.toUpperCase()}</b>${fat.factors.length ? `<ul>${fat.factors.map(f => `<li>${esc(f.text)}</li>`).join('')}</ul>` : ' — well rested, nice.'}</div>` : '') +
-        `<div class="go"><button class="pill ghost" data-x>Cancel</button><button class="pill primary" data-ok>Confirm &amp; clock in</button></div>`;
+        `<div class="go"><button class="pill ghost" data-x>Cancel</button><button class="pill primary" data-ok>Confirm &amp; ${verb}</button></div>`;
       const okBtn = sheet.querySelector('[data-ok]');
       const refresh = () => {
         const missing = Object.values(items).filter(v => v !== 'ok').length;
         okBtn.disabled = pre.ask_rested && rested == null;
         okBtn.style.opacity = okBtn.disabled ? .5 : 1;
-        okBtn.textContent = missing ? `Clock in · report ${missing} missing` : 'Confirm & clock in';
+        okBtn.textContent = !missing ? `Confirm & ${verb}` : pre.enforce ? `Report ${missing} missing · can't enter` : `${verb[0].toUpperCase() + verb.slice(1)} · report ${missing} missing`;
+        okBtn.classList.toggle('danger', !!(missing && pre.enforce));
       };
       sheet.querySelectorAll('.ppe button').forEach(b => b.onclick = () => {
         touch(); const k = b.dataset.k; items[k] = items[k] === 'ok' ? 'missing' : 'ok';
@@ -1151,12 +1204,13 @@
       okBtn.onclick = async () => {
         if (okBtn.disabled) return;
         okBtn.disabled = true;
-        try { close(await post('/api/safety/check', { employee: j.employee, kiosk: KIOSK, items, hivis: j.attire?.hivis ?? null, rested })); }
-        catch (_) { close({ result: 'pass', missing: [], fatigue: null }); }
+        try { close(await post('/api/safety/check', { employee: j.employee, kiosk: KIOSK, action, items, hivis: j.attire?.hivis ?? null, rested })); }
+        catch (_) { close({ result: 'pass', missing: [], fatigue: null, blocked: false }); }
       };
       const idle = setTimeout(() => close(null), 90000);
       refresh(); el.classList.add('show');
-      speak(pre.items.length ? 'Quick safety check. Confirm your P P E.' : 'Quick check: how rested do you feel?');
+      speak(pre.enforce ? `Safety check for ${pre.location || 'this area'}. All items are required to enter.`
+        : pre.items.length ? 'Quick safety check. Confirm your P P E.' : 'Quick check: how rested do you feel?');
     });
   }
 

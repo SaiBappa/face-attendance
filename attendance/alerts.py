@@ -8,9 +8,11 @@ live attendance / assistance / safety data into operational alerts.
   long_break     on BREAK for more than BREAK_MAX_MINUTES
   understaffed   a department has at least UNDERSTAFF_MIN fewer people on duty than rostered
   assist_sla     an assistance request has waited longer than 2 x ASSIST_SLA_MINUTES
-  safety         a clock-in safety check was flagged (missing PPE / high fatigue)
+  safety         a clock-in safety check was flagged (missing PPE / high fatigue), or entry refused at an enforced location
   pass_expired   someone with an expired security pass was recognised at a kiosk (logged live by
                  the kiosk, not by the scan; at most once per person per kiosk every PASS_ALERT_MINUTES)
+  spoof          a photo or screen showing a staff member's face was held up to a kiosk (failed the
+                 liveness check; logged live, at most once per person per kiosk every PASS_ALERT_MINUTES)
 
 Each alert has a stable `key`, so re-scans never duplicate it. New alerts are posted to the
 department's webhook (Admin → Alerts → routing) or ALERT_WEBHOOK_URL, and shown in the Admin
@@ -46,6 +48,7 @@ TYPES = {  # type -> (icon, label, severity)
     "assist_sla": ("🛎", "Assistance waiting", "high"),
     "safety": ("🦺", "Safety check flagged", "high"),
     "pass_expired": ("⛔", "Expired security pass", "high"),
+    "spoof": ("📵", "Photo / screen at kiosk", "high"),
 }
 
 
@@ -69,6 +72,20 @@ def pass_incident(conn, person, department, kiosk, expiry, now: datetime = None)
     return _add(conn, f"pass_expired|{person}|{kiosk}|{now.isoformat(timespec='seconds')}", "pass_expired",
                 f"{person} tried to use the {kiosk or 'kiosk'} kiosk with a security pass that expired on {expiry}. "
                 "All attendance actions were blocked and the floor siren sounded.",
+                now, person, department, kiosk)
+
+
+def spoof_incident(conn, person, department, kiosk, now: datetime = None) -> bool:
+    """Log a spoofing attempt: a photo or screen of `person` failed the kiosk's liveness check. Repeat
+    attempts at the same kiosk within PASS_ALERT_MINUTES are one incident. True when a new alert was created."""
+    now = now or datetime.now()
+    since = (now - timedelta(minutes=PASS_ALERT_MIN)).isoformat(timespec="seconds")
+    if conn.execute("SELECT 1 FROM alerts WHERE type='spoof' AND person=? AND kiosk IS ? AND ts>=? LIMIT 1",
+                    (person, kiosk, since)).fetchone():
+        return False
+    return _add(conn, f"spoof|{person}|{kiosk}|{now.isoformat(timespec='seconds')}", "spoof",
+                f"Someone held up a photo or screen showing {person} at the {kiosk or 'kiosk'} kiosk. "
+                "It failed the liveness check, so nothing was recorded.",
                 now, person, department, kiosk)
 
 
@@ -142,7 +159,8 @@ def scan(conn, now: datetime = None) -> int:
             bits.append("missing " + r["missing"].replace(",", ", ").replace("_", " "))
         if r["fatigue_level"] == "high":
             bits.append(f"HIGH fatigue risk ({r['fatigue_score']})")
-        new += _add(conn, f"safety|{r['id']}", "safety", f"{r['person']} clocked in with " + " and ".join(bits) + ".",
+        lead = f"{r['person']} was refused entry at {r['kiosk']}:" if r["blocked"] else f"{r['person']} clocked in with"
+        new += _add(conn, f"safety|{r['id']}", "safety", f"{lead} " + " and ".join(bits) + ".",
                     now, r["person"], r["department"], r["kiosk"])
     return new
 

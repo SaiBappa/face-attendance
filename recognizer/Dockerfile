@@ -1,3 +1,29 @@
+# ---- build stage: passive liveness (anti-spoofing) models ----------------------------------------
+# MiniFASNet from the Silent-Face-Anti-Spoofing authors (minivision-ai, Apache-2.0), exported from their
+# original PyTorch weights to ONNX here so the runtime image needs no PyTorch. Two models look at the face
+# at different zooms (2.7x and 4x the face box: skin texture, and the edges of a phone or print held up
+# to the camera). ~2 MB together, a few ms, and only run on frames that already match a staff member.
+FROM python:3.11-slim AS fas
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/minivision-ai/Silent-Face-Anti-Spoofing /fas
+RUN pip install --no-cache-dir torch onnx --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+RUN mkdir -p /out && cd /fas && python - <<'PY'
+import inspect, torch
+from src.model_lib.MiniFASNet import MiniFASNetV2, MiniFASNetV1SE
+kw = {"dynamo": False} if "dynamo" in inspect.signature(torch.onnx.export).parameters else {}
+for fn, cls, out in (("2.7_80x80_MiniFASNetV2.pth", MiniFASNetV2, "/out/liveness_2.7.onnx"),
+                     ("4_0_0_80x80_MiniFASNetV1SE.pth", MiniFASNetV1SE, "/out/liveness_4.0.onnx")):
+    sd = torch.load("resources/anti_spoof_models/" + fn, map_location="cpu")
+    sd = {k[7:] if k.startswith("module.") else k: v for k, v in sd.items()}
+    m = cls(conv6_kernel=(5, 5))  # 80x80 input
+    m.load_state_dict(sd)
+    m.eval()
+    torch.onnx.export(m, torch.zeros(1, 3, 80, 80), out, input_names=["input"], output_names=["logits"], opset_version=11, **kw)
+    print("exported", out)
+PY
+# the authors' sample photos (real faces and spoofs), for checking the export: see README "Liveness"
+RUN cp -r /fas/images/sample /out/samples
+
 FROM python:3.11-slim
 
 # System libs OpenCV needs. Retries + fix-missing make this survive a flaky Debian mirror.
@@ -32,6 +58,16 @@ cv2.FaceDetectorYN.create("/models/yunet.onnx", "", (320, 320))
 cv2.FaceRecognizerSF.create("/models/sface.onnx", "")
 cv2.dnn.readNetFromONNX("/models/emotion.onnx")
 print("models OK")
+PY
+COPY --from=fas /out/liveness_2.7.onnx /out/liveness_4.0.onnx /models/
+COPY --from=fas /out/samples /models/liveness_samples
+RUN python - <<'PY'
+import cv2, numpy as np
+for p in ("/models/liveness_2.7.onnx", "/models/liveness_4.0.onnx"):
+    n = cv2.dnn.readNetFromONNX(p)
+    n.setInput(np.zeros((1, 3, 80, 80), np.float32))
+    assert n.forward().size == 3, p
+print("liveness models OK")
 PY
 
 WORKDIR /app

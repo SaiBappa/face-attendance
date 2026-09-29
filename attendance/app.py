@@ -16,8 +16,14 @@ Kiosk (no PIN, LAN only):
   POST /api/assist           raise an assistance request; GET /api/assist/{id} its live status
   POST /api/safety/precheck  PPE items + fatigue risk for a worker about to clock in
   POST /api/safety/check     record the confirmed checklist + self-rated restedness
+  A location can link a safety rule (PUT /api/kiosks/{name} {safety_rule, safety_enforce}) that everyone entering
+  there (IN / BACK) must meet; when enforced, /api/event refuses entry without a recent passing check at that kiosk
   An expired security pass (people.pass_expiry before today) blocks /api/event and the safety endpoints
   (403), and each approach is logged as a `pass_expired` supervisor alert.
+  Liveness: a match only counts once the recognizer scores the face as a live person, not a photo or
+  screen (LIVENESS, LIVENESS_THRESHOLD, LIVENESS_FRAMES); repeated failures raise a `spoof` alert. A live
+  match carries a signed, short-lived token that /api/event requires, so a clock-in can't be posted
+  for someone the camera never saw.
 Assist desk (X-Admin-Pin = ASSIST_PIN or ADMIN_PIN):
   /assist page, GET /api/requests, PUT /api/requests/{id}
 Admin (X-Admin-Pin):
@@ -34,6 +40,8 @@ conversation text. Visitor faces are never kept.
 import asyncio
 import contextlib
 import csv
+import hashlib
+import hmac
 import io
 import json
 import os
@@ -74,6 +82,14 @@ MOOD_TRACKING = os.environ.get("MOOD_TRACKING", "on").lower()
 RETENTION_DAYS = int(os.environ.get("INTERACTION_RETENTION_DAYS", "365"))
 # let the recognizer keep each recognised person's best 2 photos a day (for a week) to track changes
 ADAPTIVE_LEARNING = os.environ.get("ADAPTIVE_LEARNING", "on").lower() not in ("off", "0", "false", "no")
+# Liveness (anti-spoofing): on = a photo/screen of a staff member never opens their actions;
+# monitor = score + alert only (for tuning the threshold on a new camera); off
+LIVENESS = os.environ.get("LIVENESS", "on").lower()
+LIVENESS_THRESHOLD = float(os.environ.get("LIVENESS_THRESHOLD", "0.5"))
+LIVENESS_FRAMES = max(1, int(os.environ.get("LIVENESS_FRAMES", "2")))   # matched frames averaged per verdict
+LIVENESS_SURE = float(os.environ.get("LIVENESS_SURE", "0.9"))          # ...unless the first one is this clear
+SPOOF_ALERT_FRAMES = int(os.environ.get("SPOOF_ALERT_FRAMES", "4"))     # failed verdicts before a `spoof` alert
+EVENT_TOKEN_SECONDS = int(os.environ.get("EVENT_TOKEN_SECONDS", "600"))
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
 ACTIONS = ("IN", "BREAK", "BACK", "OUT")
@@ -136,6 +152,16 @@ def refuse_expired_pass(conn, employee: str, kiosk: Optional[str]):
         pass_incident(conn, employee, prof, kiosk)
         conn.commit()  # the `with db()` block rolls back on the exception below; keep the incident
         raise HTTPException(403, f"Security pass expired on {prof['pass_expiry']}. Report to the pass office — your supervisor has been notified.")
+
+
+def refuse_unsafe_entry(conn, employee: str, kiosk: Optional[str], action: str):
+    """An enforced location only lets people in (IN / BACK) after a passing safety check there."""
+    if action not in safety.ENTRY_ACTIONS or not kiosk:
+        return
+    rules = safety.effective(conn, profile(conn, employee).get("department"), kiosk, action)
+    if rules["enforce"] and not safety.entry_cleared(conn, employee, kiosk):
+        raise HTTPException(403, f"Safety requirements for {rules['location']} are not met — complete the safety check "
+                                 "with all required PPE before entering.")
 
 
 def kiosk_row(conn, name: str) -> dict:
@@ -237,26 +263,54 @@ async def kiosk_page(request):
     return page("kiosk.html")
 
 
+APP_ICONS = [
+    {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+]
+
+# The staff screens install as their own apps (own id + scope) next to the kiosk: slug -> (name, short name, colour)
+STAFF_APPS = {
+    "admin": ("Aura Admin", "Admin", "#f4f6f9"),
+    "insights": ("Aura Insights", "Insights", "#f3f4f1"),
+    "assist": ("Aura Assist", "Assist", "#f3f4f1"),
+}
+
+
+def app_manifest(**fields) -> JSONResponse:
+    return JSONResponse({"display": "standalone", "orientation": "any", "icons": APP_ICONS, **fields},
+                        media_type="application/manifest+json", headers=NO_CACHE)
+
+
 async def kiosk_manifest(request):
     # Built per kiosk: iPadOS launches a Home Screen web app at the manifest's start_url, so it must
     # carry this screen's ?kiosk=… (and ?autostart=1 etc.) or every iPad would open as "Main".
+    # The id is per kiosk too, so Chrome/Android treat each kiosk as its own installable app.
     query = request.url.query
     kiosk = request.query_params.get("kiosk", "")
-    return JSONResponse({
-        "name": f"Aura · {kiosk}" if kiosk else "Aura",
-        "short_name": "Aura",
-        "start_url": "/" + (f"?{query}" if query else ""),
-        "scope": "/",
-        "display": "standalone",
-        "orientation": "any",
-        "background_color": "#031a2b",
-        "theme_color": "#031a2b",
-        "icons": [
-            {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-            {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
-            {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
-        ],
-    }, media_type="application/manifest+json", headers=NO_CACHE)
+    return app_manifest(
+        id="/" + (f"?kiosk={kiosk}" if kiosk else ""),
+        name=f"Aura · {kiosk}" if kiosk else "Aura",
+        short_name="Aura",
+        start_url="/" + (f"?{query}" if query else ""),
+        scope="/",
+        background_color="#031a2b",
+        theme_color="#031a2b",
+    )
+
+
+async def staff_manifest(request):
+    slug = request.path_params["app"]
+    if slug not in STAFF_APPS:
+        raise HTTPException(404, "unknown app")
+    name, short, colour = STAFF_APPS[slug]
+    return app_manifest(id=f"/{slug}", name=name, short_name=short, start_url=f"/{slug}", scope=f"/{slug}",
+                        background_color=colour, theme_color=colour)
+
+
+async def service_worker(request):
+    # Served from the root (not /static) so its scope covers every page; no-cache so updates roll out.
+    return FileResponse(os.path.join(STATIC, "sw.js"), media_type="text/javascript", headers=NO_CACHE)
 
 
 async def admin_page(request):
@@ -277,7 +331,88 @@ async def health(request):
         await cf("GET", "/subjects")
     except HTTPException:
         ok = False
-    return JSONResponse({"ok": ok, "threshold": THRESHOLD})
+    return JSONResponse({"ok": ok, "threshold": THRESHOLD, "liveness": LIVENESS, "liveness_threshold": LIVENESS_THRESHOLD})
+
+
+# ----------------------------------------------------------------------------- liveness + event tokens
+def _event_secret() -> bytes:
+    """HMAC key for event tokens, kept next to the database so it survives restarts."""
+    p = os.path.join(os.path.dirname(os.path.abspath(os.environ.get("DB_PATH", "./attendance.db"))), ".event_secret")
+    try:
+        with open(p, "rb") as fh:
+            key = fh.read()
+        if len(key) >= 32:
+            return key
+    except OSError:
+        pass
+    key = os.urandom(32)
+    with contextlib.suppress(OSError):
+        with open(p, "wb") as fh:
+            fh.write(key)
+    return key
+
+
+EVENT_SECRET = _event_secret()
+
+
+def _sign(employee: str, kiosk: str, exp: int) -> str:
+    return hmac.new(EVENT_SECRET, f"{employee}\n{kiosk}\n{exp}".encode(), hashlib.sha256).hexdigest()
+
+
+def event_token(employee: str, kiosk: str) -> str:
+    """Proof that the camera saw `employee`, live, at `kiosk` just now (see record_event)."""
+    exp = int(time.time()) + EVENT_TOKEN_SECONDS
+    return f"{exp}.{_sign(employee, kiosk, exp)}"
+
+
+def event_token_ok(token, employee: str, kiosk: str) -> bool:
+    try:
+        exp, sig = str(token).split(".", 1)
+        exp = int(exp)
+    except (ValueError, TypeError):
+        return False
+    return exp >= time.time() and hmac.compare_digest(sig, _sign(employee, kiosk, exp))
+
+
+# encounter -> {"who", "scores": last LIVENESS_FRAMES liveness scores, "fails", "alerted", "t"}
+_liveness: dict = {}
+
+
+def _liveness_verdict(encounter: str, employee: str, score) -> str:
+    """"live", "checking" (need another frame) or "spoof" for a matched face. A missing score (liveness
+    off, or the recognizer has no liveness models) counts as live, so attendance never stops working."""
+    if LIVENESS == "off" or score is None:
+        return "live"
+    if not encounter:
+        return "live" if score >= LIVENESS_THRESHOLD else "spoof"
+    if len(_liveness) > 500:  # forget stale approaches
+        for k in [k for k, v in _liveness.items() if time.time() - v["t"] > 600]:
+            _liveness.pop(k, None)
+    e = _liveness.get(encounter)
+    if not e or e["who"] != employee:
+        e = _liveness[encounter] = {"who": employee, "scores": [], "fails": 0, "alerted": False}
+    e["t"] = time.time()
+    e["scores"] = (e["scores"] + [score])[-LIVENESS_FRAMES:]
+    if len(e["scores"]) < LIVENESS_FRAMES:
+        return "live" if score >= LIVENESS_SURE else "checking"
+    if sum(e["scores"]) / len(e["scores"]) >= LIVENESS_THRESHOLD:
+        return "live"
+    e["fails"] += 1
+    return "spoof"
+
+
+def _spoof_alert(encounter: str, employee: str, kiosk: str):
+    """One `spoof` supervisor alert per approach, once it has failed SPOOF_ALERT_FRAMES times."""
+    e = _liveness.get(encounter)
+    if not e or e["alerted"] or e["fails"] < SPOOF_ALERT_FRAMES:
+        return
+    e["alerted"] = True
+    with db() as conn:
+        created = alerts.spoof_incident(conn, employee, profile(conn, employee).get("department"), kiosk)
+    if created:
+        task = asyncio.create_task(alerts.deliver())
+        _bg.add(task)
+        task.add_done_callback(_bg.discard)
 
 
 # ----------------------------------------------------------------------------- kiosk API
@@ -336,7 +471,9 @@ async def recognize(request: Request):
         "/recognize",
         params={"limit": 1, "prediction_count": 1, "det_prob_threshold": 0.8,
                 "extras": int(_wants_extras(encounter)), "extras_min_similarity": THRESHOLD,
-                "learn": int(ADAPTIVE_LEARNING)},
+                "learn": int(ADAPTIVE_LEARNING),
+                **({"liveness_min_similarity": THRESHOLD, "learn_min_liveness": LIVENESS_THRESHOLD}
+                   if LIVENESS != "off" else {})},
         files={"file": upload},
     )
     t2 = time.perf_counter()
@@ -344,7 +481,7 @@ async def recognize(request: Request):
     resp = _recognize_result(body.get("result", []), (form.get("kiosk") or "Main").strip(), encounter)
     rt = body.get("timing") or {}
     stages = {"upload": (t1 - t0) * 1000, "recognizer": (t2 - t1) * 1000,
-              **{k: rt[k] for k in ("decode", "detect", "embed", "match", "extras") if k in rt},
+              **{k: rt[k] for k in ("decode", "detect", "embed", "match", "extras", "liveness") if k in rt},
               "total": (time.perf_counter() - t0) * 1000}
     resp.headers["Server-Timing"] = ", ".join(f"{k};dur={v:.1f}" for k, v in stages.items())
     return resp
@@ -364,6 +501,14 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
             base["emotion"] = None
         return JSONResponse({**base, "matched": False, "similarity": round(sim, 3) if subjects else None})
     employee = subjects[0]["subject"]
+    live = face.get("liveness")
+    verdict = _liveness_verdict(encounter, employee, live)
+    if verdict != "live":
+        if verdict == "spoof":
+            _spoof_alert(encounter, employee, kiosk)
+        if LIVENESS != "monitor":
+            # a photo/screen of a staff member: say nothing about who it shows, offer no actions
+            return JSONResponse({**base, "emotion": None, "matched": False, "liveness": verdict, "liveness_score": live})
     with db() as conn:
         last = last_action_today(conn, employee)
         prof = profile(conn, employee)
@@ -388,6 +533,8 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
             "last_action": last_action,
             "last_ts": last["ts"] if last else None,
             "suggested": NEXT_ACTION.get(last_action, "IN"),
+            "liveness_score": live,
+            "token": event_token(employee, kiosk),
         }
     )
 
@@ -446,9 +593,13 @@ async def record_event(request: Request):
         raise HTTPException(400, "employee required")
     if action not in ACTIONS:
         raise HTTPException(400, f"action must be one of {ACTIONS}")
+    if not event_token_ok(payload.get("token"), employee, (payload.get("kiosk") or "Main").strip()):
+        raise HTTPException(403, "Not verified by the camera — please step in front of the kiosk again. "
+                                 "If this keeps happening, reload this screen.")
     ts = now()
     with db() as conn:
         refuse_expired_pass(conn, employee, kiosk)
+        refuse_unsafe_entry(conn, employee, kiosk, action)
         last = last_action_today(conn, employee)
         if last and last["action"] == action:
             if ts - datetime.fromisoformat(last["ts"]) < timedelta(seconds=DUP_WINDOW):
@@ -694,7 +845,8 @@ async def safety_precheck(request: Request):
         raise HTTPException(400, "employee required")
     with db() as conn:
         refuse_expired_pass(conn, employee, (p.get("kiosk") or "").strip() or None)
-        return JSONResponse(safety.precheck(conn, employee, profile(conn, employee), p.get("hivis")))
+        return JSONResponse(safety.precheck(conn, employee, profile(conn, employee), p.get("hivis"),
+                                            kiosk=(p.get("kiosk") or "").strip() or None, action=p.get("action") or "IN"))
 
 
 async def safety_check(request: Request):
@@ -708,7 +860,8 @@ async def safety_check(request: Request):
     with db() as conn:
         refuse_expired_pass(conn, employee, kiosk)
         prof = profile(conn, employee)
-        out = safety.record(conn, employee, prof, kiosk, p.get("items") or {}, p.get("hivis"), rested)
+        out = safety.record(conn, employee, prof, kiosk, p.get("items") or {}, p.get("hivis"), rested,
+                            action=p.get("action") or "IN")
     if out["result"] == "flagged" and SAFETY_WEBHOOK_URL:
         bits = []
         if out["missing"]:
@@ -716,7 +869,8 @@ async def safety_check(request: Request):
         if out["fatigue"] and out["fatigue"]["level"] == "high":
             bits.append(f"HIGH fatigue risk ({out['fatigue']['score']}): " + "; ".join(f["text"] for f in out["fatigue"]["factors"]))
         task = asyncio.create_task(_post_webhook(SAFETY_WEBHOOK_URL, {
-            "text": f"⚠️ Safety check — {employee} ({prof.get('department') or '—'}) at {kiosk}: " + " · ".join(bits),
+            "text": (f"⛔ Entry refused — {employee} ({prof.get('department') or '—'}) at {out['location']}: " if out["blocked"] else
+                     f"⚠️ Safety check — {employee} ({prof.get('department') or '—'}) at {kiosk}: ") + " · ".join(bits),
             "safety": {"person": employee, **out}}))
         _bg.add(task)
         task.add_done_callback(_bg.discard)
@@ -733,7 +887,7 @@ async def safety_rules(request: Request):
             safety.save_rule(conn, dept, await request.json())
             return JSONResponse({"ok": True})
         depts = [r[0] for r in conn.execute("SELECT DISTINCT department FROM people WHERE department IS NOT NULL AND department!='' ORDER BY 1")]
-        return JSONResponse({"rules": safety.all_rules(conn), "departments": depts,
+        return JSONResponse({"rules": safety.all_rules(conn), "departments": depts, "locations": safety.all_locations(conn),
                              "catalog": {k: {"icon": v[0], "label": v[1]} for k, v in safety.PPE.items()}})
 
 
@@ -741,6 +895,7 @@ async def safety_rule_delete(request: Request):
     require_pin(request)
     with db() as conn:
         conn.execute("DELETE FROM safety_rules WHERE department=?", (request.path_params["department"],))
+        conn.execute("UPDATE kiosks SET safety_rule=NULL WHERE safety_rule=?", (request.path_params["department"],))
     return JSONResponse({"ok": True})
 
 
@@ -941,19 +1096,39 @@ async def delete_event(request: Request):
     return JSONResponse({"ok": True})
 
 
+def _cover_score(f: dict, today: date) -> tuple:
+    """Rank a photo as someone's profile picture: kiosk daily bests first (they show the current
+    look), each scored by quality less 0.05 per day of age so a recent good photo beats an older
+    slightly sharper one; enrolled photos after them, newest first."""
+    if f.get("kind") == "learned":
+        try:
+            age = (today - date.fromisoformat(f.get("day") or "")).days
+        except ValueError:
+            age = 7
+        return (1, float(f.get("quality") or 0) - 0.05 * max(0, age), f.get("ts") or "")
+    return (0, 0.0, f.get("ts") or "")
+
+
 async def employees(request: Request):
     require_pin(request)
     subjects = (await cf("GET", "/subjects")).json().get("subjects", [])
-    faces = (await cf("GET", "/faces", params={"size": 10000})).json().get("faces", [])
+    faces = (await cf("GET", "/faces", params={"size": 10000, "details": 1})).json().get("faces", [])
     counts: dict = {}
     learned: dict = {}
+    covers: dict = {}
+    today = date.today()
     for f in faces:
         c = learned if f.get("kind") == "learned" else counts
         c[f["subject"]] = c.get(f["subject"], 0) + 1
+        if f.get("has_image"):
+            s, key = f["subject"], _cover_score(f, today)
+            if s not in covers or key > covers[s][0]:
+                covers[s] = (key, f["image_id"])
     with db() as conn:
         profs = {r["name"]: dict(r) for r in conn.execute("SELECT * FROM people")}
     return JSONResponse(
-        {"employees": [{"name": s, "photos": counts.get(s, 0), "learned": learned.get(s, 0), "profile": profs.get(s)}
+        {"employees": [{"name": s, "photos": counts.get(s, 0), "learned": learned.get(s, 0),
+                        "cover": covers[s][1] if s in covers else None, "profile": profs.get(s)}
                        for s in sorted(subjects, key=str.lower)]}
     )
 
@@ -1137,6 +1312,13 @@ async def kiosk_save(request: Request):
             fields["voice"] = 1 if p["voice"] else 0
         if "info" in p:
             fields["info"] = json.dumps(p["info"] or [], ensure_ascii=False)
+        if "safety_rule" in p:
+            rule = (p["safety_rule"] or "").strip() or None
+            if rule and not conn.execute("SELECT 1 FROM safety_rules WHERE department=?", (rule,)).fetchone():
+                raise HTTPException(400, f"No safety rule named {rule!r}")
+            fields["safety_rule"] = rule
+        if "safety_enforce" in p:
+            fields["safety_enforce"] = 1 if p["safety_enforce"] else 0
         if fields:
             conn.execute(f"UPDATE kiosks SET {', '.join(f'{k}=?' for k in fields)} WHERE name=?", (*fields.values(), name))
     return JSONResponse({"ok": True})
@@ -1307,7 +1489,7 @@ async def engine_status(request: Request):
     require_pin(request)
     out = {**brain.engines(), "jev_ok": await brain.jev_status(), "mood_tracking": MOOD_TRACKING,
            "retention_days": RETENTION_DAYS, "flights": flights.status(), "assist_webhook": bool(ASSIST_WEBHOOK_URL),
-           "safety_webhook": bool(SAFETY_WEBHOOK_URL)}
+           "safety_webhook": bool(SAFETY_WEBHOOK_URL), "liveness": LIVENESS, "liveness_threshold": LIVENESS_THRESHOLD}
     async with httpx.AsyncClient(timeout=4) as client:
         for key, url in (("recognizer", f"{COMPREFACE_URL}/healthcheck"), ("listener", f"{LISTENER_URL}/healthcheck")):
             try:
@@ -1325,6 +1507,10 @@ async def on_http_exception(request, exc: HTTPException):
 routes = [
     Route("/", kiosk_page),
     Route("/manifest.webmanifest", kiosk_manifest),
+    Route("/{app}/manifest.webmanifest", staff_manifest),
+    Route("/sw.js", service_worker),
+    Route("/{app}/manifest.webmanifest", staff_manifest),
+    Route("/sw.js", service_worker),
     Route("/admin", admin_page),
     Route("/insights", insights_page),
     Route("/assist", assist_page),
