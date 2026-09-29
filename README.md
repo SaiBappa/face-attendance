@@ -67,6 +67,21 @@ is shown to the worker with its reasons. Missing PPE or HIGH fatigue is flagged 
 it's a prompt and a record, not a gate. The score is a rule-of-thumb risk indicator, not a medical
 or regulatory fatigue-risk-management system.
 
+**Roster + supervisor alerts** — import the roster (Admin → Roster: CSV upload with preview, or
+`POST /api/roster` from your HR/rostering system; overnight and split shifts supported). Punctuality
+is then measured against each person's *rostered* start, and every shift gets an adherence status:
+worked, late, left early, overtime, missed clock-out or no-show. A background scan raises
+supervisor alerts — no-show (15 min after start), late arrival, missed clock-out, long break,
+understaffed department (rostered vs on duty), assistance request waiting too long, flagged safety
+check — each once, routed to the department's webhook (Admin → Alerts) or `ALERT_WEBHOOK_URL`, and
+acknowledged/resolved in the Alerts feed. Staff can ask Aura "when is my next shift?".
+
+```bash
+curl -X POST http://<server>:8181/api/roster -H "X-Admin-Pin: <pin>" -H "Content-Type: application/json" \
+  -d '{"replace": true, "shifts": [{"person": "Aishath Shiuna", "day": "2026-10-01", "start": "07:00", "end": "16:00",
+       "position": "Immigration desk 3", "location": "Arrivals-Hall", "department": "Immigration"}]}'
+```
+
 **Insights (`/insights`)** — on-time %, arrival times, hours, breaks, staff & visitor mood trends,
 mood by hour/weekday/location/department, arrivals heatmap, conversation intents & languages,
 per-person drill-down (daily timeline, mood calendar, outfits, memories, full chat history) and
@@ -94,6 +109,11 @@ and kudos for on-time streaks.
 | `ASSIST_SLA_MINUTES` | `5` | Response-time target shown on the board and in Insights |
 | `SAFETY_WEBHOOK_URL` | = assist webhook | POSTs flagged safety checks (missing PPE / high fatigue) |
 | `HIVIS_MIN_SHARE` | `0.12` | Share of fluorescent torso pixels that counts as "hi-vis seen" |
+| `ALERT_WEBHOOK_URL` | — | Default destination for supervisor alerts (per-department routes override it) |
+| `NO_SHOW_MINUTES` / `LATE_ALERT_MINUTES` | `15` / `10` | When a missing / late arrival becomes an alert |
+| `CLOCKOUT_GRACE_MINUTES` / `BREAK_MAX_MINUTES` | `60` / `60` | Missed clock-out and long-break thresholds |
+| `UNDERSTAFF_MIN` | `2` | Alert when a department has this many fewer on duty than rostered |
+| `EARLY_LEAVE_MINUTES` | `15` | Leaving at least this long before the rostered end counts as an early leave |
 
 Per-location content (headline, theme, info cards, images/videos, announcements, voice on/off)
 is managed in **Admin → Locations**. Load **demo data** from Admin → Setup to show the system to

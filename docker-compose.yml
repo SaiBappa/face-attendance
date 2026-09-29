@@ -81,6 +81,7 @@ services:
       - CLOCKOUT_GRACE_MINUTES=${CLOCKOUT_GRACE_MINUTES:-60}
       - BREAK_MAX_MINUTES=${BREAK_MAX_MINUTES:-60}
       - UNDERSTAFF_MIN=${UNDERSTAFF_MIN:-2}
+      - EARLY_LEAVE_MINUTES=${EARLY_LEAVE_MINUTES:-15}
     volumes:
       - attendance-data:/data
     depends_on:
