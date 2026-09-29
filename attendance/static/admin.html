@@ -200,6 +200,86 @@
   .bubble.aura { margin:8px 0 0 auto; background:linear-gradient(135deg,#6366f1,#0891b2); color:#fff; border-bottom-right-radius:5px; }
   .bubble.aura small { display:block; opacity:.8; font-size:11px; font-weight:600; margin-bottom:2px; }
 
+  /* ---------- nav badge ---------- */
+  .nbadge { margin-left:auto; min-width:20px; height:20px; padding:0 6px; border-radius:99px; background:var(--bad); color:#fff; font-size:11.5px; font-weight:700; display:inline-grid; place-items:center; font-variant-numeric:tabular-nums; }
+  nav button.active .nbadge { background:var(--bad); }
+
+  /* ---------- roster ---------- */
+  .wk-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+  .wk-bar .wk-lbl { font-weight:700; font-size:15px; margin-right:auto; min-width:0; }
+  .wk-bar input[type=search] { width:180px; }
+  .wk { width:100%; min-width:980px; border-collapse:separate; border-spacing:0; table-layout:fixed; font-size:13px; }
+  .wk th, .wk td { border-bottom:1px solid var(--line); padding:6px; vertical-align:top; }
+  .wk th { text-transform:none; letter-spacing:0; font-size:12.5px; color:var(--muted); font-weight:650; text-align:left; padding:8px 6px; }
+  .wk th.today { color:var(--accent); }
+  .wk td.today { background:color-mix(in srgb, var(--accent) 5%, transparent); }
+  .wk tbody tr:hover td { background:transparent; }
+  .wk tbody tr:hover td.today { background:color-mix(in srgb, var(--accent) 5%, transparent); }
+  .wk .pcol { width:170px; position:sticky; left:0; background:var(--surface); z-index:1; }
+  .wk .pcol b { display:block; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wk .pcol small { color:var(--muted); font-size:11.5px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .shift { display:block; width:100%; text-align:left; font:inherit; color:inherit; cursor:pointer; border:1px solid var(--line); border-left:3px solid var(--muted); border-radius:8px; padding:5px 7px; background:var(--surface-2); margin-bottom:4px; }
+  .shift:hover { border-color:var(--accent); }
+  .shift .tm { font-weight:700; font-size:12.5px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .shift .tm small { display:block; font-size:11px; }
+  .shift .tm small { font-weight:500; color:var(--muted); }
+  .shift .ps { color:var(--muted); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .shift .bd { display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; }
+  .shift.worked { border-left-color:var(--ok); } .shift.in_progress { border-left-color:var(--back); }
+  .shift.no_show { border-left-color:var(--bad); background:var(--bad-soft); } .shift.no_clock_out, .shift.late_pending { border-left-color:var(--warn); }
+  .shift.upcoming { border-left-color:var(--line); border-style:dashed; border-left-style:solid; }
+  .bdg { display:inline-block; padding:1px 6px; border-radius:6px; font-size:11px; font-weight:650; white-space:nowrap; background:var(--off-soft); color:var(--muted); }
+  .bdg.ok { background:var(--ok-soft); color:var(--ok); } .bdg.warn { background:var(--warn-soft); color:var(--warn); }
+  .bdg.bad { background:var(--bad-soft); color:var(--bad); } .bdg.acc { background:var(--accent-soft); color:var(--accent); } .bdg.live { background:color-mix(in srgb, var(--back) 15%, transparent); color:var(--back); }
+  .addcell { width:100%; min-height:30px; border:1px dashed transparent; border-radius:8px; background:none; color:var(--muted); cursor:pointer; font:inherit; font-size:15px; opacity:.35; }
+  .addcell:hover, .addcell:focus-visible { opacity:1; border-color:var(--line); color:var(--accent); }
+  @media (hover:none) { .addcell { opacity:.6; } }
+  .legend-r { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:10px; font-size:12px; color:var(--muted); }
+  .cov svg { display:block; width:100%; height:auto; }
+  .cov text { fill:var(--muted); font-size:11px; font-family:inherit; font-variant-numeric:tabular-nums; }
+  .cov .gl { stroke:var(--line); }
+  .cov-leg { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12.5px; color:var(--muted); margin-top:8px; }
+  .cov-leg i { display:inline-block; width:12px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  pre.code { margin:0; padding:12px 14px; border-radius:10px; background:var(--surface-2); border:1px solid var(--line); font-size:12.5px; overflow-x:auto; white-space:pre; }
+  .imp-sum { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+
+  /* ---------- alerts ---------- */
+  .afeed { display:flex; flex-direction:column; gap:10px; }
+  .al { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 12px; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:var(--surface); border-left:4px solid var(--muted); }
+  .al.high { border-left-color:var(--bad); } .al.medium { border-left-color:var(--warn); } .al.low { border-left-color:var(--back); }
+  .al.st-new { box-shadow:var(--shadow); }
+  .al.st-ack, .al.st-resolved { background:var(--surface-2); }
+  .al.st-resolved { opacity:.75; }
+  .al .ai { font-size:24px; line-height:1; width:40px; height:40px; border-radius:10px; display:grid; place-items:center; background:var(--surface-2); border:1px solid var(--line); }
+  .al .ah { display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; }
+  .al .ah b { font-size:14.5px; }
+  .al .ah .when { margin-left:auto; color:var(--muted); font-size:12.5px; white-space:nowrap; }
+  .al .at { font-size:14px; overflow-wrap:anywhere; }
+  .al .am { font-size:12.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 10px; }
+  .al .aa { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .al .aa input { flex:1 1 160px; padding:6px 10px; font-size:13px; }
+  .sev { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .sev.high { background:var(--bad-soft); color:var(--bad); } .sev.medium { background:var(--warn-soft); color:var(--warn); } .sev.low { background:color-mix(in srgb, var(--back) 14%, transparent); color:var(--back); }
+  .livestrip { display:flex; flex-direction:column; gap:6px; }
+  .livestrip .li { display:flex; gap:10px; align-items:center; font-size:13.5px; padding:7px 10px; border-radius:10px; background:var(--surface-2); border-left:3px solid var(--muted); }
+  .livestrip .li.high { border-left-color:var(--bad); } .livestrip .li.medium { border-left-color:var(--warn); } .livestrip .li.low { border-left-color:var(--back); }
+  .livestrip .li span.t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .livestrip .li small { color:var(--muted); white-space:nowrap; }
+  .routes td input { width:100%; padding:7px 10px; font-size:13.5px; }
+  .types { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:8px; }
+  .types div { display:flex; gap:10px; align-items:flex-start; font-size:13px; padding:8px 10px; border-radius:10px; background:var(--surface-2); }
+  .types div > span:first-child { font-size:18px; }
+  .types b { display:block; font-size:13.5px; }
+  .types code { font-size:11px; }
+  @media (max-width:600px) {
+    .wk-bar input[type=search] { width:100%; } .al { grid-template-columns:1fr; } .al .ai { width:34px; height:34px; font-size:20px; }
+    /* routes table → stacked cards so Save / ✕ stay on screen */
+    .routes thead { display:none; }
+    .routes, .routes tbody, .routes tr, .routes td { display:block; width:100%; }
+    .routes tr { padding:10px 0; border-bottom:1px solid var(--line); }
+    .routes td { border:0; padding:4px 0; }
+  }
+
   /* ---------- safety ---------- */
   .srules { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
   .srule { border:1px solid var(--line); border-radius:14px; padding:14px; background:var(--surface); display:flex; flex-direction:column; gap:12px; min-width:0; }
@@ -291,6 +371,8 @@
     <button data-s="enrol"><svg class="i" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><circle cx="12" cy="10.5" r="2.8"/><path d="M8 17c1-1.5 2.4-2.2 4-2.2s3 .7 4 2.2"/></svg>Enrol</button>
     <button data-s="locations"><svg class="i" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0119 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Locations</button>
     <button data-s="conversations"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Conversations</button>
+    <button data-s="roster"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h3M8 17h6"/></svg>Roster</button>
+    <button data-s="alerts"><svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg>Alerts<span class="nbadge" id="alertBadge" hidden>0</span></button>
     <button data-s="safety"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>Safety</button>
     <button data-s="setup"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>Setup</button>
   </nav>
@@ -313,6 +395,10 @@
     <div style="--c:var(--break)"><b id="kBreak">0</b><span>On break</span></div>
     <div style="--c:var(--out)"><b id="kOut">0</b><span>Clocked out</span></div>
     <div style="--c:var(--accent)"><b id="kTotal">0</b><span>Seen today</span></div>
+  </div>
+  <div class="card" id="liveCard" hidden>
+    <div class="card-h"><h2>🔔 Live alerts</h2><span class="pill bad" id="liveN">0 new</span><a class="btn ghost sm" href="#alerts">All alerts →</a></div>
+    <div class="livestrip" id="liveStrip"></div>
   </div>
   <div class="card"><div class="tablewrap"><table><thead><tr><th>Employee</th><th>State</th><th>Since</th><th>Kiosk</th><th>Mood</th></tr></thead><tbody id="statusBody"></tbody></table></div></div>
 </section>
@@ -452,6 +538,99 @@
   <div class="convos" id="cList"></div>
 </section>
 
+<!-- ================= ROSTER ================= -->
+<section id="s-roster">
+  <div class="card">
+    <div class="wk-bar">
+      <span class="wk-lbl" id="wkLbl">Week</span>
+      <button class="btn ghost sm" id="wkPrev" aria-label="Previous week">‹ Prev</button>
+      <button class="btn ghost sm" id="wkToday">This week</button>
+      <button class="btn ghost sm" id="wkNext" aria-label="Next week">Next ›</button>
+    </div>
+    <div class="wk-bar">
+      <select id="wkDept" aria-label="Department"><option value="">All departments</option></select>
+      <input type="search" id="wkQ" placeholder="Search person…" aria-label="Search person">
+      <label class="switch" style="font-size:13.5px"><input type="checkbox" id="wkOnly" checked><span class="sl"></span><span>Only people with shifts</span></label>
+      <span style="flex:1"></span>
+      <button class="btn sm" id="wkAdd">+ Add shift</button>
+    </div>
+    <div class="tablewrap"><table class="wk" id="wkTable"></table></div>
+    <div class="legend-r"><span><span class="bdg ok">✓ worked</span></span><span><span class="bdg live">● on shift</span></span><span><span class="bdg warn">⏰ late</span></span><span><span class="bdg bad">🚫 no-show</span></span><span><span class="bdg acc">↗ overtime</span></span><span><span class="bdg warn">↘ left early</span></span><span><span class="bdg warn">🕘 no clock-out</span></span><span><span class="bdg">upcoming</span></span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>Coverage</h2>
+      <input type="date" id="covDay" aria-label="Day"><select id="covDept" aria-label="Department"><option value="">All departments</option></select></div>
+    <p class="muted" style="margin-top:0">Rostered headcount vs people actually on duty, per hour. Red hours are short-staffed.</p>
+    <div class="cov" id="covChart"><div class="muted">Loading…</div></div>
+  </div>
+
+  <div class="grid2" style="align-items:start">
+    <div class="card" style="margin-bottom:18px">
+      <h2>Import a roster (CSV)</h2>
+      <p class="muted" style="margin-top:0">Columns: <code>name, date, start, end</code> plus optional <code>position, location, department</code>. Dates as <code>YYYY-MM-DD</code> or <code>DD/MM/YYYY</code>, times as <code>HH:MM</code> (an end before the start means the shift runs past midnight). Comma, <code>;</code> or tab delimited — straight from Excel or your rostering system.</p>
+      <div class="row"><a class="btn ghost sm" href="/api/roster/template.csv" download>⬇ Download template</a></div>
+      <div class="row"><input type="file" id="impFile" accept=".csv,text/csv,text/plain" style="flex:1 1 220px"><button class="btn ghost sm" id="impPrev" disabled>Preview</button></div>
+      <div id="impOut"></div>
+    </div>
+    <div class="card" style="margin-bottom:18px">
+      <h2>HR / rostering system integration</h2>
+      <p class="muted" style="margin-top:0">Push shifts straight from your HR or crew-rostering system. <code>replace: true</code> swaps any existing shifts for the same person and day, so re-sending a week is safe. The response lists <code>imported</code>, <code>replaced</code>, <code>errors</code> and <code>unknown_people</code>.</p>
+      <pre class="code" id="hrCurl"></pre>
+      <div class="row" style="margin:10px 0 0"><button class="btn ghost sm" id="hrCopy">Copy example</button></div>
+    </div>
+  </div>
+</section>
+
+<dialog id="shDlg">
+  <form method="dialog" id="shForm">
+    <div class="dlg-h"><h2 id="shTitle">Shift</h2><button type="button" class="btn ghost icon" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-b">
+      <div id="shInfo"></div>
+      <div class="grid2">
+        <label class="field span2"><span>Person</span><input id="sh_person" list="nameList" required autocomplete="off"></label>
+        <label class="field"><span>Date</span><input id="sh_day" type="date" required></label>
+        <label class="field"><span>Department</span><input id="sh_dept" list="deptList" placeholder="Defaults to profile"></label>
+        <label class="field"><span>Start</span><input id="sh_start" type="time" required></label>
+        <label class="field"><span>End <small class="muted" id="shNext"></small></span><input id="sh_end" type="time" required></label>
+        <label class="field"><span>Position</span><input id="sh_pos" placeholder="e.g. Ramp lead"></label>
+        <label class="field"><span>Location</span><input id="sh_loc" placeholder="e.g. Apron"></label>
+        <label class="field span2"><span>Notes</span><input id="sh_notes"></label>
+      </div>
+    </div>
+    <div class="dlg-f"><button type="button" class="btn danger" id="shDel">Delete shift</button><span class="spacer"></span><button type="button" class="btn ghost" data-close>Cancel</button><button type="submit" class="btn" id="shSave">Save</button></div>
+  </form>
+</dialog>
+
+<!-- ================= ALERTS ================= -->
+<section id="s-alerts">
+  <div class="card">
+    <div class="wk-bar">
+      <select id="alType" aria-label="Type"><option value="">All types</option></select>
+      <select id="alDept" aria-label="Department"><option value="">All departments</option></select>
+      <label class="switch" style="font-size:13.5px"><input type="checkbox" id="alResolved"><span class="sl"></span><span>Show resolved</span></label>
+      <span style="flex:1"></span>
+      <label class="field" style="flex-direction:row;align-items:center;gap:6px"><span>I am</span><input id="alBy" list="nameList" placeholder="Your name" style="width:160px" autocomplete="off"></label>
+      <button class="btn ghost sm" id="alRefresh">Refresh</button>
+    </div>
+    <div class="row" id="alCounts" style="margin-bottom:12px"></div>
+    <div class="afeed" id="alFeed"><div class="muted">Loading…</div></div>
+    <p class="hint" style="margin:12px 0 0">Updates every 30 s. Alerts from the last 7 days.</p>
+  </div>
+
+  <div class="card">
+    <h2>Who gets alerted</h2>
+    <p class="muted" style="margin-top:0">New alerts are posted to the department's webhook (Slack, Teams or a WhatsApp relay). The <b>Default (*)</b> row catches departments without their own route; if nothing is set, <code>ALERT_WEBHOOK_URL</code> from <code>.env</code> is used<span id="alEnvHook"></span>.</p>
+    <div class="tablewrap"><table class="routes"><thead><tr><th>Department</th><th>Supervisor</th><th>Webhook URL</th><th></th></tr></thead><tbody id="rtBody"></tbody></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Alert types &amp; thresholds</h2>
+    <p class="muted" style="margin-top:0">Checked every <span id="alScan">60</span> s. Change thresholds in <code>.env</code> and restart.</p>
+    <div class="types" id="alTypes"></div>
+  </div>
+</section>
+
 <!-- ================= SAFETY ================= -->
 <section id="s-safety">
   <div class="card">
@@ -553,7 +732,7 @@
   const kioskLink = name => `${location.origin}/?kiosk=${enc(name || 'Main')}`;
 
   // ---- gate ----
-  function unlock() { $('gate').hidden = true; $('app').hidden = false; show((location.hash.slice(1).split('=')[0]) || 'status'); health(); refreshNames(); }
+  function unlock() { $('gate').hidden = true; $('app').hidden = false; show((location.hash.slice(1).split('=')[0]) || 'status'); health(); refreshNames(); setTimeout(() => pollAlerts().catch(() => {}), 0); }
   function lock() { PIN = ''; sessionStorage.removeItem('pin'); $('app').hidden = true; $('gate').hidden = false; $('pin').value = ''; }
   $('pinGo').onclick = async () => {
     PIN = $('pin').value; sessionStorage.setItem('pin', PIN);
@@ -571,6 +750,8 @@
     enrol: ['Enrol', 'Add face photos so the kiosk recognises staff', () => refreshNames()],
     locations: ['Locations', 'Kiosk screens, info cards, media and announcements', () => loadLocations()],
     conversations: ['Conversations', 'What people asked Aura, and what Aura replied', () => loadConvos()],
+    roster: ['Roster', 'Planned shifts vs what actually happened — import from HR, edit, and check coverage', () => loadRoster()],
+    alerts: ['Alerts', 'Live supervisor alerts from the roster, attendance, assistance and safety checks', () => loadAlerts()],
     safety: ['Safety', 'Ramp safety pack: PPE and fatigue checks at clock-in, per department', () => loadSafety()],
     setup: ['Setup', 'Kiosk links, AI engines, privacy and demo data', () => { health(); loadEngines(); }],
   };
@@ -980,6 +1161,310 @@
       li('✋', '<b>Per-person consent:</b> each staff member can opt out of mood tracking (People → profile). Opting out erases past readings; conversations can be forgotten on request.'),
     ].join('');
   }
+  // ---- roster ----
+  const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const addD = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv'); };
+  const monday = s => { const d = new Date(s + 'T12:00:00'); return addD(s, -((d.getDay() + 6) % 7)); };
+  const dLbl = s => `${+s.slice(8)} ${MONS[+s.slice(5, 7) - 1]}`;
+  const hm = m => m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m}m`;
+  const R = { wk: monday(today()), data: null, depts: [] };
+  function shiftBadges(x) {
+    const b = [];
+    if (x.status === 'no_show') b.push('<span class="bdg bad">🚫 no-show</span>');
+    if (x.status === 'late_pending') b.push('<span class="bdg warn">⌛ not in yet</span>');
+    if (x.status === 'in_progress') b.push('<span class="bdg live">● on shift</span>');
+    if (x.status === 'worked' && !x.late_min && !x.early_leave_min) b.push('<span class="bdg ok">✓ worked</span>');
+    if (x.late_min) b.push(`<span class="bdg warn">⏰ late ${hm(x.late_min)}</span>`);
+    if (x.early_leave_min) b.push(`<span class="bdg warn">↘ left ${hm(x.early_leave_min)} early</span>`);
+    if (x.overtime_min) b.push(`<span class="bdg acc">↗ +${hm(x.overtime_min)}</span>`);
+    if (x.status === 'no_clock_out') b.push('<span class="bdg warn">🕘 no clock-out</span>');
+    if (x.status === 'upcoming') b.push('<span class="bdg">upcoming</span>');
+    return b.join('');
+  }
+  const overnight = x => x.end < x.start;
+  async function loadRoster() {
+    const to = addD(R.wk, 6);
+    R.data = await api(`/api/roster?from=${R.wk}&to=${to}`);
+    const depts = [...new Set([...R.data.people.map(p => p.department), ...R.data.shifts.map(x => x.department)].filter(Boolean))].sort();
+    for (const id of ['wkDept', 'covDept']) {
+      const cur = $(id).value;
+      $(id).innerHTML = '<option value="">All departments</option>' + depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+      $(id).value = depts.includes(cur) ? cur : '';
+    }
+    renderWeek();
+    if (!$('covDay').value) $('covDay').value = today();
+    loadCoverage().catch(fail);
+    renderHr();
+  }
+  function renderWeek() {
+    const days = [...Array(7)].map((_, i) => addD(R.wk, i)), t = today();
+    $('wkLbl').textContent = `${dLbl(days[0])} – ${dLbl(days[6])} ${days[6].slice(0, 4)}`;
+    const dept = $('wkDept').value, q = $('wkQ').value.trim().toLowerCase(), only = $('wkOnly').checked;
+    const people = new Map(R.data.people.map(p => [p.name, p]));
+    R.data.shifts.forEach(x => { if (!people.has(x.person)) people.set(x.person, { name: x.person, department: x.department }); });
+    const by = {};
+    R.data.shifts.forEach(x => ((by[x.person] = by[x.person] || {})[x.day] = by[x.person][x.day] || []).push(x));
+    const rows = [...people.values()].filter(p => (!dept || p.department === dept || (by[p.name] && Object.values(by[p.name]).flat().some(x => x.department === dept)))
+      && (!q || p.name.toLowerCase().includes(q)) && (!only || by[p.name])).sort((a, b) => a.name.localeCompare(b.name));
+    const head = `<thead><tr><th class="pcol">Person</th>${days.map(d => `<th class="${d === t ? 'today' : ''}">${DOW[days.indexOf(d)]} ${dLbl(d)}</th>`).join('')}</tr></thead>`;
+    const body = rows.map(p => `<tr><td class="pcol"><b>${esc(p.name)}</b><small>${esc([p.department, p.role].filter(Boolean).join(' · ') || '—')}</small></td>${days.map(d => {
+      const xs = (by[p.name] || {})[d] || [];
+      return `<td class="${d === t ? 'today' : ''}">${xs.map(x => `<button type="button" class="shift ${esc(x.status)}" data-sid="${x.id}" title="${esc(x.in ? `In ${x.in.slice(11)}${x.out ? ' · out ' + x.out.slice(11) : ''}` : 'Not clocked in')}">
+          <div class="tm">${esc(x.start)}–${esc(x.end)}${overnight(x) ? ' <small>→ next day</small>' : ''}</div>
+          ${x.position || x.location ? `<div class="ps">${esc([x.position, x.location].filter(Boolean).join(' · '))}</div>` : ''}
+          <div class="bd">${shiftBadges(x)}</div></button>`).join('')}<button type="button" class="addcell" data-add="${esc(p.name)}|${d}" aria-label="Add shift for ${esc(p.name)} on ${d}">+</button></td>`;
+    }).join('')}</tr>`).join('');
+    $('wkTable').innerHTML = head + `<tbody>${body || `<tr><td colspan="8" class="empty">${R.data.shifts.length ? 'No one matches the filter' : 'No shifts rostered this week — import a CSV below or add one.'}</td></tr>`}</tbody>`;
+  }
+  $('wkTable').onclick = e => {
+    const sb = e.target.closest('[data-sid]');
+    if (sb) return openShift(R.data.shifts.find(x => x.id === +sb.dataset.sid));
+    const ab = e.target.closest('[data-add]');
+    if (ab) { const [person, day] = ab.dataset.add.split('|'); openShift(null, { person, day }); }
+  };
+  $('wkPrev').onclick = () => { R.wk = addD(R.wk, -7); loadRoster().catch(fail); };
+  $('wkNext').onclick = () => { R.wk = addD(R.wk, 7); loadRoster().catch(fail); };
+  $('wkToday').onclick = () => { R.wk = monday(today()); loadRoster().catch(fail); };
+  $('wkDept').onchange = () => renderWeek();
+  $('wkQ').oninput = () => renderWeek();
+  $('wkOnly').onchange = () => renderWeek();
+  $('wkAdd').onclick = () => openShift(null, { day: today() >= R.wk && today() <= addD(R.wk, 6) ? today() : R.wk });
+
+  let SH = null;
+  function openShift(x, preset = {}) {
+    SH = x;
+    const v = x || { person: preset.person || '', day: preset.day || today(), start: '08:00', end: '17:00' };
+    const dept = x ? x.department : (R.data.people.find(p => p.name === v.person) || {}).department;
+    $('shTitle').textContent = x ? `${x.person} · ${dLbl(x.day)}` : 'Add shift';
+    $('sh_person').value = v.person || ''; $('sh_day').value = v.day; $('sh_start').value = v.start; $('sh_end').value = v.end;
+    $('sh_pos').value = v.position || ''; $('sh_loc').value = v.location || ''; $('sh_dept').value = dept || ''; $('sh_notes').value = v.notes || '';
+    $('shInfo').innerHTML = x ? `<div class="notice" style="margin-bottom:12px"><div class="bd" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">${shiftBadges(x)}</div>Clock-in: <b>${esc(x.in ? x.in.replace('T', ' ') : '—')}</b> · Clock-out: <b>${esc(x.out ? x.out.replace('T', ' ') : '—')}</b> · Planned ${esc(x.planned_h)} h</div>` : '';
+    $('shDel').hidden = !x;
+    shNext();
+    $('shDlg').showModal();
+    (x ? $('sh_start') : $('sh_person')).focus();
+  }
+  const shNext = () => { $('shNext').textContent = $('sh_end').value && $('sh_start').value && $('sh_end').value < $('sh_start').value ? '→ next day' : ''; };
+  $('sh_start').oninput = shNext; $('sh_end').oninput = shNext;
+  $('shDlg').querySelectorAll('[data-close]').forEach(b => b.onclick = () => $('shDlg').close());
+  $('shForm').onsubmit = async e => {
+    e.preventDefault();
+    const body = { person: $('sh_person').value.trim(), day: $('sh_day').value, start: $('sh_start').value, end: $('sh_end').value,
+                   position: $('sh_pos').value.trim() || null, location: $('sh_loc').value.trim() || null, department: $('sh_dept').value.trim() || null, notes: $('sh_notes').value.trim() || null };
+    if (!body.person) return toast('Person is required', true);
+    try {
+      $('shSave').disabled = true;
+      await api(SH ? '/api/roster/shift/' + SH.id : '/api/roster/shift', jsonBody(SH ? 'PUT' : 'POST', body));
+      $('shDlg').close(); toast(SH ? 'Shift updated' : 'Shift added');
+      if (body.day < R.wk || body.day > addD(R.wk, 6)) R.wk = monday(body.day);
+      await loadRoster();
+    } catch (err) { fail(err); } finally { $('shSave').disabled = false; }
+  };
+  $('shDel').onclick = async () => {
+    if (!SH || !confirm(`Delete ${SH.person}'s ${SH.start}–${SH.end} shift on ${SH.day}?`)) return;
+    try { await api('/api/roster/shift/' + SH.id, { method: 'DELETE' }); $('shDlg').close(); toast('Shift deleted'); await loadRoster(); } catch (err) { fail(err); }
+  };
+
+  // coverage: planned (outline) vs actual (filled) per hour; red where actual < planned
+  async function loadCoverage() {
+    const day = $('covDay').value || today(), dept = $('covDept').value;
+    const j = await api(`/api/roster/coverage?day=${day}${dept ? '&department=' + enc(dept) : ''}`);
+    const hs = j.hours || [], max = Math.max(1, ...hs.map(h => Math.max(h.planned, h.actual || 0)));
+    if (!hs.some(h => h.planned || h.actual)) { $('covChart').innerHTML = '<div class="empty">No shifts rostered and nobody on duty on this day.</div>'; return; }
+    const W = 760, H = 220, L = 28, T = 12, B = 22, ch = H - T - B, bw = (W - L) / 24, Y = v => T + ch - v / max * ch;
+    let g = '';
+    const step = max > 10 ? Math.ceil(max / 4) : max > 4 ? 2 : 1;
+    for (let v = 0; v <= max; v += step) g += `<line class="gl" x1="${L}" x2="${W}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 5}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+    let short = 0;
+    hs.forEach(h => {
+      const x = L + h.hour * bw, gap = h.actual != null && h.actual < h.planned;
+      if (gap) short++;
+      if (gap) g += `<rect x="${x}" y="${T}" width="${bw}" height="${ch}" fill="var(--bad-soft)"/>`;
+      if (h.planned) g += `<rect x="${x + bw * .12}" y="${Y(h.planned)}" width="${bw * .76}" height="${T + ch - Y(h.planned)}" rx="3" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 2"/>`;
+      if (h.actual) g += `<rect x="${x + bw * .26}" y="${Y(h.actual)}" width="${bw * .48}" height="${T + ch - Y(h.actual)}" rx="3" fill="${gap ? 'var(--bad)' : 'var(--ok)'}"/>`;
+      g += `<rect x="${x}" y="${T}" width="${bw}" height="${ch}" fill="transparent"><title>${String(h.hour).padStart(2, '0')}:00 — planned ${h.planned}, ${h.actual == null ? 'not yet' : 'on duty ' + h.actual}${gap ? ` (short ${h.planned - h.actual})` : ''}</title></rect>`;
+      if (h.hour % 3 === 0) g += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${String(h.hour).padStart(2, '0')}</text>`;
+    });
+    g += `<line x1="${L}" x2="${W}" y1="${T + ch}" y2="${T + ch}" stroke="var(--muted)"/>`;
+    $('covChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Planned vs actual staff per hour">${g}</svg>
+      <div class="cov-leg"><span><i style="border:1.5px dashed var(--muted)"></i>Rostered</span><span><i style="background:var(--ok)"></i>On duty</span><span><i style="background:var(--bad)"></i>Short-staffed</span>
+      <span style="margin-left:auto">${short ? `<b style="color:var(--bad)">${short} short-staffed hour${short === 1 ? '' : 's'}</b>` : 'No gaps so far'}</span></div>`;
+  }
+  $('covDay').onchange = () => loadCoverage().catch(fail);
+  $('covDept').onchange = () => loadCoverage().catch(fail);
+
+  // CSV import: dry run first, then import
+  $('impFile').onchange = () => { $('impPrev').disabled = !$('impFile').files.length; $('impOut').innerHTML = ''; if ($('impFile').files.length) $('impPrev').click(); };
+  async function impPost(dry) {
+    const fd = new FormData(); fd.append('file', $('impFile').files[0]);
+    if (!dry) fd.append('replace', $('impReplace') && $('impReplace').checked ? '1' : '0');
+    return api('/api/roster/import' + (dry ? '?dry=1' : ''), { method: 'POST', body: fd });
+  }
+  const errList = errs => errs && errs.length ? `<div class="notice warn" style="margin-top:10px"><b>${errs.length} row${errs.length === 1 ? '' : 's'} skipped</b><ul style="margin:6px 0 0;padding-left:18px">${errs.slice(0, 12).map(x => `<li>${esc(x)}</li>`).join('')}${errs.length > 12 ? `<li>…and ${errs.length - 12} more</li>` : ''}</ul></div>` : '';
+  $('impPrev').onclick = async () => {
+    if (!$('impFile').files.length) return;
+    try {
+      const j = await impPost(true);
+      $('impOut').innerHTML = `<div class="imp-sum"><span class="pill ok">${j.count} shift${j.count === 1 ? '' : 's'} ready</span>${j.errors.length ? `<span class="pill warn">${j.errors.length} error${j.errors.length === 1 ? '' : 's'}</span>` : ''}</div>
+        ${j.preview.length ? `<div class="tablewrap" style="max-height:280px;overflow:auto"><table><thead><tr><th>Person</th><th>Date</th><th>Shift</th><th>Position</th><th>Location</th><th>Dept</th></tr></thead><tbody>${j.preview.map(x => `<tr><td>${esc(x.person)}</td><td>${esc(x.day)}</td><td>${esc(x.start)}–${esc(x.end)}${x.end < x.start ? ' <span class="chip">+1 day</span>' : ''}</td><td>${esc(x.position || '')}</td><td>${esc(x.location || '')}</td><td>${esc(x.department || '')}</td></tr>`).join('')}</tbody></table></div>${j.count > 50 ? `<p class="hint">Showing the first 50 of ${j.count}.</p>` : ''}` : ''}
+        ${errList(j.errors)}
+        ${j.count ? `<div class="row" style="margin:12px 0 0"><label class="switch" style="font-size:13.5px"><input type="checkbox" id="impReplace" checked><span class="sl"></span><span>Replace existing shifts for the same person &amp; day</span></label><span style="flex:1"></span><button class="btn" id="impGo">Import ${j.count} shift${j.count === 1 ? '' : 's'}</button></div>` : ''}`;
+      if ($('impGo')) $('impGo').onclick = async () => {
+        try {
+          $('impGo').disabled = true;
+          const r = await impPost(false);
+          $('impOut').innerHTML = `<div class="imp-sum"><span class="pill ok">${r.imported} imported</span><span class="pill acc">${r.replaced} replaced</span>${r.errors.length ? `<span class="pill warn">${r.errors.length} errors</span>` : ''}</div>
+            ${(r.unknown_people || []).length ? `<div class="notice warn">Not in People yet: <b>${r.unknown_people.map(esc).join(', ')}</b>. Add them under <a href="#people">People</a> (and enrol their face) so the kiosk can match their clock-ins to these shifts.</div>` : ''}${errList(r.errors)}`;
+          $('impFile').value = ''; $('impPrev').disabled = true;
+          toast(`Imported ${r.imported} shifts`);
+          loadRoster().catch(fail);
+        } catch (err) { fail(err); if ($('impGo')) $('impGo').disabled = false; }
+      };
+    } catch (err) { fail(err); }
+  };
+  function renderHr() {
+    const t = today();
+    $('hrCurl').textContent = `curl -X POST ${location.origin}/api/roster \\
+  -H "X-Admin-Pin: <ADMIN_PIN>" -H "Content-Type: application/json" \\
+  -d '{"replace": true, "shifts": [
+        {"person": "Aishath Shiuna", "day": "${t}", "start": "07:00", "end": "16:00",
+         "position": "Immigration desk 3", "location": "Arrivals-Hall", "department": "Immigration"},
+        {"person": "Ahmed Naseem", "day": "${t}", "start": "22:00", "end": "06:30",
+         "position": "Ramp lead", "location": "Apron", "department": "Ground Handling"}]}'`;
+  }
+  $('hrCopy').onclick = () => copy($('hrCurl').textContent);
+
+  // ---- alerts ----
+  const A = { data: null, skew: 0, routes: null };
+  const ALERT_HELP = {
+    no_show: ['NO_SHOW_MINUTES', 'no_show_minutes', 'Rostered shift started this many minutes ago and nobody has clocked in.'],
+    late: ['LATE_ALERT_MINUTES', 'late_alert_minutes', 'Clocked in at least this many minutes after the rostered start.'],
+    no_clock_out: ['CLOCKOUT_GRACE_MINUTES', 'clockout_grace_minutes', 'Still clocked in this long after the shift ended.'],
+    long_break: ['BREAK_MAX_MINUTES', 'break_max_minutes', 'On break for longer than this.'],
+    understaffed: ['UNDERSTAFF_MIN', 'understaff_min', 'A department has at least this many fewer people on duty than rostered.'],
+    assist_sla: ['ASSIST_SLA_MINUTES', null, 'A traveller’s assistance request has waited more than 2 × the assist SLA.'],
+    safety: [null, null, 'A clock-in safety check was flagged (missing PPE or HIGH fatigue risk).'],
+  };
+  const rel = ts => {
+    const s = Math.max(0, (Date.now() + A.skew - new Date(ts)) / 1000);
+    return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
+  };
+  const typeOf = t => ((A.data && A.data.settings.types) || {})[t] || { icon: '🔔', label: t };
+  async function pollAlerts() {
+    const j = await api('/api/alerts?status=new,ack');
+    A.skew = new Date(j.now) - Date.now();
+    const fresh = j.rows.filter(r => r.status === 'new');
+    $('alertBadge').textContent = fresh.length; $('alertBadge').hidden = !fresh.length;
+    renderLive(fresh, j.settings);
+    return j;
+  }
+  function renderLive(fresh, settings) {
+    A.types = settings.types;
+    $('liveCard').hidden = !fresh.length;
+    $('liveN').textContent = `${fresh.length} new`;
+    const sev = { high: 0, medium: 1, low: 2 };
+    $('liveStrip').innerHTML = [...fresh].sort((a, b) => sev[a.severity] - sev[b.severity] || b.id - a.id).slice(0, 5)
+      .map(r => `<div class="li ${esc(r.severity)}"><span>${esc((settings.types[r.type] || {}).icon || '🔔')}</span><span class="t">${esc(r.text)}</span><small>${esc(rel(r.ts))}</small></div>`).join('');
+  }
+  async function loadAlerts() {
+    const statuses = $('alResolved').checked ? 'new,ack,resolved' : 'new,ack';
+    const j = await api('/api/alerts?status=' + statuses);
+    A.data = j; A.skew = new Date(j.now) - Date.now();
+    const fresh = j.rows.filter(r => r.status === 'new');
+    $('alertBadge').textContent = fresh.length; $('alertBadge').hidden = !fresh.length;
+    renderLive(fresh, j.settings);
+    const tSel = $('alType').value, dSel = $('alDept').value;
+    $('alType').innerHTML = '<option value="">All types</option>' + Object.entries(j.settings.types).map(([k, t]) => `<option value="${esc(k)}">${esc(t.icon)} ${esc(t.label)}</option>`).join('');
+    $('alType').value = tSel;
+    const depts = [...new Set(j.rows.map(r => r.department).filter(Boolean))].sort();
+    $('alDept').innerHTML = '<option value="">All departments</option>' + depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    $('alDept').value = depts.includes(dSel) ? dSel : '';
+    const c = j.counts || {};
+    $('alCounts').innerHTML = `<span class="pill bad">${c.new || 0} new</span><span class="pill warn">${c.ack || 0} acknowledged</span><span class="pill ok">${c.resolved || 0} resolved</span><span class="muted">last 7 days</span>`;
+    renderFeed();
+    renderSettings(j.settings);
+    if (!A.routes) loadRoutes().catch(fail);
+  }
+  function renderFeed() {
+    const j = A.data; if (!j) return;
+    const t = $('alType').value, d = $('alDept').value, st = { new: 0, ack: 1, resolved: 2 }, sv = { high: 0, medium: 1, low: 2 };
+    const rows = j.rows.filter(r => (!t || r.type === t) && (!d || r.department === d))
+      .sort((a, b) => st[a.status] - st[b.status] || sv[a.severity] - sv[b.severity] || b.id - a.id);
+    $('alFeed').innerHTML = rows.map(r => {
+      const ty = typeOf(r.type);
+      const acts = [r.status === 'new' ? '<button class="btn sm" data-al="ack">Acknowledge</button>' : '',
+                    r.status !== 'resolved' ? `<button class="btn ${r.status === 'new' ? 'ghost ' : ''}sm" data-al="resolved">Resolve</button>` : '',
+                    r.status !== 'new' ? '<button class="btn ghost sm" data-al="new">Reopen</button>' : ''].join('');
+      return `<article class="al ${esc(r.severity)} st-${esc(r.status)}" data-aid="${r.id}">
+        <div class="ai" aria-hidden="true">${esc(ty.icon)}</div>
+        <div style="min-width:0;display:grid;gap:4px">
+          <div class="ah"><b>${esc(ty.label)}</b><span class="sev ${esc(r.severity)}">${esc(r.severity)}</span>${r.status === 'new' ? '<span class="pill bad plain">New</span>' : r.status === 'ack' ? '<span class="pill warn plain">Acknowledged</span>' : '<span class="pill ok plain">Resolved</span>'}<span class="when" title="${esc(r.ts)}">${esc(rel(r.ts))}</span></div>
+          <div class="at">${esc(r.text)}</div>
+          <div class="am">${r.person ? `<span>👤 ${esc(r.person)}</span>` : ''}${r.department ? `<span>🏷 ${esc(r.department)}</span>` : ''}${r.kiosk ? `<span>📍 ${esc(r.kiosk)}</span>` : ''}${r.notified ? '<span>📨 sent to supervisor</span>' : ''}${r.ack_by && r.status !== 'new' ? `<span>✋ ${esc(r.ack_by)}${r.ack_ts ? ' · ' + esc(rel(r.ack_ts)) : ''}</span>` : ''}</div>
+          ${r.notes ? `<div class="am">📝 ${esc(r.notes)}</div>` : ''}
+        </div>
+        <div class="aa"><input data-note placeholder="Note (optional)" aria-label="Note">${acts}</div>
+      </article>`;
+    }).join('') || `<div class="empty">${j.rows.length ? 'No alerts match the filter.' : '✓ No open alerts — all clear.'}</div>`;
+  }
+  $('alFeed').onclick = async e => {
+    const b = e.target.closest('[data-al]'); if (!b) return;
+    const card = b.closest('[data-aid]'), status = b.dataset.al;
+    let by = $('alBy').value.trim();
+    if (status !== 'new' && !by) {
+      by = (prompt('Your name (shown on the alert):') || '').trim();
+      if (!by) return;
+      $('alBy').value = by; try { localStorage.setItem('alert-by', by); } catch (x) { /* ignore */ }
+    }
+    const note = card.querySelector('[data-note]').value.trim();
+    try {
+      b.disabled = true;
+      await api('/api/alerts/' + card.dataset.aid, jsonBody('PUT', { status, by: status === 'new' ? null : by, notes: note || null }));
+      toast(status === 'ack' ? 'Acknowledged' : status === 'resolved' ? 'Resolved' : 'Reopened');
+      await loadAlerts();
+    } catch (err) { fail(err); b.disabled = false; }
+  };
+  try { $('alBy').value = localStorage.getItem('alert-by') || ''; } catch (x) { /* ignore */ }
+  $('alBy').onchange = () => { try { localStorage.setItem('alert-by', $('alBy').value.trim()); } catch (x) { /* ignore */ } };
+  $('alType').onchange = renderFeed; $('alDept').onchange = renderFeed;
+  $('alResolved').onchange = () => loadAlerts().catch(fail);
+  $('alRefresh').onclick = () => loadAlerts().catch(fail);
+  function renderSettings(st) {
+    $('alScan').textContent = st.scan_seconds;
+    $('alEnvHook').innerHTML = st.webhook ? ' (<b>set</b>)' : ' (not set)';
+    $('alTypes').innerHTML = Object.entries(st.types).map(([k, t]) => {
+      const [env, key, text] = ALERT_HELP[k] || [null, null, ''];
+      return `<div><span>${esc(t.icon)}</span><span><b>${esc(t.label)} <span class="sev ${esc(t.severity)}">${esc(t.severity)}</span></b>${esc(text)}${env ? ` <code>${env}${key && st[key] != null ? '=' + esc(st[key]) : ''}</code>` : ''}</span></div>`;
+    }).join('') + `<div><span>📨</span><span><b>Fallback webhook</b>Used when a department has no route. <code>ALERT_WEBHOOK_URL</code> ${st.webhook ? '<span class="pill ok">set</span>' : '<span class="pill">not set</span>'}</span></div>`;
+  }
+  async function loadRoutes() {
+    A.routes = await api('/api/alerts/routes');
+    const have = Object.fromEntries(A.routes.routes.map(r => [r.department, r]));
+    const depts = ['*', ...new Set([...A.routes.departments, ...A.routes.routes.map(r => r.department).filter(d => d !== '*')])];
+    $('rtBody').innerHTML = depts.map(d => {
+      const r = have[d] || {};
+      return `<tr data-rd="${esc(d)}"><td style="white-space:nowrap"><b>${d === '*' ? 'Default (*)' : esc(d)}</b>${have[d] ? '' : ' <span class="chip">not set</span>'}</td>
+        <td><input data-f="supervisor" value="${esc(r.supervisor || '')}" placeholder="Supervisor name" aria-label="Supervisor for ${esc(d)}"></td>
+        <td><input data-f="webhook" type="url" value="${esc(r.webhook || '')}" placeholder="https://hooks.slack.com/…" aria-label="Webhook for ${esc(d)}"></td>
+        <td style="white-space:nowrap"><button class="btn sm" data-rt="save">Save</button>${have[d] ? ' <button class="btn danger sm" data-rt="del">✕</button>' : ''}</td></tr>`;
+    }).join('');
+  }
+  $('rtBody').onclick = async e => {
+    const b = e.target.closest('[data-rt]'); if (!b) return;
+    const tr = b.closest('[data-rd]'), d = tr.dataset.rd;
+    try {
+      if (b.dataset.rt === 'del') { if (!confirm(`Remove the alert route for ${d === '*' ? 'Default' : d}?`)) return; await api('/api/alerts/routes/' + enc(d), { method: 'DELETE' }); toast('Route removed'); }
+      else { await api('/api/alerts/routes/' + enc(d), jsonBody('PUT', { supervisor: tr.querySelector('[data-f=supervisor]').value, webhook: tr.querySelector('[data-f=webhook]').value })); toast(`Saved route for ${d === '*' ? 'Default' : d}`); }
+      await loadRoutes();
+    } catch (err) { fail(err); }
+  };
+  // badge + Today strip + open feed every 30 s
+  setInterval(() => {
+    if ($('app').hidden) return;
+    if ($('s-alerts').classList.contains('active')) loadAlerts().catch(() => {}); else pollAlerts().catch(() => {});
+  }, 30000);
+
   // ---- safety rules ----
   const SDEF = { ppe: [], fatigue: 0, min_rest_h: 10, max_24h_h: 12, max_7d_h: 60, max_days: 6 };
   let SAFE = { rules: [], departments: [], catalog: {} }, SEXTRA = [];

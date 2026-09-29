@@ -354,6 +354,8 @@ def person(name: str, date_from: str, date_to: str) -> dict:
                                                 (name, date_from, date_to))]
         starts = roster.starts_map(conn, date_from, date_to)
         shifts = [r for r in roster.adherence(conn, date_from, date_to) if r["person"] == name]
+        upcoming = [r for r in roster.adherence(conn, date.today().isoformat(), (date.today() + timedelta(days=14)).isoformat())
+                    if r["person"] == name and r["status"] == "upcoming"]
     prof = dict(prof) if prof else {"name": name}
     wd = workdays(ev)
     shift = _shift_min(prof)
@@ -384,7 +386,7 @@ def person(name: str, date_from: str, date_to: str) -> dict:
         "mood_mix": dict(Counter(s["mood"] for s in si if s["mood"])),
         "attire_mix": dict(Counter(s["attire"] for s in si if s["attire"])),
         "interactions": [dict(r) for r in it], "memories": [dict(r) for r in mem], "safety_checks": checks,
-        "upcoming_shifts": [r for r in shifts if r["status"] == "upcoming"][:10],
+        "upcoming_shifts": upcoming[:10],
         "moods_meta": {k: {"valence": v[0], "word": v[1], "emoji": v[2]} for k, v in MOODS.items()},
     }
 

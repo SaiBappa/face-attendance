@@ -252,6 +252,20 @@
   .lb .rk { width:26px; color:var(--muted); font-weight:650; text-align:center; }
   .lb .av { width:26px; height:26px; font-size:10.5px; }
 
+  /* roster */
+  .rminis { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+  @media (max-width:1250px) { .rminis { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+  @media (max-width:760px) { .rminis { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } }
+  .rb { display:inline-block; padding:1px 7px; border-radius:6px; font-size:11px; font-weight:650; white-space:nowrap; border:1px solid var(--line); color:var(--ink2); background:var(--card2); margin:1px 2px 1px 0; }
+  .rb.ok { color:var(--good-ink); background:color-mix(in srgb, var(--good) 12%, transparent); border-color:transparent; }
+  .rb.bad { color:var(--bad-ink); background:color-mix(in srgb, var(--crit) 12%, transparent); border-color:transparent; }
+  .rb.warn { color:var(--warn-ink); background:color-mix(in srgb, var(--warn) 16%, transparent); border-color:transparent; }
+  .rb.live { color:var(--s1); background:color-mix(in srgb, var(--s1) 12%, transparent); border-color:transparent; }
+  .upc { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
+  .upc li { display:flex; gap:10px; align-items:baseline; font-size:14px; padding:7px 10px; border-radius:10px; background:var(--card2); border:1px solid var(--line); }
+  .upc li b { font-variant-numeric:tabular-nums; }
+  .upc li small { color:var(--muted); margin-left:auto; text-align:right; }
+
   /* safety */
   .slist { display:grid; gap:8px; max-height:360px; overflow:auto; margin:-2px -4px 0; padding:2px 4px; }
   .sitem { display:grid; grid-template-columns:auto 1fr auto; gap:4px 10px; align-items:start; text-align:left; width:100%; padding:10px 12px;
@@ -521,6 +535,27 @@
       <article class="card">
         <div class="card-h"><div class="grow"><h2>How it was raised</h2><p>Help button vs. asked in conversation</p></div></div>
         <div id="aSrc"></div>
+      </article>
+    </div>
+
+    <!-- roster adherence: planned shifts vs what happened -->
+    <div class="asec-h" id="roster">
+      <div class="grow"><h2>🗓 Roster adherence</h2><p>Rostered shifts vs actual clock-ins — no-shows, lateness against the rostered start, early leaves and overtime</p></div>
+      <a class="btn no-print" href="/admin#roster">Open roster ↗</a>
+    </div>
+    <div class="rminis" id="rKpis"></div>
+    <div class="grid g-2">
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>By department</h2><p>Attendance against the roster</p></div></div>
+        <div class="tbl-wrap" id="rDept"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>People to follow up</h2><p>Most no-shows, then most late starts — select to drill down</p></div></div>
+        <div class="tbl-wrap" id="rPeople"></div>
+      </article>
+      <article class="card">
+        <div class="card-h"><div class="grow"><h2>Recent no-shows</h2><p>Rostered but never clocked in</p></div></div>
+        <div class="slist" id="rNo"></div>
       </article>
     </div>
 
@@ -1021,6 +1056,16 @@
       if (as.open) s += ` — <b>${as.open}</b> still open`;
       out.push(['🛎', s + '.']);
     }
+    // 7b. roster adherence
+    const ro = d.roster;
+    if (ro && ro.shifts) {
+      let s = `<b>${fmt(ro.attendance_pct, 1)}%</b> of ${fmt(ro.shifts)} rostered shifts were worked`;
+      s += ro.no_shows ? ` — <b>${ro.no_shows}</b> no-show${ro.no_shows === 1 ? '' : 's'}` : ' with no no-shows';
+      if (ro.late_pct) s += `; <b>${fmt(ro.late_pct, 0)}%</b> started late (avg ${fmt(ro.avg_late_min, 0)} min)`;
+      if (ro.overtime_h) s += `; <b>${fmt(ro.overtime_h, 0)} h</b> overtime`;
+      const top = (ro.people || []).find(x => x.no_show >= 2);
+      out.push(['🗓', s + (top ? `. <b>${esc(top.person)}</b> missed ${top.no_show} shifts.` : '.')]);
+    }
     // 8. safety
     const sf = d.safety;
     if (sf && sf.checks) {
@@ -1031,8 +1076,8 @@
       out.push(['🦺', s]);
     }
     const kudos = d.alerts.filter(a => a.severity === 'positive').length;
-    if (kudos && out.length < 7) out.push(['★', `<b>${kudos}</b> ${kudos === 1 ? 'person is' : 'people are'} on a 10+ shift on-time streak — worth a shout-out.`]);
-    $('#summary').innerHTML = out.length ? out.slice(0, 7).map(([i, s]) => `<li><span class="ic" aria-hidden="true">${i}</span><span>${s}</span></li>`).join('')
+    if (kudos && out.length < 8) out.push(['★', `<b>${kudos}</b> ${kudos === 1 ? 'person is' : 'people are'} on a 10+ shift on-time streak — worth a shout-out.`]);
+    $('#summary').innerHTML = out.length ? out.slice(0, 8).map(([i, s]) => `<li><span class="ic" aria-hidden="true">${i}</span><span>${s}</span></li>`).join('')
       : '<li><span></span><span class="muted">Not enough data in this range to summarise yet.</span></li>';
     $('#sumSub').textContent = `${S.kiosk || 'All locations'} · ${fmtDay(S.from)} – ${fmtDay(S.to)} · vs the ${(new Date(S.to) - new Date(S.from)) / 864e5 + 1}-day period before`;
   }
@@ -1042,7 +1087,7 @@
     const sevLabel = { high: 'High', medium: 'Medium', low: 'Low', positive: 'Kudos' };
     const main = d.alerts.filter(a => a.severity !== 'positive');
     const kudos = d.alerts.filter(a => a.severity === 'positive');
-    let html = main.map(a => `<button class="alert" data-person="${esc(a.person)}"><span class="sev ${esc(a.severity)}">${a.type === 'fatigue' ? '🦺 Fatigue' : sevLabel[a.severity] || esc(a.severity)}</span><span class="txt">${esc(a.text)}</span><span class="go" aria-hidden="true">›</span></button>`).join('');
+    let html = main.map(a => `<button class="alert" data-person="${esc(a.person)}"><span class="sev ${esc(a.severity)}">${a.type === 'fatigue' ? '🦺 Fatigue' : a.type === 'no_show' ? '🚫 No-show' : sevLabel[a.severity] || esc(a.severity)}</span><span class="txt">${esc(a.text)}</span><span class="go" aria-hidden="true">›</span></button>`).join('');
     if (kudos.length) {
       html += `<div class="kudos"><span class="sev positive">Kudos</span><div class="txt">${kudos.length} on-time streak${kudos.length > 1 ? 's' : ''} of 10+ shifts — worth a shout-out.</div>
         <div class="chips">${kudos.map(a => { const m = /(\d+)-shift/.exec(a.text); return `<button class="chip" data-person="${esc(a.person)}">${esc(a.person)}${m ? ` · 🔥${m[1]}` : ''}</button>`; }).join('')}</div></div>`;
@@ -1144,6 +1189,60 @@
        <div class="mleg" style="grid-template-columns:1fr;margin-top:12px">${src.map(([k, v]) => `<span><i style="background:${sc(k)}"></i>${esc(sl(k))}<em>${pctOf(v, stot)}% · ${fmt(v)}</em></span>`).join('')}</div>
        <p class="muted" style="font-size:12.5px;margin:14px 0 0">${tot ? `${pctOf(a.cancelled, tot)}% were cancelled before anyone arrived.` : ''}</p>`;
   }
+  // ============================================================== roster adherence
+  const hmin = m => !m ? '0m' : m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`;
+  function shiftBadges(st, late, early, ot) {
+    const b = [];
+    if (st === 'no_show') b.push('<span class="rb bad">🚫 no-show</span>');
+    if (st === 'in_progress') b.push('<span class="rb live">● on shift</span>');
+    if (st === 'late_pending') b.push('<span class="rb warn">⌛ not in yet</span>');
+    if (st === 'no_clock_out') b.push('<span class="rb warn">🕘 no clock-out</span>');
+    if (st === 'upcoming') b.push('<span class="rb">upcoming</span>');
+    if (st === 'worked' && !late && !early) b.push('<span class="rb ok">✓ worked</span>');
+    if (late) b.push(`<span class="rb warn">⏰ ${hmin(late)} late</span>`);
+    if (early) b.push(`<span class="rb warn">↘ left ${hmin(early)} early</span>`);
+    if (ot) b.push(`<span class="rb live">↗ +${hmin(ot)} OT</span>`);
+    return b.join('');
+  }
+  function renderRoster(d) {
+    const r = d.roster;
+    const parts = [$('#roster'), $('#rKpis'), $('#rDept').closest('.grid')];
+    parts.forEach(el => el.hidden = !r || !(r.shifts || r.upcoming));
+    if (!r || !(r.shifts || r.upcoming)) return;
+    const pc = (v, good, ok) => v == null ? 'var(--none)' : v >= good ? 'var(--good)' : v >= ok ? 'var(--warn)' : 'var(--crit)';
+    const tiles = [
+      { l: 'Rostered shifts', v: fmt(r.shifts), d: `<span>${fmt(r.planned_h, 0)} h planned${r.upcoming ? ` · ${r.upcoming} upcoming` : ''}</span>` },
+      { l: 'Attendance', v: r.attendance_pct == null ? '—' : `${fmt(r.attendance_pct, 1)}<small>%</small>`, extra: r.attendance_pct == null ? '' : `<div class="gauge"><i style="width:${r.attendance_pct}%;background:${pc(r.attendance_pct, 97, 90)}"></i></div>`, d: '<span>shifts clocked in</span>' },
+      { l: 'No-shows', v: fmt(r.no_shows), d: r.no_shows ? '<span class="delta down">● follow up</span>' : '<span class="delta up">● none</span>', cls: r.no_shows ? 'alert-on' : '' },
+      { l: 'Late starts', v: r.late_pct == null ? '—' : `${fmt(r.late_pct, 1)}<small>%</small>`, d: '<span>vs rostered start</span>' },
+      { l: 'Avg minutes late', v: r.avg_late_min == null ? '—' : `${fmt(r.avg_late_min, 0)}<small>min</small>`, d: '<span>when late</span>' },
+      { l: 'Early leaves', v: fmt(r.early_leaves), d: '<span>left before shift end</span>' },
+      { l: 'Overtime', v: `${fmt(r.overtime_h, 1)}<small>h</small>`, d: '<span>past rostered end</span>' },
+      { l: 'Missed clock-outs', v: fmt(r.missed_clock_outs), d: '<span>never clocked out</span>' }
+    ];
+    $('#rKpis').innerHTML = tiles.map(t => `<div class="kpi ${t.cls || ''}"><div class="l">${esc(t.l)}</div><div class="v">${t.v}</div>${t.extra || ''}<div class="d">${t.d}</div></div>`).join('');
+    $('#rDept').innerHTML = (r.by_department || []).length ? `<table><thead><tr><th>Department</th><th class="r">Shifts</th><th>Attended</th><th class="r">No-show</th><th class="r">Late</th><th class="r">OT</th></tr></thead><tbody>${
+      r.by_department.map(x => `<tr><td><b style="font-weight:600">${esc(x.department)}</b></td><td class="r">${fmt(x.shifts)}</td>
+        <td><div class="inbar sm"${tipAttr({ t: x.department, r: [[pc(x.attendance_pct, 97, 90), 'attended', `${fmt(x.attendance_pct, 1)}%`]] })}><span class="t"><i style="width:${x.attendance_pct || 0}%;background:${pc(x.attendance_pct, 97, 90)}"></i></span>${fmt(x.attendance_pct, 0)}%</div></td>
+        <td class="r">${x.no_shows ? `<span class="pill red">${x.no_shows}</span>` : '<span class="muted">0</span>'}</td><td class="r">${fmt(x.late)}</td><td class="r">${fmt(x.overtime_h, 1)}h</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No rostered shifts in this range</div>';
+    const ppl = (r.people || []).filter(x => x.no_show || x.late || x.early).slice(0, 12);
+    $('#rPeople').innerHTML = ppl.length ? `<table><thead><tr><th>Person</th><th class="r">Shifts</th><th class="r">No-show</th><th class="r">Late</th><th class="r">Early</th><th class="r">OT</th></tr></thead><tbody>${
+      ppl.map(x => `<tr class="click" data-person="${esc(x.person)}" tabindex="0"><td><b style="font-weight:600">${esc(x.person)}</b></td><td class="r">${x.shifts}</td>
+        <td class="r">${x.no_show ? `<span class="pill red">${x.no_show}</span>` : '<span class="muted">0</span>'}</td>
+        <td class="r">${x.late ? `<span class="pill amber">${x.late}</span>` : '<span class="muted">0</span>'}</td><td class="r">${x.early || '<span class="muted">0</span>'}</td>
+        <td class="r">${x.overtime_min ? hmin(x.overtime_min) : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">✓ Everyone worked their rostered shifts on time</div>';
+    $('#rNo').innerHTML = (r.recent_no_shows || []).length ? r.recent_no_shows.map(x => `<button class="sitem" data-person="${esc(x.person)}">
+        <span class="fscore high" style="min-width:30px" aria-hidden="true">🚫</span>
+        <span class="who"><b>${esc(x.person)}</b> <span class="muted" style="font-size:12px">${esc(x.department || '')}</span></span>
+        <span class="when">${esc(fmtDayLong(x.day))} · ${esc(x.start)}</span></button>`).join('') : '<div class="empty">No no-shows in this range</div>';
+  }
+  document.addEventListener('click', e => { const b = e.target.closest('#rNo [data-person], #rPeople [data-person]'); if (b) openPerson(b.dataset.person); });
+  document.addEventListener('keydown', e => { const b = e.target.closest && e.target.closest('#rPeople [data-person]'); if (b && e.key === 'Enter') openPerson(b.dataset.person); });
+  function upcomingCard(list) {
+    if (!list || !list.length) return '';
+    return `<div class="card"><div class="card-h"><div class="grow"><h2>Upcoming shifts</h2><p>From the roster</p></div></div><ul class="upc">${list.map(x => `<li><span>${esc(fmtDayLong(x.day))}</span><b>${esc(x.start)}–${esc(x.end)}${x.end < x.start ? ' <span class="muted" style="font-weight:500">→ next day</span>' : ''}</b><small>${esc([x.position, x.location].filter(Boolean).join(' · '))}</small></li>`).join('')}</ul></div>`;
+  }
+
   // ============================================================== safety
   const FLEVEL = { low: ['Low', 'var(--good)'], moderate: ['Moderate', 'var(--warn)'], high: ['High', 'var(--crit)'] };
   const RESTED = { 1: ['😫', 'Exhausted'], 2: ['😴', 'Tired'], 3: ['😐', 'OK'], 4: ['🙂', 'Rested'], 5: ['😄', 'Very rested'] };
@@ -1253,6 +1352,7 @@
     renderConvCharts(d);
     renderAssist(d);
     renderSafety(d);
+    renderRoster(d);
     renderCharts();
     renderPeople();
     fillTalkFilters(d);
@@ -1441,14 +1541,15 @@
       </div>
       <div class="card"><div class="card-h"><div class="grow"><h2>Mood calendar</h2><p>${esc(fmtDay(S.from))} – ${esc(fmtDay(S.to))} · colour = daily mood score</p></div></div><div class="cal">${cal}</div></div>
       ${consent ? `<div class="card"><div class="card-h"><div class="grow"><h2>Mood mix</h2></div></div>${mixBars([{ name: pr.name || S.person, mix: p.mood_mix }])}</div>` : ''}
+      ${upcomingCard(p.upcoming_shifts)}
       ${safetyCard(p.safety_checks)}
       <div class="card"><div class="card-h"><div class="grow"><h2>Daily log</h2></div></div><div class="tbl-wrap"><table>
-        <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Worked</th><th class="r">Break</th><th class="r">Late</th><th>Mood</th><th>Attire</th></tr></thead>
-        <tbody>${p.days.length ? [...p.days].reverse().map(d => `<tr><td>${esc(fmtDayLong(d.day))}</td><td>${esc(d.in || '—')}</td><td>${esc(d.out || '—')}</td><td>${esc(d.worked || '—')}</td>
+        <thead><tr><th>Date</th><th>Rostered</th><th>In</th><th>Out</th><th>Worked</th><th class="r">Break</th><th class="r">Late</th><th>Mood</th><th>Attire</th></tr></thead>
+        <tbody>${p.days.length ? [...p.days].reverse().map(d => `<tr><td>${esc(fmtDayLong(d.day))}</td><td>${d.shift ? `<b style="font-weight:600;font-variant-numeric:tabular-nums">${esc(d.shift)}</b><div style="margin-top:2px">${shiftBadges(d.shift_status, 0, d.early_leave_min, d.overtime_min)}</div>` : '<span class="muted">—</span>'}</td><td>${esc(d.in || '—')}</td><td>${esc(d.out || '—')}</td><td>${esc(d.worked || '—')}</td>
           <td class="r">${d.break_min ? d.break_min + 'm' : '—'}</td><td class="r">${d.late_min > 0 ? `<span class="pill amber">+${d.late_min}m</span>` : '<span class="muted">—</span>'}</td>
           <td>${consent ? `${moodCell(d.mood)} ${d.dominant && meta[d.dominant] ? meta[d.dominant].emoji : ''}` : '<span class="pill out">opted out</span>'}</td>
           <td>${d.attire ? `<span class="sw" style="background:${ATTIRE[d.attire] || 'var(--axis)'}"></span> <span class="muted">${esc(d.attire)}</span>` : '<span class="muted">—</span>'}</td></tr>`).join('')
-          : '<tr><td colspan="8" class="empty">No attendance in this range</td></tr>'}</tbody></table></div></div>
+          : '<tr><td colspan="9" class="empty">No attendance in this range</td></tr>'}</tbody></table></div></div>
       ${attire.length ? `<div class="card"><div class="card-h"><div class="grow"><h2>Attire colours worn</h2><p>How often each colour was spotted</p></div></div><div class="swatches">${attire.map(([c, n]) => `<div><span class="sw" style="background:${ATTIRE[c] || 'var(--axis)'}"></span>${esc(c)} <span class="muted">${pctOf(n, attTot)}%</span></div>`).join('')}</div></div>` : ''}
       <div class="card"><div class="card-h"><div class="grow"><h2>What Aura remembers</h2><p>Short facts Aura uses to follow up kindly</p></div></div>
         ${p.memories.length ? `<ul class="mem">${p.memories.map(m => `<li><span>${MEMICON[m.kind] || '📝'}</span><span>${esc(m.fact)}</span><small>${esc(fmtDay((m.ts || '').slice(0, 10)))}</small></li>`).join('')}</ul>` : '<div class="muted" style="font-size:14px">Nothing remembered yet.</div>'}</div>

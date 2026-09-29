@@ -65,7 +65,7 @@
   .privacy { margin-top:10px; display:inline-flex; gap:6px; align-items:center; font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:5px 10px; background:var(--glass); }
 
   /* ------------------------------------------------------------------ orb + portal */
-  #center { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:clamp(14px,2.4vh,26px); min-height:0; text-align:center; overflow-y:auto; overflow-x:hidden; }
+  #center { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:clamp(14px,2.4vh,26px); min-height:0; text-align:center; overflow-y:auto; overflow-x:hidden; padding:clamp(14px,3vh,40px) 0 8px; }
   #center > :first-child { margin-top:auto; } #center > :last-child { margin-bottom:auto; }   /* centred, but scrolls instead of overflowing */
   #orbWrap { position:relative; width:min(38vmin,300px); aspect-ratio:1; transition:width .6s cubic-bezier(.2,.8,.2,1); flex:none; }
   body[data-state=ambient] #orbWrap { width:min(30vmin,240px); }
@@ -99,7 +99,7 @@
 
   /* ------------------------------------------------------------------ text */
   #say { max-width:min(900px,92vw); }
-  #headline { font-size:clamp(30px,5.4vw,64px); font-weight:750; letter-spacing:-.03em; line-height:1.05; margin:0;
+  #headline { font-size:clamp(28px,min(5.4vw,8.5vh),64px); font-weight:750; letter-spacing:-.03em; line-height:1.12; margin:0; padding-bottom:.06em;
     background:linear-gradient(92deg, #fff 10%, var(--a1) 55%, var(--a2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
   #sub { margin-top:10px; color:var(--muted); font-size:clamp(17px,2.2vw,24px); min-height:1.3em; }
   #lines { margin:14px auto 0; display:grid; gap:8px; max-width:760px; }
@@ -135,7 +135,8 @@
 
   /* ------------------------------------------------------------------ ambient bottom */
   #ambient { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:end; margin-bottom:10px; transition:opacity .5s; }
-  body:not([data-state=ambient]) #ambient { opacity:0; pointer-events:none; }
+  /* collapse (not just fade) once someone is in front: the flight board is tall and would squeeze #center, pushing the IN/OUT actions out of view */
+  body:not([data-state=ambient]) #ambient { display:none; }
   #infoCard { max-width:520px; padding:18px 20px; border-radius:22px; background:var(--glass); border:1px solid var(--line); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); display:flex; gap:14px; align-items:flex-start; min-height:84px; }
   #infoCard .ico { font-size:30px; line-height:1; }
   #infoCard b { display:block; font-size:18px; margin-bottom:4px; }
@@ -249,6 +250,22 @@
     #pulse { justify-content:flex-start; }
     #right { align-items:stretch; }
     #board { width:100%; }
+  }
+  /* short landscape screens (e.g. a laptop or TV in a browser window): keep greeting + actions + tools on one screen */
+  @media (max-height: 760px) and (min-aspect-ratio: 4/5) {
+    #clock { font-size:clamp(34px,8vh,60px); } #date { font-size:13px; margin-top:2px; } .when .privacy { display:none; }
+    .where h1 { font-size:clamp(22px,5vh,34px); margin:2px 0 0; } .where p { font-size:14px; }
+    body[data-state=staff] #orbWrap, body[data-state=visitor] #orbWrap { width:min(17vh,160px); }
+    #center { gap:10px; justify-content:safe center; } #center > :first-child, #center > :last-child { margin-top:0; margin-bottom:0; }
+    /* the tap targets come straight after the name; the longer AI greeting (lines, chips) flows underneath */
+    #say { display:contents; }
+    #orbWrap { order:1; } #headline { order:2; max-width:92vw; } #sub { order:3; margin-top:-6px; font-size:clamp(15px,2.6vh,20px); }
+    #actions { order:4; } #tools { order:5; } #countdown { order:6; } #lines { order:7; margin:0 auto; max-width:min(760px,92vw); } #chips { order:8; margin-top:0; } #prompts { order:9; }
+    #lines:empty, #chips:empty { display:none; }
+    #actions button { padding:10px 8px 8px; gap:2px; border-radius:18px; font-size:clamp(16px,2.8vh,20px); }
+    #actions button .ic { width:30px; height:30px; border-radius:10px; font-size:15px; }
+    #actions button small { font-size:12px; }
+    .pill { padding:8px 16px; font-size:15px; }
   }
   @media (max-width: 820px) {
     #clock { font-size:44px; }

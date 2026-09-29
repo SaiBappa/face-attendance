@@ -98,6 +98,22 @@
 
   /* ------------------------------------------------------------------ summary strip */
   main { max-width:2200px; margin:0 auto; padding:1rem 1.25rem 4rem; }
+  /* supervisor alerts rail */
+  #sup { margin:0 0 1.1rem; border:1px solid var(--line); border-radius:1rem; background:var(--card); box-shadow:var(--shadow); }
+  #sup summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:.6rem; padding:.7rem 1rem; font-weight:650; font-size:.95rem; }
+  #sup summary::-webkit-details-marker { display:none; }
+  #sup summary::after { content:"▾"; margin-left:auto; color:var(--muted); transition:transform .2s; }
+  #sup[open] summary::after { transform:rotate(180deg); }
+  #sup .sn { min-width:1.5rem; height:1.5rem; padding:0 .4rem; border-radius:99px; display:inline-grid; place-items:center; background:var(--crit); color:#fff; font-size:.78rem; font-weight:700; }
+  #sup .sn.zero { background:var(--hover); color:var(--muted); }
+  #sup .sl { display:grid; gap:.4rem; padding:0 1rem .9rem; }
+  #sup .si { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; gap:.6rem; align-items:center; padding:.5rem .7rem; border-radius:.7rem; background:var(--card2); border-left:3px solid var(--muted); font-size:.88rem; }
+  #sup .si .sa { display:flex; gap:.35rem; }
+  #sup .si .sa .btn { min-height:1.9rem; padding:0 .6rem; font-size:.8rem; }
+  @media (max-width:640px) { #sup .si { grid-template-columns:auto minmax(0,1fr) auto; } #sup .si .sa { grid-column:1 / -1; justify-content:flex-end; } }
+  #sup .si.high { border-left-color:var(--crit); } #sup .si.medium { border-left-color:var(--warn); } #sup .si.low { border-left-color:var(--s1); }
+  #sup .si small { color:var(--muted); white-space:nowrap; }
+  #sup .si.ack { opacity:.7; }
   .strip { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.8rem; margin-bottom:1.1rem; }
   .stat { background:var(--card); border:1px solid var(--line); border-radius:1rem; padding:.8rem 1rem; box-shadow:var(--shadow); min-width:0; }
   .stat .l { font-size:.8rem; color:var(--ink2); font-weight:550; display:flex; align-items:center; gap:.4rem; }
@@ -255,6 +271,7 @@
 <div id="offline" hidden><div>⚠ Connection lost — retrying… (times shown may be stale)</div></div>
 
 <main>
+  <details id="sup" hidden><summary><span aria-hidden="true">🔔</span>Supervisor alerts <span class="sn zero" id="supN">0</span><span class="muted" style="font-weight:500;font-size:.8rem" id="supSub"></span></summary><div class="sl" id="supList"></div></details>
   <section class="strip" id="strip" aria-label="Summary"></section>
   <div class="lanes" id="lanes">
     <section class="lane" aria-labelledby="hWait">
@@ -633,6 +650,36 @@
     poll();
   });
   $('#pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pinGo').click(); });
+
+  // supervisor alerts rail (no-shows, understaffing, safety…): acknowledge / resolve here; routing and history live in Admin → Alerts
+  async function pollSup() {
+    if (!PIN || $('#app').hidden) return;
+    try {
+      const j = await api('/api/alerts?status=new,ack');
+      const skew = tms(j.now) - Date.now(), types = (j.settings || {}).types || {}, sv = { high: 0, medium: 1, low: 2 };
+      const rows = j.rows.sort((a, b) => (a.status === 'new' ? 0 : 1) - (b.status === 'new' ? 0 : 1) || sv[a.severity] - sv[b.severity] || b.id - a.id);
+      const n = rows.filter(r => r.status === 'new').length;
+      $('#sup').hidden = !rows.length;
+      $('#supN').textContent = n; $('#supN').classList.toggle('zero', !n);
+      $('#supSub').textContent = rows.length - n ? `· ${rows.length - n} acknowledged` : '';
+      const rel = ts => { const m = Math.max(0, Math.round((Date.now() + skew - tms(ts)) / 60000)); return m < 1 ? 'now' : m < 60 ? `${m} min` : `${Math.round(m / 60)} h`; };
+      $('#supList').innerHTML = rows.slice(0, 12).map(r => `<div class="si ${esc(r.severity)}${r.status === 'ack' ? ' ack' : ''}"><span aria-hidden="true">${esc((types[r.type] || {}).icon || '🔔')}</span><span>${esc(r.text)}${r.ack_by && r.status !== 'new' ? ` <span class="muted">· ✋ ${esc(r.ack_by)}</span>` : ''}</span><small>${esc(rel(r.ts))}</small><span class="sa">${r.status === 'new' ? `<button class="btn" data-sup="ack" data-aid="${r.id}">Acknowledge</button>` : ''}<button class="btn ${r.status === 'new' ? 'ghost' : 'go'}" data-sup="resolved" data-aid="${r.id}">Resolve</button></span></div>`).join('');
+    } catch (e) { /* the rail is optional */ }
+  }
+  $('#supList').addEventListener('click', async e => {
+    const b = e.target.closest('[data-sup]'); if (!b) return;
+    if (needMe()) return;
+    b.disabled = true;
+    try {
+      await api('/api/alerts/' + b.dataset.aid, { method: 'PUT', body: JSON.stringify({ status: b.dataset.sup, by: S.me }) });
+      toast(b.dataset.sup === 'ack' ? `✋ Acknowledged by ${S.me}` : '✓ Alert resolved');
+    } catch (err) { if (err.message !== 'unauthorised') toast('Couldn’t update: ' + err.message, true); }
+    pollSup();
+  });
+  try { if (store.get('assist-sup') === '1') $('#sup').open = true; } catch (e) { /* ignore */ }
+  $('#sup').addEventListener('toggle', () => store.set('assist-sup', $('#sup').open ? '1' : null));
+  setInterval(pollSup, 30000);
+  setTimeout(pollSup, 1500);
 
   soundUI(); notifyUI(); wake();
   if (PIN) poll(); else lock();

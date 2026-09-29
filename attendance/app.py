@@ -667,9 +667,9 @@ async def roster_import(request: Request):
     shifts, errors = roster.parse_csv(text)
     if request.query_params.get("dry") in ("1", "true"):
         return JSONResponse({"preview": shifts[:50], "count": len(shifts), "errors": errors})
+    unknown = _unknown_people(shifts)  # before saving: save() creates profiles for rostered departments
     with db() as conn:
         out = roster.save(conn, shifts, "csv", replace=form.get("replace", "1") in ("1", "true", "on"))
-    unknown = _unknown_people(shifts)
     return JSONResponse({**out, "errors": errors, "unknown_people": unknown})
 
 
@@ -684,9 +684,10 @@ async def roster_push(request: Request):
     require_pin(request)
     p = await request.json()
     shifts, errors = roster.validate(p.get("shifts") if isinstance(p, dict) else p)
+    unknown = _unknown_people(shifts)
     with db() as conn:
         out = roster.save(conn, shifts, "api", replace=(p.get("replace", True) if isinstance(p, dict) else True))
-    return JSONResponse({**out, "errors": errors, "unknown_people": _unknown_people(shifts)})
+    return JSONResponse({**out, "errors": errors, "unknown_people": unknown})
 
 
 async def roster_shift(request: Request):
@@ -747,8 +748,12 @@ async def alert_update(request: Request):
     if status not in ("new", "ack", "resolved"):
         raise HTTPException(400, "status must be new, ack or resolved")
     with db() as conn:
-        conn.execute("UPDATE alerts SET status=?, ack_by=COALESCE(?, ack_by), ack_ts=COALESCE(ack_ts, ?), notes=COALESCE(?, notes) WHERE id=?",
-                     (status, p.get("by"), stamp() if status != "new" else None, p.get("notes"), int(request.path_params["alert_id"])))
+        aid = int(request.path_params["alert_id"])
+        if status == "new":  # reopened: nobody owns it any more
+            conn.execute("UPDATE alerts SET status='new', ack_by=NULL, ack_ts=NULL, notes=COALESCE(?, notes) WHERE id=?", (p.get("notes"), aid))
+        else:
+            conn.execute("UPDATE alerts SET status=?, ack_by=COALESCE(?, ack_by), ack_ts=COALESCE(ack_ts, ?), notes=COALESCE(?, notes) WHERE id=?",
+                         (status, p.get("by"), stamp(), p.get("notes"), aid))
     return JSONResponse({"ok": True})
 
 

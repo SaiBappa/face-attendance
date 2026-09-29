@@ -219,7 +219,7 @@ def adherence(conn, date_from: str, date_to: str, now: datetime = None) -> list:
             "early_leave_min": max(0, int((en - last_out).total_seconds() // 60)) if last_out and last_out < en - timedelta(minutes=EARLY_LEAVE_MIN) else 0,
             "overtime_min": max(0, int((last_out - en).total_seconds() // 60)) if last_out and last_out > en + timedelta(minutes=15) else 0,
             "planned_h": round((en - st).total_seconds() / 3600, 2),
-            "status": status, "demo": s.get("demo", 0),
+            "status": status, "demo": s.get("demo", 0), "notes": s.get("notes"),
         })
     return out
 
