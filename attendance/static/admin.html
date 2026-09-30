@@ -1424,6 +1424,8 @@
     return [bits.join(' '), +r.fatigue ? 'fatigue check' : ''].filter(Boolean).join(' + ') || 'no checks';
   };
   const FLIGHT_OPTS = { both: 'Departures + arrivals', departures: 'Departures only', arrivals: 'Arrivals only', off: 'Off — no flight board' };
+  // app.SCREENS: the device the kiosk runs on; the layout stays fluid within it (window resizes, rotation)
+  const SCREEN_OPTS = { auto: 'Auto — fit the window', mobile: 'Mobile phone', minitab: 'Mini tablet (iPad mini, 7–8″)', tablet: 'Tablet (iPad, 10–13″)', desktop: 'Laptop / PC' };
   function renderEditor() {
     const k = KIOSKS.find(x => x.name === SEL);
     if (!k) { $('kEditor').innerHTML = '<div class="empty">Select or create a kiosk to edit it.</div>'; return; }
@@ -1438,6 +1440,7 @@
         <label class="field"><span>Headline</span><input id="k_head" value="${esc(k.headline || '')}" placeholder="e.g. Welcome to the Maldives"></label>
         <label class="field"><span>Subtitle</span><input id="k_sub" value="${esc(k.subtitle || '')}" placeholder="Shown under the headline"></label>
         <div class="field span2"><span>Theme</span><div class="themes">${Object.entries(THEMES).map(([v, l]) => `<label class="theme-opt"><input type="radio" name="k_theme" value="${v}"${(k.theme || 'lagoon') === v ? ' checked' : ''}><span><i class="th-${v}"></i>${l}</span></label>`).join('')}</div></div>
+        <label class="field"><span>Screen size</span><select id="k_screen">${Object.entries(SCREEN_OPTS).map(([v, l]) => `<option value="${v}"${(k.screen || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field"><span>Flight board</span><select id="k_flights">${Object.entries(FLIGHT_OPTS).map(([v, l]) => `<option value="${v}"${(k.flights || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <div class="field span2"><span>Voice</span><label class="switch"><input type="checkbox" id="k_voice"${+k.voice !== 0 ? ' checked' : ''}><span class="sl"></span><span>Aura speaks replies aloud and listens for questions</span></label></div>
         <label class="field"><span>Purpose</span><select id="k_mode"><option value="attendance"${(k.mode || 'attendance') === 'attendance' ? ' selected' : ''}>Attendance — clock in / out</option><option value="gate"${k.mode === 'gate' ? ' selected' : ''}>Gate — hands-free area entry &amp; exit</option><option value="muster"${k.mode === 'muster' ? ' selected' : ''}>Muster point — emergency roll call</option></select></label>
@@ -1495,7 +1498,7 @@
     const body = {
       zone: $('k_zone').value.trim(), headline: $('k_head').value.trim(), subtitle: $('k_sub').value.trim(),
       theme: (document.querySelector('input[name=k_theme]:checked') || {}).value || 'lagoon', language: $('k_lang').value,
-      voice: $('k_voice').checked, flights: $('k_flights').value,
+      voice: $('k_voice').checked, flights: $('k_flights').value, screen: $('k_screen').value,
       safety_rule: $('k_srule').value, safety_enforce: $('k_senforce').checked,
       mode: $('k_mode').value, area: $('k_area').value.trim(), direction: $('k_dir').value,
       actions: [...document.querySelectorAll('.k_act:checked')].map(x => x.value),
@@ -1904,6 +1907,9 @@
     const t = $('alType').value, d = $('alDept').value, st = { new: 0, ack: 1, resolved: 2 }, sv = { high: 0, medium: 1, low: 2 };
     const rows = j.rows.filter(r => (!t || r.type === t) && (!d || r.department === d))
       .sort((a, b) => st[a.status] - st[b.status] || sv[a.severity] - sv[b.severity] || b.id - a.id);
+    // notes being typed survive the 30 s refresh (and keep focus, so typing isn't interrupted)
+    const typed = {}, focused = document.activeElement?.closest?.('#alFeed [data-aid]')?.dataset.aid;
+    $('alFeed').querySelectorAll('[data-aid]').forEach(c => { const v = c.querySelector('[data-note]').value; if (v) typed[c.dataset.aid] = v; });
     $('alFeed').innerHTML = rows.map(r => {
       const ty = typeOf(r.type);
       const acts = [r.status === 'new' ? '<button class="btn sm" data-al="ack">Acknowledge</button>' : '',
@@ -1917,9 +1923,10 @@
           <div class="am">${r.person ? `<span>👤 ${esc(r.person)}</span>` : ''}${r.department ? `<span>🏷 ${esc(r.department)}</span>` : ''}${r.kiosk ? `<span>📍 ${esc(r.kiosk)}</span>` : ''}${r.notified ? '<span>📨 sent to supervisor</span>' : ''}${r.ack_by && r.status !== 'new' ? `<span>✋ ${esc(r.ack_by)}${r.ack_ts ? ' · ' + esc(rel(r.ack_ts)) : ''}</span>` : ''}</div>
           ${r.notes ? `<div class="am">📝 ${esc(r.notes)}</div>` : ''}
         </div>
-        <div class="aa"><input data-note placeholder="Note (optional)" aria-label="Note">${acts}</div>
+        <div class="aa"><input data-note placeholder="Note (optional)" aria-label="Note" value="${esc(typed[r.id] || '')}">${acts}</div>
       </article>`;
     }).join('') || `<div class="empty">${j.rows.length ? 'No alerts match the filter.' : '✓ No open alerts — all clear.'}</div>`;
+    if (focused) { const n = $('alFeed').querySelector(`[data-aid="${focused}"] [data-note]`); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }
   }
   $('alFeed').onclick = async e => {
     const b = e.target.closest('[data-al]'); if (!b) return;
@@ -1935,6 +1942,7 @@
       b.disabled = true;
       await api('/api/alerts/' + card.dataset.aid, jsonBody('PUT', { status, by: status === 'new' ? null : by, notes: note || null }));
       toast(status === 'ack' ? 'Acknowledged' : status === 'resolved' ? 'Resolved' : 'Reopened');
+      card.querySelector('[data-note]').value = '';   // saved: don't carry it into the re-render
       await loadAlerts();
     } catch (err) { fail(err); b.disabled = false; }
   };

@@ -80,8 +80,9 @@ from store import db, init_db
 COMPREFACE_URL = os.environ.get("COMPREFACE_URL", "http://localhost:8000").rstrip("/")
 API_KEY = os.environ.get("COMPREFACE_API_KEY", "")
 LISTENER_URL = os.environ.get("LISTENER_URL", "http://localhost:8001").rstrip("/")
-THRESHOLD = float(os.environ.get("SIMILARITY_THRESHOLD", "0.90"))
+THRESHOLD = float(os.environ.get("SIMILARITY_THRESHOLD", "0.35"))   # SFace cosine, same default as compose/README
 DUP_WINDOW = int(os.environ.get("DUPLICATE_WINDOW_SECONDS", "60"))
+SHIFT_MAX_HOURS = float(os.environ.get("SHIFT_MAX_HOURS", "16"))   # a clock-in older than this no longer counts as on duty
 ADMIN_PIN = os.environ.get("ADMIN_PIN", "2468")
 ASSIST_PIN = os.environ.get("ASSIST_PIN") or ADMIN_PIN   # for service-desk agents who shouldn't see admin
 ASSIST_WEBHOOK_URL = os.environ.get("ASSIST_WEBHOOK_URL", "")
@@ -130,10 +131,17 @@ def stamp(ts: datetime = None) -> str:
     return (ts or now()).isoformat(timespec="seconds")
 
 
-def last_action_today(conn, employee: str):
+def shift_since(ts: datetime = None) -> str:
+    """Start of the window a shift can still be open in. A rolling window, not the calendar day, so a night
+    shift (IN 22:00, OUT 06:00) stays one shift across midnight."""
+    return stamp((ts or now()) - timedelta(hours=SHIFT_MAX_HOURS))
+
+
+def last_action(conn, employee: str):
+    """The person's latest event of their current shift (None if they have nothing in the last SHIFT_MAX_HOURS)."""
     return conn.execute(
-        "SELECT action, ts FROM events WHERE employee=? AND day=? ORDER BY id DESC LIMIT 1",
-        (employee, date.today().isoformat()),
+        "SELECT action, ts FROM events WHERE employee=? AND ts>=? ORDER BY id DESC LIMIT 1",
+        (employee, shift_since()),
     ).fetchone()
 
 
@@ -172,6 +180,10 @@ def refuse_unsafe_entry(conn, employee: str, kiosk: Optional[str], action: str):
     if rules["enforce"] and not safety.entry_cleared(conn, employee, kiosk):
         raise HTTPException(403, f"Safety requirements for {rules['location']} are not met — complete the safety check "
                                  "with all required PPE before entering.")
+
+
+# screen size per location: auto follows the window; the others tune the kiosk layout for that device class
+SCREENS = ("auto", "mobile", "minitab", "tablet", "desktop")
 
 
 def kiosk_row(conn, name: str) -> dict:
@@ -532,7 +544,7 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
             # a photo/screen of a staff member: say nothing about who it shows, offer no actions
             return JSONResponse({**base, "emotion": None, "matched": False, "liveness": verdict, "liveness_score": live})
     with db() as conn:
-        last = last_action_today(conn, employee)
+        last = last_action(conn, employee)
         prof = profile(conn, employee)
         consent = bool(prof.get("mood_consent", 1))
         k = kiosk_row(conn, kiosk)
@@ -637,7 +649,7 @@ async def record_event(request: Request):
                                     (f" — use {' / '.join(offered)}." if offered else " — this location records area entry and exit only."))
         refuse_expired_pass(conn, employee, kiosk)
         refuse_unsafe_entry(conn, employee, kiosk, action)
-        last = last_action_today(conn, employee)
+        last = last_action(conn, employee)
         if last and last["action"] == action:
             if ts - datetime.fromisoformat(last["ts"]) < timedelta(seconds=DUP_WINDOW):
                 return JSONResponse({"ok": True, "duplicate": True, "ts": last["ts"]})
@@ -751,8 +763,8 @@ async def kiosk_config(request: Request):
                AND (starts IS NULL OR starts='' OR starts<=?) AND (ends IS NULL OR ends='' OR ends>=?) ORDER BY id DESC""",
             (name, stamp(ts), stamp(ts)))]
         on_duty = conn.execute(
-            """SELECT COUNT(*) FROM (SELECT e.action FROM events e JOIN (SELECT employee, MAX(id) id FROM events WHERE day=? GROUP BY employee) m
-               ON m.id=e.id) WHERE action IN ('IN','BACK')""", (today,)).fetchone()[0]
+            """SELECT COUNT(*) FROM (SELECT e.action FROM events e JOIN (SELECT employee, MAX(id) id FROM events WHERE ts>=? GROUP BY employee) m
+               ON m.id=e.id) WHERE action IN ('IN','BACK')""", (shift_since(ts),)).fetchone()[0]
         vis = conn.execute("SELECT AVG(valence), COUNT(*) FROM sightings WHERE day=? AND kind='visitor' AND kiosk=?", (today, name)).fetchone()
         allv = conn.execute("SELECT AVG(valence) FROM sightings WHERE day=? AND valence IS NOT NULL", (today,)).fetchone()[0]
         chats = conn.execute("SELECT COUNT(*) FROM interactions WHERE day=? AND kiosk=? AND channel!='greeting'", (today, name)).fetchone()[0]
@@ -1114,17 +1126,20 @@ async def alert_routes(request: Request):
 
 # ----------------------------------------------------------------------------- admin API
 async def status(request: Request):
-    """Current state of every employee who has an event on the given day (default today)."""
+    """Current state of every employee who has an event on the given day (default today). Today also
+    includes anyone still on a shift that started yesterday (a night shift clocked IN before midnight)."""
     require_pin(request)
     day = request.query_params.get("day") or date.today().isoformat()
+    since = shift_since() if day == date.today().isoformat() else "~"   # "~" sorts after every timestamp
     with db() as conn:
         rows = conn.execute(
             """SELECT e.employee, e.action, e.ts, e.kiosk, e.mood
                FROM events e
-               JOIN (SELECT employee, MAX(id) AS id FROM events WHERE day=? GROUP BY employee) m
+               JOIN (SELECT employee, MAX(id) AS id FROM events WHERE day=? OR ts>=? GROUP BY employee) m
                  ON m.id = e.id
+               WHERE e.day=? OR e.action IN ('IN','BREAK','BACK')
                ORDER BY e.employee""",
-            (day,),
+            (day, since, day),
         ).fetchall()
     return JSONResponse({"day": day, "rows": [dict(r) for r in rows]})
 
@@ -1275,14 +1290,27 @@ async def rename_employee(request: Request):
     new = ((await request.json()).get("name") or "").strip()
     if not new:
         raise HTTPException(400, "name required")
-    if await _enrolled(name):
-        await cf("PUT", f"/subjects/{name}", json={"subject": new})
+    if new == name:
+        return JSONResponse({"ok": True})
+    subjects = (await cf("GET", "/subjects")).json().get("subjects", [])
     with db() as conn:
-        conn.execute("UPDATE events SET employee=? WHERE employee=?", (new, name))
-        conn.execute("UPDATE access SET person=? WHERE person=?", (new, name))
-        for t, col in (("people", "name"), ("sightings", "person"), ("interactions", "person"), ("memories", "person")):
+        if new in subjects or conn.execute("SELECT 1 FROM people WHERE name=?", (new,)).fetchone():
+            raise HTTPException(409, f"{new} already exists — pick a different name")
+        # every table that names a person, so the roster, alerts and safety history follow them
+        for t, col in RENAME_COLUMNS:
             conn.execute(f"UPDATE {t} SET {col}=? WHERE {col}=?", (new, name))
+        # alert keys embed the name ("late|Name|..."): re-key them so a re-scan doesn't raise them again
+        conn.execute("""UPDATE alerts SET key = type || '|' || ? || substr(key, length(type) + length(?) + 2)
+                        WHERE person=? AND key LIKE type || '|' || ? || '|%'""", (new, name, new, name))
+        # the recognizer last: if it fails, the exception rolls all of the above back
+        if name in subjects:
+            await cf("PUT", f"/subjects/{name}", json={"subject": new})
     return JSONResponse({"ok": True})
+
+
+RENAME_COLUMNS = (("events", "employee"), ("access", "person"), ("people", "name"), ("sightings", "person"),
+                  ("interactions", "person"), ("memories", "person"), ("shifts", "person"), ("safety_checks", "person"),
+                  ("requests", "person"), ("alerts", "person"), ("muster_roll", "person"))
 
 
 PROFILE_FIELDS = ("role", "department", "shift_start", "birthday", "joined", "language", "nickname", "mood_consent", "notes",
@@ -1543,6 +1571,10 @@ async def kiosk_save(request: Request):
         fields = {k: p[k] for k in ("zone", "headline", "subtitle", "theme", "language") if k in p}
         if p.get("flights") in ("both", "departures", "arrivals", "off"):
             fields["flights"] = p["flights"]
+        if "screen" in p:
+            if p["screen"] not in SCREENS:
+                raise HTTPException(400, f"screen must be one of {SCREENS}")
+            fields["screen"] = p["screen"]
         if "voice" in p:
             fields["voice"] = 1 if p["voice"] else 0
         if "info" in p:

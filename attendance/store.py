@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_day ON events(day);
 CREATE INDEX IF NOT EXISTS idx_events_emp ON events(employee, ts);
+CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 
 CREATE TABLE IF NOT EXISTS people (
     name         TEXT PRIMARY KEY,
@@ -294,7 +295,9 @@ MIGRATIONS = {
                # what the location is for (access.py): attendance (default) | gate; attendance buttons offered
                # (comma list, NULL = all four); a gate's area and direction (both | in | out)
                "mode": "TEXT NOT NULL DEFAULT 'attendance'", "actions": "TEXT", "area": "TEXT",
-               "direction": "TEXT NOT NULL DEFAULT 'both'"},
+               "direction": "TEXT NOT NULL DEFAULT 'both'",
+               # device the screen runs on: auto (follow the window) | mobile | minitab | tablet | desktop
+               "screen": "TEXT NOT NULL DEFAULT 'auto'"},
     "safety_checks": {"action": "TEXT", "blocked": "INTEGER NOT NULL DEFAULT 0",
                       "auto": "INTEGER NOT NULL DEFAULT 0"},   # passed by camera alone, no checklist shown
     # allow entry without the checklist when the camera confirms every PPE item of the rule

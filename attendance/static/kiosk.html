@@ -36,6 +36,7 @@
     --fg:#f4fbff; --muted:rgba(230,245,255,.62); --glass:rgba(255,255,255,.07); --line:rgba(255,255,255,.14);
     --in:#22c55e; --break:#f59e0b; --back:#3b82f6; --out:#ef4444;
     --orb:var(--a1);
+    --chat-h:min(62vh,640px);   /* the chat sheet's height; each screen size tunes it */
   }
   body[data-theme=sunset] { --bg1:#1a0b1e; --bg2:#44142f; --a1:#ff8a5b; --a2:#ffd166; --a3:#ff5d8f; }
   body[data-theme=aurora] { --bg1:#07071a; --bg2:#1a1147; --a1:#8b5cf6; --a2:#22d3ee; --a3:#34d399; }
@@ -52,7 +53,7 @@
   /* Home Screen app: pin every full-screen layer to the measured window height (see the script in <head>) */
   html.pwa, html.pwa body { height:var(--app-h, 100%); }
   html.pwa :is(#bg, #stage, #done, #safety, #passAlert, #start) { bottom:auto; height:var(--app-h, 100%); }
-  html.pwa #chat { bottom:auto; top:calc(var(--app-h, 100vh) - min(62vh,640px)); }
+  html.pwa #chat { bottom:auto; top:calc(var(--app-h, 100vh) - var(--chat-h)); }
   html.pwa #status { bottom:auto; top:calc(var(--app-h, 100vh) - 48px - 1.4em); }
   button { font:inherit; color:inherit; cursor:pointer; }
   .hidden { display:none !important; }
@@ -241,7 +242,7 @@
   @keyframes tick { to { transform:translateX(-100%); } }
 
   /* ------------------------------------------------------------------ chat */
-  #chat { position:fixed; left:50%; bottom:0; transform:translate(-50%, 105%); width:min(820px,100vw); height:min(62vh,640px); background:rgba(8,16,28,.82);
+  #chat { position:fixed; left:50%; bottom:0; transform:translate(-50%, 105%); width:min(820px,100vw); height:var(--chat-h); background:rgba(8,16,28,.82);
     border:1px solid var(--line); border-bottom:0; border-radius:28px 28px 0 0; backdrop-filter:blur(26px); -webkit-backdrop-filter:blur(26px);
     display:flex; flex-direction:column; transition:transform .45s cubic-bezier(.2,.8,.2,1); z-index:20; padding-bottom:env(safe-area-inset-bottom); }
   body.chatting #chat { transform:translate(-50%,0); }
@@ -268,7 +269,7 @@
 
   /* ------------------------------------------------------------------ overlays */
   #done { position:fixed; inset:0; z-index:30; display:grid; place-items:center; text-align:center; background:var(--c); opacity:0; pointer-events:none; transition:opacity .35s; }
-  #done.show { opacity:1; }
+  #done.show { opacity:1; pointer-events:auto; }   /* swallow taps meant for the buttons it covers */
   #done .check { width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.2); display:grid; place-items:center; margin:0 auto 20px; font-size:60px; animation:pop .5s cubic-bezier(.2,1.6,.4,1); }
   @keyframes pop { from { transform:scale(.4); } }
   #done h2 { font-size:clamp(34px,6vw,64px); margin:0; letter-spacing:-.02em; }
@@ -405,6 +406,97 @@
     .when .privacy { display:none; }
     #caption { display:none; }
   }
+  /* ------------------------------------------------------------------ screen size (location setting, body[data-screen])
+     auto follows the window alone (the rules above); the others tune type, spacing and tap targets for the device the
+     kiosk runs on. Every size stays fluid inside its class: resizing the window or rotating keeps re-flowing the layout. */
+  /* mobile phone: one column, compact header, no stats row, a tall chat sheet */
+  body[data-screen=mobile] { --chat-h:min(86vh,100%); }
+  body[data-screen=mobile] #stage { padding:calc(12px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left)); }
+  body[data-screen=mobile] header { gap:10px; }
+  body[data-screen=mobile] .where .zone { font-size:11px; letter-spacing:.12em; }
+  body[data-screen=mobile] .where h1 { font-size:clamp(19px,5.6vw,28px); margin:4px 0 0; }
+  body[data-screen=mobile] .where p { font-size:13px; }
+  body[data-screen=mobile] #clock { font-size:clamp(28px,min(9vw,9vh),44px); }
+  body[data-screen=mobile] #date { font-size:12px; margin-top:2px; }
+  body[data-screen=mobile] :is(.when .privacy, #caption, #pulse) { display:none; }
+  body[data-screen=mobile] #headline { font-size:clamp(22px,min(7vw,6vh),36px); }
+  body[data-screen=mobile] #sub { font-size:clamp(14px,4vw,18px); }
+  body[data-screen=mobile] #lines { gap:4px; }
+  body[data-screen=mobile] #lines div { font-size:clamp(14px,4vw,18px); }
+  body[data-screen=mobile] .chip { font-size:13px; padding:6px 12px; }
+  body[data-screen=mobile] #prompts button { font-size:14px; padding:9px 12px; border-radius:14px; }
+  body[data-screen=mobile] .pill { padding:10px 16px; font-size:15px; }
+  body[data-screen=mobile] #actions { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  body[data-screen=mobile] #actions button { padding:12px 6px 10px; gap:4px; border-radius:18px; font-size:clamp(16px,4.8vw,22px); }
+  body[data-screen=mobile] #actions button .ic { width:38px; height:38px; border-radius:12px; font-size:18px; }
+  body[data-screen=mobile] #actions button small { font-size:12px; }
+  body[data-screen=mobile] #infoCard { max-width:none; min-height:0; padding:10px 12px; gap:10px; border-radius:16px; }
+  body[data-screen=mobile] #infoCard .ico { font-size:24px; }
+  body[data-screen=mobile] #infoCard b { font-size:15px; margin-bottom:2px; }
+  body[data-screen=mobile] #infoCard span { font-size:13px; }
+  body[data-screen=mobile] #board { padding:8px 10px 6px; border-radius:16px; }
+  body[data-screen=mobile] #board col.c-w { width:0; } body[data-screen=mobile] #board col.c-t { width:30%; } body[data-screen=mobile] #board col.c-n { width:21%; } body[data-screen=mobile] #board col.c-s { width:27%; }
+  body[data-screen=mobile] #board td.t s { font-size:11px; margin-right:2px; }
+  body[data-screen=mobile] #hint { font-size:15px; }
+  body[data-screen=mobile] #board td { font-size:13px; padding:5px 3px; }
+  body[data-screen=mobile] #ticker .track { font-size:13px; }
+  body[data-screen=mobile] #chat { border-radius:20px 20px 0 0; }
+  body[data-screen=mobile] .msg { font-size:16px; padding:10px 14px; max-width:88%; }
+  body[data-screen=mobile] #composer input { font-size:16px; padding:12px 16px; }   /* 16px: smaller makes iOS zoom into the field */
+  body[data-screen=mobile] #mic { width:50px; height:50px; font-size:21px; }
+  body[data-screen=mobile] #safety { padding:12px; }
+  body[data-screen=mobile] #safety .sub { font-size:15px; }
+  body[data-screen=mobile] .ppe { grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; }
+  body[data-screen=mobile] .ppe button { padding:12px 8px; font-size:14px; } body[data-screen=mobile] .ppe button i { font-size:28px; }
+  body[data-screen=mobile] #safety .reasons button { min-height:72px; }
+  body[data-screen=mobile] #done .check { width:90px; height:90px; font-size:44px; }
+  @media (max-aspect-ratio: 1/1) {   /* phone upright: stack the info card, then the flight board, full width */
+    body[data-screen=mobile] #ambient { grid-template-columns:minmax(0,1fr); gap:10px; margin-bottom:6px; }
+    body[data-screen=mobile] #right { align-items:stretch; }
+    body[data-screen=mobile] #board { width:100%; }
+  }
+  @media (min-aspect-ratio: 1/1) {   /* phone on its side: the screen is short, so a smaller board and orb */
+    body[data-screen=mobile][data-state=ambient] #board { width:clamp(260px,42vw,420px); }
+    body[data-screen=mobile][data-state=ambient] #orbWrap { width:min(30vmin,200px,48cqh); }
+    body[data-screen=mobile].acting:not(.chatting) #actions button { font-size:clamp(16px,min(3vw,5vh),26px); }
+    body[data-screen=mobile].acting:not(.chatting) #actions button .ic { width:clamp(30px,8vh,48px); height:clamp(30px,8vh,48px); font-size:clamp(15px,3.6vh,22px); }
+  }
+
+  /* mini tablet (iPad mini, 7–8" Android): a touch denser than a full tablet */
+  body[data-screen=minitab] { --chat-h:min(70vh,640px); }
+  body[data-screen=minitab] #stage { padding:calc(16px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); }
+  body[data-screen=minitab] .where h1 { font-size:clamp(22px,3.4vw,34px); }
+  body[data-screen=minitab] .where p { font-size:15px; }
+  body[data-screen=minitab] #clock { font-size:clamp(32px,min(6vw,8vh),60px); }
+  body[data-screen=minitab] #headline { font-size:clamp(24px,min(5.4vw,7vh),54px); }
+  body[data-screen=minitab] #pulse div { min-width:80px; }
+  body[data-screen=minitab] #infoCard { max-width:440px; }
+  body[data-screen=minitab] #board td { font-size:clamp(12px,min(1.6vw,2vh),17px); }
+  body[data-screen=minitab] .ppe { grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); }
+  @media (max-aspect-ratio: 1/1) { body[data-screen=minitab] #actions { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+  /* tablet (iPad 10–13"): the layout above is designed for it, nothing to change */
+
+  /* laptop / PC: a mouse, a viewer close to the screen and windows of any size, so hover feedback, capped type and tap
+     targets, and the content kept to a readable width on wide monitors */
+  body[data-screen=desktop] { --chat-h:min(70vh,720px); }
+  body[data-screen=desktop] #stage { padding-left:max(calc(28px + env(safe-area-inset-left)), calc((100vw - 1680px) / 2));
+    padding-right:max(calc(28px + env(safe-area-inset-right)), calc((100vw - 1680px) / 2)); }
+  body[data-screen=desktop] #headline { font-size:clamp(26px,min(4.2vw,7.5vh),60px); }
+  body[data-screen=desktop] #actions { width:min(960px,100%); }
+  body[data-screen=desktop] #actions button { font-size:clamp(17px,min(2.4vw,3vh),28px); }
+  body[data-screen=desktop] :is(#actions button, #prompts button, .pill, .helpgrid button, .ppe button, .rest button) { transition:transform .15s, filter .15s, box-shadow .3s, background .3s; }
+  body[data-screen=desktop] :is(#actions button, #prompts button, .pill, .helpgrid button, .ppe button, .rest button):hover { filter:brightness(1.15); transform:translateY(-2px); }
+  body[data-screen=desktop] :is(#actions button, #prompts button, .pill):focus-visible { outline:2px solid var(--a1); outline-offset:3px; }
+  body[data-screen=desktop] .msg { font-size:17px; }
+  @media (min-aspect-ratio: 1/1) {
+    body[data-screen=desktop][data-state=ambient] #board { width:clamp(320px,34vw,600px); }
+    body[data-screen=desktop].acting:not(.chatting) #headline { font-size:clamp(26px,min(3.8vw,7vh),72px); }
+    body[data-screen=desktop].acting:not(.chatting) #actions { height:min(100%,62vh,560px); max-width:640px; }
+    body[data-screen=desktop].acting:not(.chatting) #actions button { font-size:clamp(18px,min(2.4vw,4.4vh),38px); }
+    body[data-screen=desktop].acting:not(.chatting) #actions button .ic { width:clamp(34px,7.5vh,76px); height:clamp(34px,7.5vh,76px); font-size:clamp(16px,3.4vh,34px); }
+  }
+  @media (prefers-reduced-motion: reduce) { body[data-screen=desktop] :is(#actions button, #prompts button, .pill, .helpgrid button, .ppe button, .rest button):hover { transform:none; } }
 </style>
 </head>
 <body data-state="ambient" data-theme="lagoon">
@@ -501,6 +593,8 @@
 (() => {
   const q = new URLSearchParams(location.search);
   const KIOSK = q.get('kiosk') || 'Main';
+  // ?screen=mobile|minitab|tablet|desktop previews a screen size without changing the location's setting
+  const SCREEN = ['auto', 'mobile', 'minitab', 'tablet', 'desktop'].includes(q.get('screen')) ? q.get('screen') : '';
   const SCAN_IDLE_MS = 900;       // frame cadence while the scene is still
   const SCAN_ACTIVE_MS = 120;     // movement in front of the kiosk
   const SCAN_FACE_MS = 40;        // a face is in view but not matched yet: scan almost back-to-back
@@ -513,7 +607,8 @@
   const STAFF_TIMEOUT_S = 20;     // staff panel returns to ambient if untouched
   const VISITOR_TIMEOUT_S = 25;
   const COOLDOWN_MS = 8000;       // after an action, ignore the same person (backstop if they never leave the frame)
-  const COOLDOWN_CLEAR_FRAMES = 2; // ...but end the cooldown once this many frames in a row have no face
+  const HOLD_GONE_MS = 2000;      // ...but end it once no face at all has been seen for this long (they walked away;
+                                  // a head turn or a missed frame is shorter, so it doesn't count as leaving)
   const MOTION_MS = 250;          // on-device motion check cadence (tiny thumbnail, never uploaded)
   const MOTION_HOLD_MS = 2500;    // keep the activity sign up this long after movement stops
   const MOODS = { happiness:['😊','happy'], neutral:['😌','calm'], surprise:['😮','surprised'], sadness:['😔','low'],
@@ -528,7 +623,7 @@
 
   const S = {
     state: 'ambient', encounter: null, noFace: 0, unmatched: 0, face: null, current: null, cfg: null,
-    paused: false, chatting: false, lastActivity: Date.now(), cooldownName: null, cooldownUntil: 0,
+    paused: false, chatting: false, lastActivity: Date.now(), held: new Map(), lastFaceAt: 0,
     deadline: 0, mediaIdx: 0, cardIdx: 0, lang: 'en', voiceOn: true, busy: false, failures: 0,
     frames: 0, firstUnmatchedAt: 0, spoofAt: 0,
   };
@@ -603,6 +698,7 @@
   function beep(freq = 880, ms = 110, type = 'sine', vol = .18) {
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume().catch(() => {});   // autostart / iOS interruptions leave it suspended
       const o = actx.createOscillator(), g = actx.createGain();
       o.type = type; o.frequency.value = freq; o.connect(g); g.connect(actx.destination);
       g.gain.setValueAtTime(vol, actx.currentTime);
@@ -633,6 +729,7 @@
       S.cfg = j; status('');
       const k = j.kiosk;
       document.body.dataset.theme = k.theme || 'lagoon';
+      document.body.dataset.screen = SCREEN || k.screen || 'auto';
       S.voiceOn = !!k.voice;
       $('zone').textContent = k.zone || KIOSK;
       $('place').textContent = k.headline || KIOSK;
@@ -906,13 +1003,24 @@
   }
 
   // ================================================================ camera + recognition loop
+  let camStarted = false, camOpening = false;
   async function startCamera() {
+    if (camOpening) return;
+    camOpening = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+      (video.srcObject?.getTracks() || []).forEach(t => t.stop());
       video.srcObject = stream; await video.play();
-      loop(); setInterval(motionTick, MOTION_MS);
-    } catch (e) { status(`Camera blocked: ${e.message}. Use HTTPS and allow the camera.`); }
+      // iPadOS ends the track when the app is backgrounded, locked or another app takes the camera: reopen it
+      stream.getVideoTracks().forEach(t => t.onended = () => setTimeout(startCamera, 1000));
+      if (!camStarted) { camStarted = true; loop(); setInterval(motionTick, MOTION_MS); }
+      status('');
+    } catch (e) {
+      status(`Camera blocked: ${e.message}. Use HTTPS and allow the camera.`);
+      if (camStarted) setTimeout(startCamera, 5000);   // was working: keep trying (e.g. another app still holds it)
+    } finally { camOpening = false; }
   }
+  const cameraLive = () => (video.srcObject?.getVideoTracks() || []).some(t => t.readyState === 'live');
 
   // Frame capture. The JPEG encode (toBlob) costs ~20-50 ms whatever the frame size, so the loop starts
   // it near the end of each sleep (see loop) and the frame is ready when the sleep ends.
@@ -989,11 +1097,21 @@
     }).finally(() => { wakeScan = null; });
   }
 
+  // people who were just handled are ignored while they stay in view (one entry each, so a second person
+  // passing doesn't release the first); the whole list clears once nobody has been in frame for HOLD_GONE_MS
+  function hold(name, ms) { S.held.set(name, Date.now() + ms); }
+  function isHeld(name) {
+    const until = S.held.get(name);
+    if (until === undefined) return false;
+    if (Date.now() < until) return true;
+    S.held.delete(name); return false;
+  }
+
   function onResult(j) {
     if (!j.face) {
       S.noFace++;
-      // the person who just clocked has walked away: let them be recognised again right away
-      if (S.cooldownName && S.noFace >= COOLDOWN_CLEAR_FRAMES) S.cooldownName = null;
+      // everyone who just clocked has walked away: let them be recognised again right away
+      if (S.held.size && Date.now() - S.lastFaceAt >= HOLD_GONE_MS) S.held.clear();
       if (S.state === 'presence' && S.noFace >= 3) toAmbient();
       else if (S.state === 'visitor' && S.noFace >= 8 && !S.chatting && Date.now() - S.lastActivity > 6000) toAmbient();
       else if (S.state === 'ambient') {
@@ -1003,7 +1121,7 @@
       return;
     }
     // the server only computes mood/clothing on frames that need them, so keep the last known values
-    S.noFace = 0; S.face = { ...j, emotion: j.emotion || S.face?.emotion, attire: j.attire || S.face?.attire };
+    S.noFace = 0; S.lastFaceAt = Date.now(); S.face = { ...j, emotion: j.emotion || S.face?.emotion, attire: j.attire || S.face?.attire };
     motionAt = Date.now();   // a face counts as activity
     if (S.alarm) {
       // locked out: the expired-pass holder keeps it up; someone else can take over once the minimum has passed
@@ -1013,7 +1131,7 @@
     }
     if (j.matched && j.pass_expired) return showPassAlert(j);
     if (j.matched) {
-      if (j.employee === S.cooldownName && Date.now() < S.cooldownUntil) return;
+      if (isHeld(j.employee)) return;
       if (isGate() && j.gate) { if (S.state !== 'staff') gatePass(j); return; }
       if (isMuster()) { if (S.state !== 'staff') musterCheckin(j); return; }
       if (S.state !== 'staff' && !S.chatting) showStaff(j);
@@ -1161,7 +1279,8 @@
   const LABEL = { IN: 'Clocked in', BREAK: 'Enjoy your break', BACK: 'Welcome back', OUT: 'Clocked out' };
   const COLOR = { IN: 'var(--in)', BREAK: 'var(--break)', BACK: 'var(--back)', OUT: 'var(--out)' };
   document.querySelectorAll('#actions button').forEach(btn => btn.onclick = async () => {
-    const j = S.current; if (!j || j.pass_expired || S.alarm) return;
+    const j = S.current; if (!j || j.pass_expired || S.alarm || j.acting) return;
+    j.acting = true;   // one action per recognition: a second tap (e.g. IN then BREAK) is ignored
     const action = btn.dataset.a;
     S.deadline = 0;
     let safetyOut = null;
@@ -1176,7 +1295,7 @@
         }
         if (pre.required && !safetyOut) {
           safetyOut = await safetySheet(j, pre, action);
-          if (!safetyOut) { startCountdown(STAFF_TIMEOUT_S); return; }   // cancelled
+          if (!safetyOut) { j.acting = false; startCountdown(STAFF_TIMEOUT_S); return; }   // cancelled
         }
       } catch (_) { /* safety service unavailable: the server still refuses entry at enforced locations */ }
     }
@@ -1189,7 +1308,7 @@
       const bits = safetySummary(safetyOut);
       flash('Entry refused', `${bits.join(' ')} You are not clocked in. Supervisor notified.`, 'var(--out)');
       beep(220, 400, 'square'); speak(`Entry refused. Safety requirements for ${safetyOut.location || 'this area'} are not met.`);
-      S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+      hold(j.employee, COOLDOWN_MS);
       setTimeout(toAmbient, 6000);
       return;
     }
@@ -1212,7 +1331,7 @@
         flash(`${LABEL[action]} · ${time}`, line, COLOR[action]);
         chime(); speak(`${LABEL[action]}, ${j.employee.split(' ')[0]}. ${line}`);
       }
-      S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+      hold(j.employee, COOLDOWN_MS);
       setTimeout(toAmbient, 3600);
     } catch (e) {
       flash('Not saved', e.message, 'var(--out)'); beep(220, 300, 'square');
@@ -1231,7 +1350,7 @@
       reason = await reasonSheet(j);
       if (!reason) {
         flash('Entry not recorded', `${j.employee} · ${area} — choose a reason to enter.`, '#d97706'); beep(330, 200, 'triangle');
-        S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+        hold(j.employee, COOLDOWN_MS);
         setTimeout(toAmbient, 2600);
         return;
       }
@@ -1260,7 +1379,7 @@
     }
     // hold them until they step out of view (no timer): standing at the gate must not toggle them back,
     // but walking away and coming straight back is a real second pass
-    S.cooldownName = j.employee; S.cooldownUntil = Infinity;
+    hold(j.employee, Infinity);
     setTimeout(toAmbient, 2600);
   }
 
@@ -1282,7 +1401,7 @@
     } catch (e) {
       flash('Not recorded', `${e.message} Tell the fire warden your name.`, 'var(--out)', '✕'); beep(220, 300, 'square');
     }
-    S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+    hold(j.employee, COOLDOWN_MS);
     setTimeout(toAmbient, 2600);
   }
 
@@ -1374,7 +1493,7 @@
     setTimeout(() => $('done').classList.remove('show'), 3200);
   }
 
-  $('notMe').onclick = () => { S.cooldownName = S.current?.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS; toAmbient(); };
+  $('notMe').onclick = () => { if (S.current?.employee) hold(S.current.employee, COOLDOWN_MS); toAmbient(); };
 
   // ================================================================ conversation
   function openChat() {
@@ -1385,7 +1504,13 @@
       addMsg('aura', S.current ? `What's on your mind, ${S.current.employee.split(' ')[0]}?` : 'Hi! Ask me anything — speak or type in any language.');
     }
   }
+  // back from 'thinking'/'listening' to the panel underneath. Only while the chat is still open: a reply that
+  // lands after Close must not put back a state whose panel is gone (the kiosk would stop recognising anyone)
+  function chatIdle() {
+    if (S.chatting && (S.state === 'thinking' || S.state === 'listening')) setState(S.current ? 'staff' : 'visitor');
+  }
   function closeChat() {
+    chatIdle();
     S.chatting = false; document.body.classList.remove('chatting'); stopRec(true); S.ticket = null;
     $('msgs').innerHTML = '';
     if (S.state === 'staff') startCountdown(STAFF_TIMEOUT_S);
@@ -1395,10 +1520,12 @@
   $('closeChat').onclick = closeChat;
   $('talkBtn').onclick = () => { openChat(); record(); };
   $('typeBtn').onclick = () => { openChat(); setTimeout(() => $('text').focus(), 350); };
+  // tap the idle screen to talk to Aura; gates and muster points have no chat (the orb there is only a status)
+  const canChat = () => S.state === 'ambient' && !isGate() && !isMuster();
   document.getElementById('center').addEventListener('click', e => {
-    if (S.state === 'ambient' && e.target.closest('#orbWrap')) { showVisitor(); openChat(); }
+    if (canChat() && e.target.closest('#orbWrap')) { showVisitor(); openChat(); }
   });
-  $('ambient').onclick = () => { if (S.state === 'ambient') { showVisitor(); openChat(); } };
+  $('ambient').onclick = () => { if (canChat()) { showVisitor(); openChat(); } };
 
   function addMsg(who, html, meta) {
     const d = document.createElement('div'); d.className = `msg ${who}`;
@@ -1420,14 +1547,15 @@
     S.lastText = text;
     $('text').value = '';
     const bubble = addMsg('aura', '<span class="typing"><i></i><i></i><i></i></span>');
-    const prev = S.state; setState('thinking');
+    setState('thinking');
     try {
       const r = await post('/api/talk', { text, kiosk: KIOSK, encounter: S.encounter, employee: S.current?.employee, mood: S.face?.emotion?.label, channel: 'text' });
       await answer(bubble, r);
     } catch (e) { bubble.textContent = 'Sorry, I lost my train of thought. Try again?'; }
-    setState(prev === 'thinking' ? 'visitor' : prev);
+    chatIdle();
   }
   async function answer(bubble, r) {
+    if (!S.chatting) return;   // closed while we waited: don't talk to an empty screen
     const span = document.createElement('span'); bubble.innerHTML = ''; bubble.appendChild(span);
     speak(r.reply, r.locale);
     await typeInto(span, r.reply);
@@ -1485,8 +1613,8 @@
       clearInterval(meter); $('level').querySelector('i').style.width = '0';
       stream.getTracks().forEach(t => t.stop()); $('mic').classList.remove('rec');
       const cancelled = rec?.cancelled; rec = null;
-      setState(S.current ? 'staff' : 'visitor');
-      if (cancelled || !spoke || !chunks.length) return;
+      chatIdle();
+      if (cancelled || !spoke || !chunks.length || !S.chatting) return;
       const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
       const mine = addMsg('me', '<span class="typing"><i></i><i></i><i></i></span>');
       setState('thinking');
@@ -1507,7 +1635,7 @@
       } catch (e) {
         mine.remove(); addMsg('aura', 'My ears are offline right now — please type your question.');
       }
-      setState(S.current ? 'staff' : 'visitor'); touch();
+      chatIdle(); touch();
     };
     mr.start(250);
   }
@@ -1525,10 +1653,21 @@
     startCamera();
   }
   $('start').onclick = start;
+  // ?autostart=1 skips the tap iOS needs before it plays sound: unlock audio and speech on the first touch instead
+  addEventListener('pointerdown', () => {
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (_) {}
+    if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
+  }, { once: true, capture: true });
   if (q.get('autostart') === '1') start();
 
   // iPadOS pauses media on tab switches; resume when visible again
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && video.paused) video.play().catch(() => {}); });
+  // (and may have ended the camera track altogether, so reopen it if needed)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (camStarted && !cameraLive()) startCamera();
+    else if (video.paused) video.play().catch(() => {});
+    if (actx?.state === 'suspended') actx.resume().catch(() => {});
+  });
 
   toAmbient();
   loadConfig(); setInterval(loadConfig, 60000);

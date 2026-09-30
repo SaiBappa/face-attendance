@@ -27,6 +27,7 @@ alerts feed where a supervisor acknowledges or resolves them.
 import asyncio
 import json
 import os
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -128,7 +129,8 @@ def scan(conn, now: datetime = None) -> int:
     depts = {r["name"]: r["department"] for r in conn.execute("SELECT name, department FROM people")}
 
     # --- roster: no-shows, lateness, missed clock-outs
-    for r in roster.adherence(conn, yesterday, today, now):
+    rows = roster.adherence(conn, yesterday, today, now)
+    for r in rows:
         st, en = roster.window(r)
         if now - st > timedelta(hours=12) and r["status"] != "no_clock_out":
             continue  # only live-ish shifts; history is in Insights
@@ -146,25 +148,25 @@ def scan(conn, now: datetime = None) -> int:
                         f"{r['person']} is still clocked in {int((now - en).total_seconds() // 60)} min after their shift ended at {r['end']}. Forgot to clock out, or unpaid overtime?",
                         now, r["person"], r["department"], demo=r["demo"])
 
-    # --- long breaks (latest action today is BREAK)
+    # --- long breaks (latest action is BREAK; since yesterday, so a night shift's break after midnight counts)
     for r in conn.execute(
-            """SELECT e.employee, e.ts, e.kiosk FROM events e JOIN (SELECT employee, MAX(id) id FROM events WHERE day=? GROUP BY employee) m
-               ON m.id=e.id WHERE e.action='BREAK'""", (today,)):
+            """SELECT e.employee, e.ts, e.kiosk, e.demo FROM events e JOIN (SELECT employee, MAX(id) id FROM events WHERE day>=? GROUP BY employee) m
+               ON m.id=e.id WHERE e.action='BREAK'""", (yesterday,)):
         mins = int((now - datetime.fromisoformat(r["ts"])).total_seconds() // 60)
         if mins > BREAK_MAX:
             new += _add(conn, f"long_break|{r['employee']}|{r['ts']}", "long_break",
-                        f"{r['employee']} has been on break for {mins} min (limit {BREAK_MAX}).", now, r["employee"], depts.get(r["employee"]), r["kiosk"])
+                        f"{r['employee']} has been on break for {mins} min (limit {BREAK_MAX}).", now, r["employee"], depts.get(r["employee"]), r["kiosk"],
+                        demo=r["demo"])
 
-    # --- understaffing per department right now
-    rows = roster.adherence(conn, yesterday, today, now)
+    # --- understaffing per department right now (real roster and clock-ins only: demo data never alerts)
     planned = defaultdict(int)
     for r in rows:
         st, en = roster.window(r)
-        if st + timedelta(minutes=NO_SHOW_MIN) <= now < en:
+        if not r["demo"] and st + timedelta(minutes=NO_SHOW_MIN) <= now < en:
             planned[r["department"] or "Unassigned"] += 1
     on_duty = defaultdict(int)
     for r in conn.execute(
-            """SELECT e.employee FROM events e JOIN (SELECT employee, MAX(id) id FROM events WHERE day>=? GROUP BY employee) m
+            """SELECT e.employee FROM events e JOIN (SELECT employee, MAX(id) id FROM events WHERE day>=? AND demo=0 GROUP BY employee) m
                ON m.id=e.id WHERE e.action IN ('IN','BACK')""", (yesterday,)):
         on_duty[depts.get(r["employee"]) or "Unassigned"] += 1
     for dept, n in planned.items():
@@ -208,27 +210,45 @@ def _route(conn, department) -> str:
     return (r["webhook"] if r and r["webhook"] else None) or WEBHOOK
 
 
+_retry = {}                # alert id -> (failures so far, monotonic time of the next attempt)
+_deliver_lock = asyncio.Lock()
+
+
 async def deliver():
-    """Post not-yet-notified alerts to their webhook (at most 20 per scan)."""
-    with db() as conn:
-        pending = [dict(r) for r in conn.execute("SELECT * FROM alerts WHERE notified=0 AND demo=0 ORDER BY id LIMIT 20")]
-        routes = {a["id"]: _route(conn, a["department"]) for a in pending}
-    if not pending:
-        return
-    sent = []
-    async with httpx.AsyncClient(timeout=8) as client:
-        for a in pending:
-            url = routes[a["id"]]
-            if url:
-                icon, label, _ = TYPES.get(a["type"], ("⚠️", a["type"], ""))
-                try:
-                    await client.post(url, json={"text": f"{icon} {label}: {a['text']}", "alert": a})
-                except httpx.HTTPError as e:
-                    print("alert webhook failed", e.__class__.__name__)
+    """Post not-yet-notified alerts to their webhook (at most 20 per round). A failed alert backs off
+    (30 s, 1 min, 2 min ... up to 30 min) instead of being retried first every round, and one dead webhook
+    is skipped for the rest of the round, so it can't hold up alerts bound for other departments."""
+    if _deliver_lock.locked():
+        return   # a round is already running; it will pick these up (or the next scan will)
+    async with _deliver_lock:
+        t = time.monotonic()
+        with db() as conn:
+            rows = [dict(r) for r in conn.execute("SELECT * FROM alerts WHERE notified=0 AND demo=0 ORDER BY id LIMIT 200")]
+            pending = [a for a in rows if _retry.get(a["id"], (0, 0))[1] <= t][:20]
+            routes = {a["id"]: _route(conn, a["department"]) for a in pending}
+        if not pending:
+            return
+        sent, dead = [], set()
+        async with httpx.AsyncClient(timeout=8) as client:
+            for a in pending:
+                url = routes[a["id"]]
+                if url in dead:
                     continue
-            sent.append(a["id"])
-    with db() as conn:
-        conn.executemany("UPDATE alerts SET notified=1 WHERE id=?", [(i,) for i in sent])
+                if url:
+                    icon, label, _ = TYPES.get(a["type"], ("⚠️", a["type"], ""))
+                    try:
+                        r = await client.post(url, json={"text": f"{icon} {label}: {a['text']}", "alert": a})
+                        r.raise_for_status()   # a 4xx/5xx is not delivered either
+                    except httpx.HTTPError as e:
+                        n = _retry.get(a["id"], (0, 0))[0] + 1
+                        _retry[a["id"]] = (n, time.monotonic() + min(30 * 2 ** (n - 1), 1800))
+                        dead.add(url)
+                        print("alert webhook failed", e.__class__.__name__, f"(alert {a['id']}, attempt {n})")
+                        continue
+                sent.append(a["id"])
+                _retry.pop(a["id"], None)
+        with db() as conn:
+            conn.executemany("UPDATE alerts SET notified=1 WHERE id=?", [(i,) for i in sent])
 
 
 async def loop():

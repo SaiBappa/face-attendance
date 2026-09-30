@@ -107,8 +107,8 @@ services:
       - recognizer
       - listener
     ports:
-      - "8181:8080"   # this Mac, no HTTPS needed (localhost is a secure origin for camera/mic):
-                      #   kiosk http://localhost:8181/?kiosk=Staff-Entrance · admin http://localhost:8181/admin
+      - "127.0.0.1:8181:8080"   # this Mac only, no HTTPS needed (localhost is a secure origin for camera/mic); iPads use Caddy on 8443:
+                                #   kiosk http://localhost:8181/?kiosk=Staff-Entrance · admin http://localhost:8181/admin
 
   caddy:
     image: caddy:2-alpine

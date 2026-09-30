@@ -16,6 +16,7 @@ from store import db
 
 SHIFT_START = os.environ.get("SHIFT_START", "08:00")
 GRACE_MIN = int(os.environ.get("LATE_GRACE_MINUTES", "5"))
+SHIFT_MAX_HOURS = float(os.environ.get("SHIFT_MAX_HOURS", "16"))   # longer than this since the last event: a new shift
 LOW_MOOD = float(os.environ.get("LOW_MOOD_THRESHOLD", "-0.25"))
 MIN_HOUR_SAMPLES = 5      # hours with fewer mood readings are left blank rather than drawn as spikes
 
@@ -40,29 +41,54 @@ def _dur(m) -> str:
 
 
 def workdays(rows) -> dict:
-    """events rows (ordered by ts) -> {(person, day): {in, out, hours_min, break_min, breaks}}"""
-    by = defaultdict(list)
+    """events rows (ordered by ts) -> {(person, day): {in, out, worked, break, breaks, in_ts, open}}
+
+    A shift runs from IN to OUT and belongs to the day it started, so a night shift (IN 22:00, OUT 06:00)
+    is one shift, not two broken days. Several shifts on one day (a split shift) are added up: worked is the
+    sum of each IN..OUT less its breaks, never the gap between them. `open` means the last one has no OUT yet."""
+    segs = defaultdict(list)   # (person, day) -> [[events of one shift], ...]
+    cur = {}                   # person -> the shift still open
     for r in rows:
-        by[(r["employee"], r["day"])].append(r)
+        p, seg = r["employee"], cur.get(r["employee"])
+        stale = seg and (datetime.fromisoformat(r["ts"]) - datetime.fromisoformat(seg[-1]["ts"])
+                         > timedelta(hours=SHIFT_MAX_HOURS))
+        if r["action"] == "IN" or not seg or stale:
+            seg = cur[p] = []
+            segs[(p, r["day"])].append(seg)
+        seg.append(r)
+        if r["action"] == "OUT":
+            cur.pop(p, None)
     out = {}
-    for key, evs in by.items():
-        first_in = next((e for e in evs if e["action"] == "IN"), None)
-        last_out = next((e for e in reversed(evs) if e["action"] == "OUT"), None)
-        brk, n_breaks, open_break = 0, 0, None
-        for e in evs:
-            if e["action"] == "BREAK":
-                open_break = e["ts"]
-                n_breaks += 1
-            elif e["action"] == "BACK" and open_break:
-                brk += (datetime.fromisoformat(e["ts"]) - datetime.fromisoformat(open_break)).total_seconds() / 60
-                open_break = None
-        worked = None
-        if first_in and last_out and last_out["ts"] > first_in["ts"]:
-            worked = (datetime.fromisoformat(last_out["ts"]) - datetime.fromisoformat(first_in["ts"])).total_seconds() / 60 - brk
+    for key, shifts in segs.items():
+        first_in = last_out = None
+        brk = worked = 0.0
+        n_breaks, complete = 0, False
+        last_in, last_brk = None, 0.0
+        for evs in shifts:
+            s_in = next((e for e in evs if e["action"] == "IN"), None)
+            s_out = next((e for e in reversed(evs) if e["action"] == "OUT"), None)
+            first_in = first_in or s_in
+            last_out = s_out or last_out
+            s_brk, open_break = 0.0, None
+            for e in evs:
+                if e["action"] == "BREAK":
+                    open_break = e["ts"]
+                    n_breaks += 1
+                elif e["action"] == "BACK" and open_break:
+                    s_brk += (datetime.fromisoformat(e["ts"]) - datetime.fromisoformat(open_break)).total_seconds() / 60
+                    open_break = None
+            brk += s_brk
+            last_in, last_brk = s_in, s_brk
+            if s_in and s_out and s_out["ts"] > s_in["ts"]:
+                worked += (datetime.fromisoformat(s_out["ts"]) - datetime.fromisoformat(s_in["ts"])).total_seconds() / 60 - s_brk
+                complete = True
+        last = shifts[-1]
         out[key] = {
             "in": _mins(first_in["ts"]) if first_in else None,
             "out": _mins(last_out["ts"]) if last_out else None,
-            "worked": worked, "break": brk, "breaks": n_breaks,
+            "worked": worked if complete else None, "break": brk, "breaks": n_breaks,
+            "open": last[-1]["action"] != "OUT" and last_in is not None,
+            "open_since": last_in["ts"] if last_in else None, "open_break": last_brk,
         }
     return out
 
@@ -462,23 +488,32 @@ def person_stats(conn, name: str, today: date, profile: dict) -> dict:
         stats["stayed_late_yesterday"] = True
     if t and t["worked"]:
         stats["worked_today"] = _dur(t["worked"])
+    elif not t and y and y["worked"]:
+        stats["worked_today"] = _dur(y["worked"])   # clocking OUT of a night shift that started yesterday
     stats["days_this_month"] = sum(1 for k in wd if k[1][:7] == today.isoformat()[:7])
     return stats
 
 
 def attendance_text(conn, name: str, today: date) -> str:
-    ev = conn.execute("SELECT * FROM events WHERE employee=? AND day=? ORDER BY ts", (name, today.isoformat())).fetchall()
+    yday = (today - timedelta(days=1)).isoformat()
+    ev = conn.execute("SELECT * FROM events WHERE employee=? AND day>=? ORDER BY ts", (name, yday)).fetchall()
     cur, nxt = roster.current_and_next(conn, name, datetime.now())
     plan = (f" Your rostered shift is {roster.describe(cur, datetime.now())}." if cur else "") + \
            (f" Next shift: {roster.describe(nxt, datetime.now())}." if nxt else "")
-    if not ev:
+    wd = workdays(ev)
+    r = wd.get((name, today.isoformat()))
+    if not r and wd.get((name, yday), {}).get("open"):
+        r = wd[(name, yday)]   # a night shift that started before midnight is still today's shift
+    if not r:
         return "You haven't clocked in yet today." + plan
-    r = workdays(ev)[(name, today.isoformat())]
     parts = []
     if r["in"] is not None:
         parts.append(f"You clocked in at {_hhmm(r['in'])}")
-        end = r["out"] if r["out"] is not None else (datetime.now().hour * 60 + datetime.now().minute)
-        parts.append(f"{_dur(end - r['in'] - r['break'])} on shift so far" if r["out"] is None else f"worked {_dur(r['worked'])}")
+        if r["open"]:
+            so_far = (r["worked"] or 0) + (datetime.now() - datetime.fromisoformat(r["open_since"])).total_seconds() / 60 - r["open_break"]
+            parts.append(f"{_dur(so_far)} on shift so far")
+        else:
+            parts.append(f"worked {_dur(r['worked'])}")
     if r["breaks"]:
         parts.append(f"{r['breaks']} break{'s' if r['breaks'] > 1 else ''} ({_dur(r['break'])})")
     return ", ".join(parts) + f". Last action: {ev[-1]['action']} at {ev[-1]['ts'][11:16]}." + plan
