@@ -288,6 +288,8 @@
   .risk ul { margin:6px 0 0; padding-left:20px; color:var(--muted); }
   #safety .enforce { margin:0 0 6px; padding:10px 14px; border-radius:14px; font-size:16px; background:rgba(239,68,68,.16); border:1px solid rgba(239,68,68,.55); color:#fecaca; }
   #safety .go .pill.danger { background:#dc2626; border-color:#dc2626; color:#fff; }
+  #safety .reasons { grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr)); gap:14px; }
+  #safety .reasons button { min-height:96px; padding:16px 18px; overflow-wrap:anywhere; justify-content:center; text-align:center; font-size:clamp(17px,2.4vw,24px); font-weight:650; }
   #safety .go { margin-top:22px; display:flex; gap:12px; justify-content:flex-end; flex-wrap:wrap; }
   /* expired security pass: full-screen red lockout, swallows every tap */
   #passAlert { position:fixed; inset:0; z-index:35; display:none; place-items:center; text-align:center; padding:24px;
@@ -1200,21 +1202,49 @@
     setState('staff'); S.current = j; S.paused = true; touch();
     dbg.walkup(`Gate: ${j.employee}`);
     const first = j.employee.split(' ')[0], area = j.gate.area;
+    let reason = null;
+    if (j.gate.ask_reason && !j.gate.repeat) {
+      chime(); speak(`${first}, why are you entering ${area}?`);
+      reason = await reasonSheet(j);
+      if (!reason) {
+        flash('Entry not recorded', `${j.employee} · ${area} — choose a reason to enter.`, '#d97706'); beep(330, 200, 'triangle');
+        S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+        setTimeout(toAmbient, 2600);
+        return;
+      }
+    }
     try {
-      const r = await post('/api/access', { employee: j.employee, kiosk: KIOSK, token: j.token, similarity: j.similarity });
+      const r = await post('/api/access', { employee: j.employee, kiosk: KIOSK, token: j.token, similarity: j.similarity, reason });
       const time = new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const inn = r.move === 'IN';
       const note = r.duplicate ? 'Already recorded a moment ago.'
         : r.missed_exit ? 'Your last exit wasn\'t recorded — please use the exit screen when you leave.'
         : r.missed_entry ? 'Your entry wasn\'t recorded — please use the entry screen next time.' : '';
-      flash(`${inn ? 'Entered' : 'Exited'} · ${time}`, `${j.employee} · ${area}${note ? ' — ' + note : ''}`, inn ? 'var(--in)' : 'var(--out)');
-      if (!r.duplicate) { chime(); speak(`${inn ? 'Welcome' : 'Goodbye'}, ${first}.`); }
+      flash(`${inn ? 'Entered' : 'Exited'} · ${time}`, `${j.employee} · ${area}${inn && r.reason ? ' · ' + r.reason : ''}${note ? ' — ' + note : ''}`, inn ? 'var(--in)' : 'var(--out)');
+      if (!r.duplicate && !reason) chime();
+      if (!r.duplicate) speak(`${inn ? 'Welcome' : 'Goodbye'}, ${first}.`);
       if (S.cfg?.kiosk) S.cfg.kiosk.inside = r.count;
     } catch (e) {
       flash('Not recorded', e.message, 'var(--out)'); beep(220, 300, 'square');
     }
     S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
     setTimeout(toAmbient, 2600);
+  }
+
+  // ---- restricted area: pick why you're entering (areas.reasons); resolves with the reason, or null
+  const REASON_TIMEOUT_MS = 30000;
+  function reasonSheet(j) {
+    return new Promise(resolve => {
+      const el = $('safety'), sheet = el.querySelector('.sheet');
+      sheet.innerHTML = `<h2>Reason for entry</h2><div class="sub">${esc(j.employee)} · ${esc(j.gate.area)} — tap one to enter</div>` +
+        `<div class="ppe reasons">${j.gate.reasons.map((r, i) => `<button data-i="${i}">${esc(r)}</button>`).join('')}</div>` +
+        `<div class="go"><button class="pill ghost" data-x>Cancel</button></div>`;
+      const close = v => { el.classList.remove('show'); clearTimeout(idle); resolve(v); };
+      sheet.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { touch(); close(j.gate.reasons[+b.dataset.i]); });
+      sheet.querySelector('[data-x]').onclick = () => close(null);
+      const idle = setTimeout(() => close(null), REASON_TIMEOUT_MS);
+      el.classList.add('show');
+    });
   }
 
   // ---- ramp safety pack: PPE checklist + restedness, resolves with the recorded check (or null if cancelled)

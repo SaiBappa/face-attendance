@@ -34,6 +34,7 @@ Admin (X-Admin-Pin):
   /api/insights, /api/insights/person/{name}, /api/status/mood, /api/interactions(.csv), /api/demo, /api/engines
   /api/roster…  (CSV import, JSON push from HR systems, edit, coverage)   /api/alerts…  (feed, ack, routing)
   /api/access/presence (who is inside each area), /api/access (movements), /api/access.csv, /api/access/out
+  PUT /api/areas/{name} {reasons: [...], ask_reason}  reasons offered (and required) on entry to an area
 Each location has a mode (PUT /api/kiosks/{name} {mode, actions, area, direction}, see access.py):
   attendance (default: IN / BREAK / BACK / OUT, or a chosen subset) or gate (hands-free area entry/exit).
 
@@ -660,7 +661,10 @@ async def gate_pass(request: Request):
         if not access.is_gate(k):
             raise HTTPException(400, f"{kiosk} is not set up as a gate")
         refuse_expired_pass(conn, employee, kiosk)
-        out = access.record(conn, employee, k, now(), similarity=p.get("similarity"))
+        try:
+            out = access.record(conn, employee, k, now(), similarity=p.get("similarity"), reason=p.get("reason"))
+        except access.ReasonRequired as e:
+            raise HTTPException(400, str(e))
         out["count"] = access.area_count(conn, out["area"], now())
     return JSONResponse({"ok": True, **out})
 
@@ -1369,6 +1373,19 @@ def _access_rows(request: Request):
         return [dict(r) for r in conn.execute(sql + " ORDER BY id DESC LIMIT ?", args + [int(request.query_params.get("limit", 2000))])]
 
 
+async def area_save(request: Request):
+    require_pin(request)
+    name = request.path_params["name"].strip()
+    p = await request.json()
+    if not name:
+        raise HTTPException(400, "area name required")
+    if p.get("ask_reason") and not [x for x in (p.get("reasons") or []) if str(x).strip()]:
+        raise HTTPException(400, "Add at least one reason to ask for")
+    with db() as conn:
+        access.save_settings(conn, name, p.get("reasons") or [], bool(p.get("ask_reason")))
+        return JSONResponse({"ok": True, **access.settings(conn, name)})
+
+
 async def access_log(request: Request):
     require_pin(request)
     return JSONResponse({"rows": _access_rows(request)})
@@ -1378,9 +1395,10 @@ async def access_csv(request: Request):
     require_pin(request)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["timestamp", "person", "area", "direction", "kiosk", "similarity", "source", "note"])
+    w.writerow(["timestamp", "person", "area", "direction", "reason", "kiosk", "similarity", "source", "note"])
     for r in reversed(_access_rows(request)):
-        w.writerow([r["ts"], r["person"], r["area"], r["direction"], r["kiosk"] or "", r["similarity"] or "", r["source"], r["note"] or ""])
+        w.writerow([r["ts"], r["person"], r["area"], r["direction"], r["reason"] or "", r["kiosk"] or "", r["similarity"] or "",
+                    r["source"], r["note"] or ""])
     return Response(buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition": 'attachment; filename="area-access.csv"'})
 
@@ -1672,6 +1690,7 @@ routes = [
     Route("/api/access.csv", access_csv),
     Route("/api/access/presence", access_presence),
     Route("/api/access/out", access_out, methods=["POST"]),
+    Route("/api/areas/{name}", area_save, methods=["PUT"]),
     Route("/api/talk", talk, methods=["POST"]),
     Route("/api/listen", listen, methods=["POST"]),
     Route("/api/kiosk/{name}", kiosk_config),

@@ -137,6 +137,7 @@
   .areas { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr)); gap:14px; margin-bottom:18px; }
   .areas .card { margin:0; }
   .area-n { font-size:34px; font-weight:700; letter-spacing:-.02em; line-height:1; }
+  .area-set { margin-top:10px; } .area-set summary { cursor:pointer; color:var(--accent); font-weight:600; font-size:13px; }
   .area-list { list-style:none; margin:12px 0 0; padding:0; display:grid; gap:6px; }
   .area-list li { display:flex; align-items:center; gap:10px; }
   .area-list .who { flex:1; min-width:0; }
@@ -494,7 +495,7 @@
       <label class="field" style="flex:1 1 160px"><span>Person</span><input id="axPerson" placeholder="Optional" list="nameList"></label>
       <div style="display:flex;gap:8px;align-self:flex-end;flex-wrap:wrap"><button class="btn" id="axGo">Show</button><button class="btn ghost" id="axCsv">⬇︎ Download CSV</button></div>
     </div>
-    <div class="tablewrap"><table><thead><tr><th>Time</th><th>Person</th><th>Area</th><th>Move</th><th class="hide-sm">Location</th><th class="num hide-sm">Match</th></tr></thead><tbody id="axBody"></tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>Time</th><th>Person</th><th>Area</th><th>Move</th><th>Reason</th><th class="hide-sm">Location</th><th class="num hide-sm">Match</th></tr></thead><tbody id="axBody"></tbody></table></div>
   </div>
 </section>
 
@@ -910,6 +911,7 @@
   $('axFrom').value = today(); $('axTo').value = today();
   const dur = ts => { const m = Math.max(0, Math.round((Date.now() - new Date(ts)) / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
   const DIR = { both: 'entry + exit', in: 'entry', out: 'exit' };
+  let OPEN_AREA = null;   // keep an area's settings open across the 15 s refresh
   async function loadAreas() {
     const j = await api('/api/access/presence');
     const cur = $('axArea').value;
@@ -919,8 +921,20 @@
         <div class="card-h" style="margin-bottom:6px"><h2>${esc(a.area)}</h2>${a.stale ? `<span class="pill warn" title="Entered more than ${j.stale_hours} h ago with no exit — probably a missed exit">${a.stale} unconfirmed</span>` : ''}</div>
         <div class="area-n">${a.count}</div><div class="muted">staff inside now</div>
         <div class="hint" style="margin:6px 0 0">${a.gates.map(g => `${esc(g.name)} (${DIR[g.direction] || g.direction})`).join(' · ') || 'No gates'}</div>
-        <ul class="area-list">${a.inside.map(p => `<li>${avatar(p.person, 'sm')}<div class="who"><b style="font-weight:600">${esc(p.person)}</b><div class="muted" style="font-size:12px">in since ${fmtDT(p.since)} · ${dur(p.since)} · via ${esc(p.kiosk || '—')}</div></div>${p.stale ? '<span class="pill warn">no exit?</span>' : ''}<button class="btn ghost sm" data-out="${esc(p.person)}" data-area="${esc(a.area)}" title="Record a manual exit (e.g. they left without passing a gate)">Mark out</button></li>`).join('') || '<li class="muted">Nobody inside</li>'}</ul>
+        <details class="area-set"${OPEN_AREA === a.area ? ' open' : ''} data-area="${esc(a.area)}"><summary>${a.settings.ask_reason ? `📝 Reason asked on entry · ${a.settings.reasons.length} reason${a.settings.reasons.length === 1 ? '' : 's'}` : 'Ask a reason on entry…'}</summary>
+          <label class="switch" style="margin:10px 0"><input type="checkbox" class="ar_ask"${a.settings.ask_reason ? ' checked' : ''}><span class="sl"></span><span>Staff must pick a reason before entry is recorded</span></label>
+          <label class="field"><span>Reasons (one per line)</span><textarea class="ar_list" rows="4" placeholder="Maintenance&#10;Inspection&#10;Cleaning&#10;Delivery">${esc(a.settings.reasons.join('\n'))}</textarea></label>
+          <div class="row" style="margin:8px 0 0"><button class="btn sm ar_save">Save</button></div>
+        </details>
+        <ul class="area-list">${a.inside.map(p => `<li>${avatar(p.person, 'sm')}<div class="who"><b style="font-weight:600">${esc(p.person)}</b><div class="muted" style="font-size:12px">${p.reason ? `<b>${esc(p.reason)}</b> · ` : ''}in since ${fmtDT(p.since)} · ${dur(p.since)} · via ${esc(p.kiosk || '—')}</div></div>${p.stale ? '<span class="pill warn">no exit?</span>' : ''}<button class="btn ghost sm" data-out="${esc(p.person)}" data-area="${esc(a.area)}" title="Record a manual exit (e.g. they left without passing a gate)">Mark out</button></li>`).join('') || '<li class="muted">Nobody inside</li>'}</ul>
       </div>`).join('') || '<div class="empty">No areas yet. In <a href="#locations">Locations</a>, set a kiosk\'s purpose to <b>Gate</b> and give it an area name.</div>';
+    $('areaCards').querySelectorAll('details.area-set').forEach(d => {
+      d.ontoggle = () => { OPEN_AREA = d.open ? d.dataset.area : (OPEN_AREA === d.dataset.area ? null : OPEN_AREA); };
+      d.querySelector('.ar_save').onclick = async () => {
+        const reasons = d.querySelector('.ar_list').value.split('\n').map(x => x.trim()).filter(Boolean);
+        try { await api('/api/areas/' + enc(d.dataset.area), jsonBody('PUT', { reasons, ask_reason: d.querySelector('.ar_ask').checked })); OPEN_AREA = null; toast('Saved'); loadAreas().catch(fail); } catch (e) { fail(e); }
+      };
+    });
     $('areaCards').querySelectorAll('[data-out]').forEach(b => b.onclick = async () => {
       if (!confirm(`Record ${b.dataset.out} as having left ${b.dataset.area}?`)) return;
       try { await api('/api/access/out', jsonBody('POST', { person: b.dataset.out, area: b.dataset.area })); toast('Marked out'); loadAreas().catch(fail); } catch (e) { fail(e); }
@@ -930,12 +944,13 @@
   const axParams = () => { const p = new URLSearchParams({ from: $('axFrom').value, to: $('axTo').value }); if ($('axArea').value) p.set('area', $('axArea').value); if ($('axPerson').value.trim()) p.set('person', $('axPerson').value.trim()); return p; };
   async function loadMoves() {
     const j = await api('/api/access?' + axParams());
-    $('axBody').innerHTML = j.rows.map(r => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.person)}</td><td>${esc(r.area)}</td><td>${tag(r.direction)}</td><td class="hide-sm">${r.source === 'admin' ? `<span class="muted" title="${esc(r.note || '')}">manual (admin)</span>` : esc(r.kiosk || '')}</td><td class="num hide-sm">${r.similarity != null ? Math.round(r.similarity * 100) + '%' : ''}</td></tr>`).join('') || '<tr><td colspan=6 class="empty">No movements in this range</td></tr>';
+    $('axBody').innerHTML = j.rows.map(r => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.person)}</td><td>${esc(r.area)}</td><td>${tag(r.direction)}</td><td>${esc(r.reason || '')}</td><td class="hide-sm">${r.source === 'admin' ? `<span class="muted" title="${esc(r.note || '')}">manual (admin)</span>` : esc(r.kiosk || '')}</td><td class="num hide-sm">${r.similarity != null ? Math.round(r.similarity * 100) + '%' : ''}</td></tr>`).join('') || '<tr><td colspan=7 class="empty">No movements in this range</td></tr>';
   }
   $('areasRefresh').onclick = () => loadAreas().catch(fail);
   $('axGo').onclick = () => loadMoves().catch(fail);
   $('axCsv').onclick = () => { const p = axParams(); p.set('pin', PIN); location.href = '/api/access.csv?' + p; };
-  setInterval(() => { if (!$('app').hidden && $('s-areas').classList.contains('active')) loadAreas().catch(() => {}); }, 15000);
+  // auto-refresh, but never while an area's reasons are being edited (it would wipe the edit)
+  setInterval(() => { if (!$('app').hidden && $('s-areas').classList.contains('active') && !document.activeElement?.closest?.('details.area-set')) loadAreas().catch(() => {}); }, 15000);
 
   // ---- mood charts ----
   // valence -1..1 -> score 0..100 (50 = calm); colour scale red → amber → grey (calm) → teal → green, same as Insights
@@ -1330,7 +1345,7 @@
         <div class="field" data-for="attendance"><span>Buttons offered</span><div class="row" style="margin:0;gap:14px">${['IN', 'BREAK', 'BACK', 'OUT'].map(a => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="k_act" value="${a}"${(k.offered || ['IN', 'BREAK', 'BACK', 'OUT']).includes(a) ? ' checked' : ''}>${tag(a)}</label>`).join('')}</div></div>
         <label class="field" data-for="gate"><span>Area</span><input id="k_area" value="${esc(k.area || '')}" placeholder="e.g. Departure Hall" list="areaList"></label>
         <label class="field" data-for="gate"><span>This screen records</span><select id="k_dir">${Object.entries({ both: 'Entry and exit (toggles each pass)', in: 'Entry only', out: 'Exit only' }).map(([v, l]) => `<option value="${v}"${(k.direction || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-        <div class="field span2" data-for="gate"><div class="hint" style="margin:0">Staff just look at the screen: a recognised, live face is recorded as entering or leaving the area — no taps. Every gate with the same area name shares one headcount, so people can enter at one gate and leave at another (see <a href="#areas">Areas</a>). Use separate <b>Entry only</b> and <b>Exit only</b> screens where you can; a two-way screen decides from where the person was last recorded. Gates never record attendance and don't run safety checks. An expired pass still locks the screen and alerts supervisors.</div></div>
+        <div class="field span2" data-for="gate"><div class="hint" style="margin:0">Staff just look at the screen: a recognised, live face is recorded as entering or leaving the area — no taps. Every gate with the same area name shares one headcount, so people can enter at one gate and leave at another (see <a href="#areas">Areas</a>). Use separate <b>Entry only</b> and <b>Exit only</b> screens where you can; a two-way screen decides from where the person was last recorded. To make staff pick a reason before entering (restricted rooms, stores…), open the area in <a href="#areas">Areas</a>. Gates never record attendance and don't run safety checks. An expired pass still locks the screen and alerts supervisors.</div></div>
         <datalist id="areaList">${[...new Set(KIOSKS.map(x => x.area).filter(Boolean))].map(a => `<option value="${esc(a)}">`).join('')}</datalist>
         <label class="field" data-for="attendance"><span>Safety rule to enter</span><select id="k_srule"><option value="">None — no safety check here</option><option value="${DEPT_RULE}"${k.safety_rule === DEPT_RULE ? ' selected' : ''}>Each worker's department rule</option>${(SAFE.rules || []).map(r => `<option value="${esc(r.department)}"${k.safety_rule === r.department ? ' selected' : ''}>${esc(r.department)} — ${esc(ruleSummary(r.department))}</option>`).join('')}</select></label>
         <div class="field" data-for="attendance"><span>Enforce</span><label class="switch"><input type="checkbox" id="k_senforce"${+k.safety_enforce === 1 ? ' checked' : ''}><span class="sl"></span><span>Refuse entry unless this rule's PPE is confirmed</span></label></div>

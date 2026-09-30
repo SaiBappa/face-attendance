@@ -219,6 +219,9 @@ the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't d
   Movements go to their own `access` table — they never count as attendance, so rosters, lateness and
   fatigue are unaffected. Admin → **Areas** shows who is inside each area now, a movement log with CSV, and
   **Mark out** for missed exits (entries older than `ACCESS_STALE_HOURS`, default 16, are flagged "no exit?").
+  **Reasons** (Admin → Areas → an area → *Ask a reason on entry*): for restricted rooms, the gate shows the
+  area's reasons as big buttons and records the entry only once one is tapped (cancel or 30 s = not recorded);
+  exits stay hands-free. The reason shows on the Areas board, the movement log and the CSV.
   The same person at the same gate within `GATE_REPEAT_SECONDS` (60) is ignored. An expired pass still locks
   the screen. A tablet can't physically stop anyone: a gate records and alerts; a turnstile can be added later.
 

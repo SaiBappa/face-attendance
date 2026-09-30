@@ -18,6 +18,7 @@ SQLite schema for Aura. One file, created/migrated on start-up.
   alerts         supervisor alerts (no-show, late, understaffed, …) with ack/resolve state
   alert_routes   per-department webhook + supervisor for alerts ('*' = default)
   access         area entry/exit through gate-mode locations (who is inside where; see access.py)
+  areas          per-area settings: the reasons offered on entry and whether one must be chosen
 
 Rows produced by the demo generator carry demo=1 so they can be removed in one go.
 """
@@ -225,12 +226,19 @@ CREATE TABLE IF NOT EXISTS access (
     direction  TEXT NOT NULL,              -- IN | OUT
     similarity REAL,
     source     TEXT NOT NULL DEFAULT 'gate',  -- gate | admin
+    reason     TEXT,                       -- why they entered, picked on the gate screen (areas.reasons)
     note       TEXT,
     demo       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_access_person ON access(person, area, id);
 CREATE INDEX IF NOT EXISTS idx_access_area ON access(area, id);
 CREATE INDEX IF NOT EXISTS idx_access_day ON access(day);
+
+CREATE TABLE IF NOT EXISTS areas (
+    name       TEXT PRIMARY KEY,           -- matches kiosks.area
+    reasons    TEXT DEFAULT '[]',          -- JSON list of reasons offered on entry
+    ask_reason INTEGER NOT NULL DEFAULT 0  -- 1 = entry is only recorded once a reason is chosen
+);
 
 CREATE TABLE IF NOT EXISTS announcements (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,6 +266,7 @@ MIGRATIONS = {
                       "auto": "INTEGER NOT NULL DEFAULT 0"},   # passed by camera alone, no checklist shown
     # allow entry without the checklist when the camera confirms every PPE item of the rule
     "safety_rules": {"auto_pass": "INTEGER NOT NULL DEFAULT 0"},
+    "access": {"reason": "TEXT"},
     # enrolment / security pass details (role doubles as designation)
     "people": {"record_card": "TEXT", "dob": "TEXT", "pass_expiry": "TEXT", "zone": "TEXT"},
 }
