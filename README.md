@@ -290,6 +290,14 @@ Recognizer (`recognizer.environment`): `DAILY_BEST` (2 photos/person/day), `DAIL
 
 After a change: `docker compose up -d attendance` (or double-click `start.command`).
 
+## Tests
+
+`./test.command` (or double-click it) runs `attendance/tests` with pytest inside `python:3.12-slim`, the same
+image the app ships on; extra arguments go to pytest (`./test.command -k roster`). Each test uses its own
+temporary SQLite file, never `attendance.db`. Covered: gates and areas (toggling, repeat window, passback,
+zones, entry reasons, overstay / capacity / no-exit), roster parsing and adherence, supervisor alerts, and
+event tokens.
+
 ## Backup / move
 
 ```bash
