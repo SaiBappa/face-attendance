@@ -88,7 +88,10 @@ def end(conn, mid: int, by: str, mark_out: bool, now: datetime) -> dict:
     conn.execute("UPDATE musters SET status='ended', ended=?, ended_by=? WHERE id=?", (_ts(now), by or None, mid))
     out = 0
     if mark_out:
-        for r in conn.execute("SELECT person, area FROM muster_roll WHERE muster_id=? AND area IS NOT NULL", (mid,)).fetchall():
+        # only people confirmed safe have left: anyone still missing stays "inside" so area headcounts and
+        # no-exit alerts keep pointing at them
+        for r in conn.execute("SELECT person, area FROM muster_roll WHERE muster_id=? AND area IS NOT NULL AND status='safe'",
+                              (mid,)).fetchall():
             last = access.last_move(conn, r["person"], r["area"])
             if last and last["direction"] == "IN":
                 access.record(conn, r["person"], {"name": None, "area": r["area"], "direction": "out"}, now,

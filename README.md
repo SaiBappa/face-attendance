@@ -236,8 +236,8 @@ the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't d
 everyone recorded inside, alerts supervisors, and turns muster-point screens red within ~5 s: a recognised
 face is checked in as **safe** (an expired pass never blocks this; people not on the roll are added as
 safe). The board lists **missing** people first with where they were last seen, lets a supervisor mark
-someone safe (e.g. confirmed by radio) or undo it, and exports a CSV. *End muster* can record everyone as
-having left the evacuated areas so headcounts restart clean. Past musters stay listed with their report.
+someone safe (e.g. confirmed by radio) or undo it, and exports a CSV. *End muster* can record everyone marked
+safe as having left the evacuated areas so headcounts restart clean; anyone still missing stays inside. Past musters stay listed with their report.
 It depends on gates having recorded who went in — people who entered without passing a gate aren't on
 the roll unless you include everyone clocked in.
 

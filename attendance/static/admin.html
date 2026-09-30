@@ -997,6 +997,7 @@
     const pointsNote = j.points.length ? `Muster points: <b>${j.points.map(esc).join(', ')}</b> — staff check in there by face.`
       : '⚠️ No muster point yet: in <a href="#locations">Locations</a>, set a kiosk\'s purpose to <b>Muster point</b>. You can still mark people safe here.';
     if (!j.active) {
+      if ($('muStart')) return;   // the start form is already up: a refresh must not wipe what's being typed into it
       $('muLive').innerHTML = `<div class="card">
         <div class="card-h"><h2>Start an emergency muster</h2></div>
         <p class="muted" style="margin-top:0">Takes a roll of everyone recorded inside the chosen areas right now (and, optionally, everyone clocked in). Muster-point screens turn red and check people in as safe by face; supervisors get an alert.</p>
@@ -1018,6 +1019,7 @@
     }
     const b = j.active, m = b.muster;
     const miss = b.people.filter(x => x.status === 'missing'), safe = b.people.filter(x => x.status === 'safe');
+    const keepOut = $('muOut') ? $('muOut').checked : true;   // survive the 5 s refresh
     const where = x => x.area ? `${esc(x.area)} since ${fmtT(x.since)}` : (x.note ? esc(x.note) : 'on duty');
     $('muLive').innerHTML = `<div class="card mu-live">
       <div class="card-h"><h2>🚨 Muster in progress</h2><span class="muted">since ${fmtT(m.started)} (${dur(m.started)}) · ${m.areas.includes('*') ? 'all areas' : esc(m.areas.join(', '))}${m.on_duty ? ' + on duty' : ''}${m.started_by ? ' · started by ' + esc(m.started_by) : ''}</span></div>
@@ -1029,7 +1031,7 @@
       <h3 style="margin:18px 0 8px">Safe (${safe.length})</h3>
       <div class="mu-list">${safe.map(x => `<div class="mu-p">${avatar(x.person, 'sm')}<div class="who"><b>${esc(x.person)}</b><div class="muted" style="font-size:12px">${fmtT(x.safe_ts)} · ${x.safe_by === 'admin' ? 'marked by supervisor' + (x.note ? ': ' + esc(x.note) : '') : 'at ' + esc(x.safe_kiosk || 'muster point')}${x.on_list ? '' : ' · <span class="pill warn">not on list</span>'}</div></div>${x.on_list ? `<button class="btn ghost sm" data-undo="${esc(x.person)}" title="Undo — back to missing">Undo</button>` : ''}</div>`).join('') || '<div class="muted">Nobody yet.</div>'}</div>
       <p class="hint">${pointsNote}</p>
-      <div class="row" style="margin:14px 0 0;border-top:1px solid var(--line);padding-top:14px"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="muOut" checked>Record everyone on the roll as having left the evacuated areas</label><span style="flex:1"></span><button class="btn ghost" id="muCsv">⬇︎ CSV</button><button class="btn danger" id="muEnd">End muster</button></div>
+      <div class="row" style="margin:14px 0 0;border-top:1px solid var(--line);padding-top:14px"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="muOut" ${keepOut ? 'checked' : ''}>Record everyone marked safe as having left the evacuated areas</label><span style="flex:1"></span><button class="btn ghost" id="muCsv">⬇︎ CSV</button><button class="btn danger" id="muEnd">End muster</button></div>
     </div>`;
     $('muLive').querySelectorAll('[data-safe]').forEach(x => x.onclick = async () => {
       const note = prompt(`Mark ${x.dataset.safe} as safe.\n\nHow was this confirmed? (optional)`, 'Confirmed by radio');
