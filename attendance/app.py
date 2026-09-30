@@ -137,7 +137,7 @@ def shift_since(ts: datetime = None) -> str:
     return stamp((ts or now()) - timedelta(hours=SHIFT_MAX_HOURS))
 
 
-def last_action(conn, employee: str):
+def last_event(conn, employee: str):
     """The person's latest event of their current shift (None if they have nothing in the last SHIFT_MAX_HOURS)."""
     return conn.execute(
         "SELECT action, ts FROM events WHERE employee=? AND ts>=? ORDER BY id DESC LIMIT 1",
@@ -544,7 +544,7 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
             # a photo/screen of a staff member: say nothing about who it shows, offer no actions
             return JSONResponse({**base, "emotion": None, "matched": False, "liveness": verdict, "liveness_score": live})
     with db() as conn:
-        last = last_action(conn, employee)
+        last = last_event(conn, employee)
         prof = profile(conn, employee)
         consent = bool(prof.get("mood_consent", 1))
         k = kiosk_row(conn, kiosk)
@@ -649,7 +649,7 @@ async def record_event(request: Request):
                                     (f" — use {' / '.join(offered)}." if offered else " — this location records area entry and exit only."))
         refuse_expired_pass(conn, employee, kiosk)
         refuse_unsafe_entry(conn, employee, kiosk, action)
-        last = last_action(conn, employee)
+        last = last_event(conn, employee)
         if last and last["action"] == action:
             if ts - datetime.fromisoformat(last["ts"]) < timedelta(seconds=DUP_WINDOW):
                 return JSONResponse({"ok": True, "duplicate": True, "ts": last["ts"]})
