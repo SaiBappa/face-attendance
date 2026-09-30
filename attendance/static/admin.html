@@ -134,6 +134,12 @@
   .mood { font-size:19px; line-height:1; }
 
   /* ---------- KPIs ---------- */
+  .areas { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr)); gap:14px; margin-bottom:18px; }
+  .areas .card { margin:0; }
+  .area-n { font-size:34px; font-weight:700; letter-spacing:-.02em; line-height:1; }
+  .area-list { list-style:none; margin:12px 0 0; padding:0; display:grid; gap:6px; }
+  .area-list li { display:flex; align-items:center; gap:10px; }
+  .area-list .who { flex:1; min-width:0; }
   .kpi { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:18px; }
   .kpi > div { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); position:relative; overflow:hidden; }
   .kpi > div::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--c, var(--accent)); }
@@ -432,6 +438,7 @@
   <div class="brand"><div class="logo">A</div><div><b>Aura</b><small>Kiosk admin console</small></div></div>
   <nav>
     <button data-s="status" class="active"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Today</button>
+    <button data-s="areas"><svg class="i" viewBox="0 0 24 24"><path d="M4 21V4.5L13 3v18"/><path d="M13 5h5a2 2 0 012 2v14M2.5 21h19"/><circle cx="10" cy="12.5" r=".9"/></svg>Areas</button>
     <button data-s="log"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M18 13v7m-3-3l3 3 3-3"/></svg>Log &amp; Export</button>
     <button data-s="people"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/></svg>People</button>
     <button data-s="enrol"><svg class="i" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><circle cx="12" cy="10.5" r="2.8"/><path d="M8 17c1-1.5 2.4-2.2 4-2.2s3 .7 4 2.2"/></svg>Enrol</button>
@@ -472,6 +479,23 @@
   </div>
   <div class="card"><div class="tablewrap"><table><thead><tr><th>Employee</th><th>State</th><th>Since</th><th class="hide-sm">Kiosk</th><th>Mood</th><th>Mood · 14 days</th></tr></thead><tbody id="statusBody"></tbody></table></div>
     <p class="hint">Select a person to see their mood through the day and over the last 14 days. Mood score: 0–100, 50 = calm. Only staff who consented are measured.</p></div>
+</section>
+
+<!-- ================= AREAS ================= -->
+<section id="s-areas">
+  <div class="row"><button class="btn ghost" id="areasRefresh">Refresh</button><span class="muted">Auto-refreshes every 15 s · set a location to <b>Gate</b> mode in Locations to track an area</span></div>
+  <div class="areas" id="areaCards"><div class="empty">Loading…</div></div>
+  <div class="card">
+    <div class="card-h"><h2>Movements</h2></div>
+    <div class="row">
+      <label class="field"><span>From</span><input type="date" id="axFrom"></label>
+      <label class="field"><span>To</span><input type="date" id="axTo"></label>
+      <label class="field" style="flex:1 1 160px"><span>Area</span><select id="axArea"><option value="">All areas</option></select></label>
+      <label class="field" style="flex:1 1 160px"><span>Person</span><input id="axPerson" placeholder="Optional" list="nameList"></label>
+      <div style="display:flex;gap:8px;align-self:flex-end;flex-wrap:wrap"><button class="btn" id="axGo">Show</button><button class="btn ghost" id="axCsv">⬇︎ Download CSV</button></div>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Time</th><th>Person</th><th>Area</th><th>Move</th><th class="hide-sm">Location</th><th class="num hide-sm">Match</th></tr></thead><tbody id="axBody"></tbody></table></div>
+  </div>
 </section>
 
 <!-- ================= LOG ================= -->
@@ -829,6 +853,7 @@
   // ---- nav ----
   const PAGES = {
     status: ['Today', 'Who is on duty right now', () => loadStatus()],
+    areas: ['Areas', 'Who is inside each area right now — hands-free gates, entry and exit', () => loadAreas()],
     log: ['Log & Export', 'Every clock event, filter and download for payroll', () => loadLog()],
     people: ['People', 'Staff profiles, face enrolment and consent', () => loadPeople()],
     enrol: ['Enrol', 'Add face photos so the kiosk recognises staff', () => refreshNames()],
@@ -880,6 +905,37 @@
   function toggleMood(tr) { moodOpen = moodOpen === tr.dataset.emp ? null : tr.dataset.emp; loadStatus().catch(fail); }
   $('statusBody').addEventListener('click', e => { const tr = e.target.closest('tr.clickable'); if (tr) toggleMood(tr); });
   $('statusBody').addEventListener('keydown', e => { const tr = e.target.closest('tr.clickable'); if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleMood(tr); } });
+
+  // ---- areas (gate-mode locations, access.py) ----
+  $('axFrom').value = today(); $('axTo').value = today();
+  const dur = ts => { const m = Math.max(0, Math.round((Date.now() - new Date(ts)) / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
+  const DIR = { both: 'entry + exit', in: 'entry', out: 'exit' };
+  async function loadAreas() {
+    const j = await api('/api/access/presence');
+    const cur = $('axArea').value;
+    $('axArea').innerHTML = '<option value="">All areas</option>' + j.areas.map(a => `<option value="${esc(a.area)}">${esc(a.area)}</option>`).join('');
+    $('axArea').value = cur;
+    $('areaCards').innerHTML = j.areas.map(a => `<div class="card">
+        <div class="card-h" style="margin-bottom:6px"><h2>${esc(a.area)}</h2>${a.stale ? `<span class="pill warn" title="Entered more than ${j.stale_hours} h ago with no exit — probably a missed exit">${a.stale} unconfirmed</span>` : ''}</div>
+        <div class="area-n">${a.count}</div><div class="muted">staff inside now</div>
+        <div class="hint" style="margin:6px 0 0">${a.gates.map(g => `${esc(g.name)} (${DIR[g.direction] || g.direction})`).join(' · ') || 'No gates'}</div>
+        <ul class="area-list">${a.inside.map(p => `<li>${avatar(p.person, 'sm')}<div class="who"><b style="font-weight:600">${esc(p.person)}</b><div class="muted" style="font-size:12px">in since ${fmtDT(p.since)} · ${dur(p.since)} · via ${esc(p.kiosk || '—')}</div></div>${p.stale ? '<span class="pill warn">no exit?</span>' : ''}<button class="btn ghost sm" data-out="${esc(p.person)}" data-area="${esc(a.area)}" title="Record a manual exit (e.g. they left without passing a gate)">Mark out</button></li>`).join('') || '<li class="muted">Nobody inside</li>'}</ul>
+      </div>`).join('') || '<div class="empty">No areas yet. In <a href="#locations">Locations</a>, set a kiosk\'s purpose to <b>Gate</b> and give it an area name.</div>';
+    $('areaCards').querySelectorAll('[data-out]').forEach(b => b.onclick = async () => {
+      if (!confirm(`Record ${b.dataset.out} as having left ${b.dataset.area}?`)) return;
+      try { await api('/api/access/out', jsonBody('POST', { person: b.dataset.out, area: b.dataset.area })); toast('Marked out'); loadAreas().catch(fail); } catch (e) { fail(e); }
+    });
+    await loadMoves();
+  }
+  const axParams = () => { const p = new URLSearchParams({ from: $('axFrom').value, to: $('axTo').value }); if ($('axArea').value) p.set('area', $('axArea').value); if ($('axPerson').value.trim()) p.set('person', $('axPerson').value.trim()); return p; };
+  async function loadMoves() {
+    const j = await api('/api/access?' + axParams());
+    $('axBody').innerHTML = j.rows.map(r => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.person)}</td><td>${esc(r.area)}</td><td>${tag(r.direction)}</td><td class="hide-sm">${r.source === 'admin' ? `<span class="muted" title="${esc(r.note || '')}">manual (admin)</span>` : esc(r.kiosk || '')}</td><td class="num hide-sm">${r.similarity != null ? Math.round(r.similarity * 100) + '%' : ''}</td></tr>`).join('') || '<tr><td colspan=6 class="empty">No movements in this range</td></tr>';
+  }
+  $('areasRefresh').onclick = () => loadAreas().catch(fail);
+  $('axGo').onclick = () => loadMoves().catch(fail);
+  $('axCsv').onclick = () => { const p = axParams(); p.set('pin', PIN); location.href = '/api/access.csv?' + p; };
+  setInterval(() => { if (!$('app').hidden && $('s-areas').classList.contains('active')) loadAreas().catch(() => {}); }, 15000);
 
   // ---- mood charts ----
   // valence -1..1 -> score 0..100 (50 = calm); colour scale red → amber → grey (calm) → teal → green, same as Insights
@@ -1243,7 +1299,7 @@
     renderAnns(a.announcements);
   }
   function renderKList() {
-    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media${k.safety_rule ? ` · ${+k.safety_enforce ? '⛔' : '🦺'} ${k.safety_rule === DEPT_RULE ? 'Department rules' : esc(k.safety_rule)}` : ''}</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
+    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${k.mode === 'gate' ? `🚪 ${esc(k.area || '—')} · ${esc({ both: 'entry + exit', in: 'entry', out: 'exit' }[k.direction] || '')}` : k.actions ? esc(k.actions.replace(/,/g, ' / ')) : ''}${k.mode === 'gate' || k.actions ? ' · ' : ''}${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media${k.safety_rule ? ` · ${+k.safety_enforce ? '⛔' : '🦺'} ${k.safety_rule === DEPT_RULE ? 'Department rules' : esc(k.safety_rule)}` : ''}</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
     $('kList').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { SEL = b.dataset.k; renderKList(); renderEditor(); if (innerWidth < 900) $('kEditor').scrollIntoView({ behavior: 'smooth' }); });
   }
   const DEPT_RULE = '@department';   // location setting: each worker's own department rule (safety.DEPT_RULE)
@@ -1270,9 +1326,15 @@
         <div class="field span2"><span>Theme</span><div class="themes">${Object.entries(THEMES).map(([v, l]) => `<label class="theme-opt"><input type="radio" name="k_theme" value="${v}"${(k.theme || 'lagoon') === v ? ' checked' : ''}><span><i class="th-${v}"></i>${l}</span></label>`).join('')}</div></div>
         <label class="field"><span>Flight board</span><select id="k_flights">${Object.entries(FLIGHT_OPTS).map(([v, l]) => `<option value="${v}"${(k.flights || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <div class="field span2"><span>Voice</span><label class="switch"><input type="checkbox" id="k_voice"${+k.voice !== 0 ? ' checked' : ''}><span class="sl"></span><span>Aura speaks replies aloud and listens for questions</span></label></div>
-        <label class="field"><span>Safety rule to enter</span><select id="k_srule"><option value="">None — no safety check here</option><option value="${DEPT_RULE}"${k.safety_rule === DEPT_RULE ? ' selected' : ''}>Each worker's department rule</option>${(SAFE.rules || []).map(r => `<option value="${esc(r.department)}"${k.safety_rule === r.department ? ' selected' : ''}>${esc(r.department)} — ${esc(ruleSummary(r.department))}</option>`).join('')}</select></label>
-        <div class="field"><span>Enforce</span><label class="switch"><input type="checkbox" id="k_senforce"${+k.safety_enforce === 1 ? ' checked' : ''}><span class="sl"></span><span>Refuse entry unless this rule's PPE is confirmed</span></label></div>
-        <div class="field span2"><div class="hint" style="margin:0">This is the only safety check asked here. <b>None</b>: no check. <b>Department rule</b>: each worker's own rule, on clock-in. A named rule: everyone clocking in or returning from a break here. A HIGH fatigue score is flagged to supervisors, never a lockout. <a href="#safety">Create or edit rules in Safety →</a></div></div>
+        <label class="field"><span>Purpose</span><select id="k_mode"><option value="attendance"${(k.mode || 'attendance') === 'attendance' ? ' selected' : ''}>Attendance — clock in / out</option><option value="gate"${k.mode === 'gate' ? ' selected' : ''}>Gate — hands-free area entry &amp; exit</option></select></label>
+        <div class="field" data-for="attendance"><span>Buttons offered</span><div class="row" style="margin:0;gap:14px">${['IN', 'BREAK', 'BACK', 'OUT'].map(a => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="k_act" value="${a}"${(k.offered || ['IN', 'BREAK', 'BACK', 'OUT']).includes(a) ? ' checked' : ''}>${tag(a)}</label>`).join('')}</div></div>
+        <label class="field" data-for="gate"><span>Area</span><input id="k_area" value="${esc(k.area || '')}" placeholder="e.g. Departure Hall" list="areaList"></label>
+        <label class="field" data-for="gate"><span>This screen records</span><select id="k_dir">${Object.entries({ both: 'Entry and exit (toggles each pass)', in: 'Entry only', out: 'Exit only' }).map(([v, l]) => `<option value="${v}"${(k.direction || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <div class="field span2" data-for="gate"><div class="hint" style="margin:0">Staff just look at the screen: a recognised, live face is recorded as entering or leaving the area — no taps. Every gate with the same area name shares one headcount, so people can enter at one gate and leave at another (see <a href="#areas">Areas</a>). Use separate <b>Entry only</b> and <b>Exit only</b> screens where you can; a two-way screen decides from where the person was last recorded. Gates never record attendance and don't run safety checks. An expired pass still locks the screen and alerts supervisors.</div></div>
+        <datalist id="areaList">${[...new Set(KIOSKS.map(x => x.area).filter(Boolean))].map(a => `<option value="${esc(a)}">`).join('')}</datalist>
+        <label class="field" data-for="attendance"><span>Safety rule to enter</span><select id="k_srule"><option value="">None — no safety check here</option><option value="${DEPT_RULE}"${k.safety_rule === DEPT_RULE ? ' selected' : ''}>Each worker's department rule</option>${(SAFE.rules || []).map(r => `<option value="${esc(r.department)}"${k.safety_rule === r.department ? ' selected' : ''}>${esc(r.department)} — ${esc(ruleSummary(r.department))}</option>`).join('')}</select></label>
+        <div class="field" data-for="attendance"><span>Enforce</span><label class="switch"><input type="checkbox" id="k_senforce"${+k.safety_enforce === 1 ? ' checked' : ''}><span class="sl"></span><span>Refuse entry unless this rule's PPE is confirmed</span></label></div>
+        <div class="field span2" data-for="attendance"><div class="hint" style="margin:0">This is the only safety check asked here. <b>None</b>: no check. <b>Department rule</b>: each worker's own rule, on clock-in. A named rule: everyone clocking in or returning from a break here. A HIGH fatigue score is flagged to supervisors, never a lockout. <a href="#safety">Create or edit rules in Safety →</a></div></div>
       </div>
       <h3>Info cards</h3>
       <p class="muted" style="margin-top:0">Shown on the kiosk screen — and they're also what Aura uses to answer visitors' questions ("where is the prayer room?"), so keep them accurate and specific.</p>
@@ -1283,6 +1345,8 @@
       <p class="muted" style="margin-top:0">Rotates on this kiosk's ambient screen together with shared media.</p>
       <div id="kGallery">${galleryHtml(k.media || [], k.name)}</div>`;
     renderCards();
+    const purpose = () => $('kEditor').querySelectorAll('[data-for]').forEach(el => el.hidden = el.dataset.for !== $('k_mode').value);
+    $('k_mode').onchange = purpose; purpose();
     wireGallery($('kGallery'), k.media || [], k.name);
     $('kCopy').onclick = () => copy(url);
     $('kAddCard').onclick = () => { CARDS.push({ icon: 'ℹ️', title: '', text: '' }); renderCards(); const rows = $('kCards').querySelectorAll('.card-row'); rows[rows.length - 1].querySelector('[data-f=title]').focus(); };
@@ -1311,11 +1375,15 @@
     });
   }
   async function saveKiosk(name) {
+    if ($('k_mode').value === 'gate' && !$('k_area').value.trim()) return toast('Give the gate an area name, e.g. Departure Hall', true);
+    if ($('k_mode').value === 'attendance' && !document.querySelector('.k_act:checked')) return toast('Tick at least one button', true);
     const body = {
       zone: $('k_zone').value.trim(), headline: $('k_head').value.trim(), subtitle: $('k_sub').value.trim(),
       theme: (document.querySelector('input[name=k_theme]:checked') || {}).value || 'lagoon', language: $('k_lang').value,
       voice: $('k_voice').checked, flights: $('k_flights').value,
       safety_rule: $('k_srule').value, safety_enforce: $('k_senforce').checked,
+      mode: $('k_mode').value, area: $('k_area').value.trim(), direction: $('k_dir').value,
+      actions: [...document.querySelectorAll('.k_act:checked')].map(x => x.value),
       info: CARDS.map(c => ({ icon: c.icon.trim(), title: c.title.trim(), text: c.text.trim() })).filter(c => c.title || c.text),
     };
     await api('/api/kiosks/' + enc(name), jsonBody('PUT', body));

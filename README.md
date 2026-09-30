@@ -210,15 +210,28 @@ the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't d
    Start. Staff can't leave the page.
 4. Auto-Lock **Never**, keep on power, mount at face height, light from the front.
 
+**Location purpose** — each location (Admin → Locations → a kiosk → **Purpose**) is either:
+- **Attendance** (default, unchanged): IN / BREAK / BACK / OUT. Untick buttons to offer fewer — e.g. IN/OUT
+  only, or BREAK/BACK only in a canteen. The server refuses actions a location doesn't offer.
+- **Gate** — hands-free entry/exit of an **area** (e.g. "Departure Hall"). A recognised, live face is recorded
+  straight away, no taps; each screen is *Entry only*, *Exit only* or *Entry and exit* (toggles). All gates
+  with the same area name share one headcount, so staff can enter at one gate and leave at another.
+  Movements go to their own `access` table — they never count as attendance, so rosters, lateness and
+  fatigue are unaffected. Admin → **Areas** shows who is inside each area now, a movement log with CSV, and
+  **Mark out** for missed exits (entries older than `ACCESS_STALE_HOURS`, default 16, are flagged "no exit?").
+  The same person at the same gate within `GATE_REPEAT_SECONDS` (60) is ignored. An expired pass still locks
+  the screen. A tablet can't physically stop anyone: a gate records and alerts; a turnstile can be added later.
+
 ## Admin page (`/admin`)
 
 | Tab | What |
 |---|---|
 | Today | who is IN / on BREAK / OUT now (with mood), auto-refresh |
+| Areas | who is inside each gate-controlled area now, movements, CSV, mark out |
 | Log & Export | date range + employee filter, **Download CSV**, delete mistakes |
 | People | profiles (department, shift, birthday, language, mood consent), rename, delete, forget |
 | Enrol | camera capture or photo upload |
-| Locations | per-kiosk headline, theme, info cards, images/videos, announcements |
+| Locations | per-kiosk purpose (attendance buttons or gate + area), headline, theme, info cards, images/videos, announcements |
 | Conversations | everything said to Aura, filterable, CSV |
 | Setup | kiosk links, AI engine status, demo data, privacy settings |
 

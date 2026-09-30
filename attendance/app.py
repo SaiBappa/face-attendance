@@ -8,7 +8,8 @@ Thin layer between the wall kiosks, the admin/insights pages and the local ML se
 Kiosk (no PIN, LAN only):
   POST /api/recognize        camera frame -> best match + mood + attire; logs one sighting per approach
   POST /api/greet            personal greeting lines for a recognised staff member
-  POST /api/event            IN / BREAK / BACK / OUT
+  POST /api/event            IN / BREAK / BACK / OUT (only the buttons the location offers)
+  POST /api/access           hands-free pass through a gate-mode location: records IN/OUT of its area
   POST /api/talk             text -> reply in the speaker's language (stored per person)
   POST /api/listen           voice clip -> transcript + reply
   GET  /api/kiosk/{name}     screen config, images, announcements, live pulse
@@ -32,6 +33,9 @@ Admin (X-Admin-Pin):
   /api/people…, /api/kiosks…, /api/media…, /api/announcements…
   /api/insights, /api/insights/person/{name}, /api/status/mood, /api/interactions(.csv), /api/demo, /api/engines
   /api/roster…  (CSV import, JSON push from HR systems, edit, coverage)   /api/alerts…  (feed, ack, routing)
+  /api/access/presence (who is inside each area), /api/access (movements), /api/access.csv, /api/access/out
+Each location has a mode (PUT /api/kiosks/{name} {mode, actions, area, direction}, see access.py):
+  attendance (default: IN / BREAK / BACK / OUT, or a chosen subset) or gate (hands-free area entry/exit).
 
 Camera frames and voice clips are processed in memory and discarded. Stored: face vectors plus a
 small face crop per enrolled photo and per daily-best kiosk photo of recognised staff (recognizer;
@@ -59,6 +63,7 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, R
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+import access
 import alerts
 import brain
 import flights
@@ -527,6 +532,8 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
         prof = profile(conn, employee)
         consent = bool(prof.get("mood_consent", 1))
         expired = pass_expired(prof)
+        k = kiosk_row(conn, kiosk)
+        gate = access.state(conn, employee, k, now()) if access.is_gate(k) else None
         if expired:
             pass_incident(conn, employee, prof, kiosk)
     if encounter:
@@ -552,6 +559,7 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
             "last_action": last_action,
             "last_ts": last["ts"] if last else None,
             "suggested": NEXT_ACTION.get(last_action, "IN"),
+            "gate": gate,
             "liveness_score": live,
             "token": event_token(employee, kiosk),
         }
@@ -617,6 +625,11 @@ async def record_event(request: Request):
                                  "If this keeps happening, reload this screen.")
     ts = now()
     with db() as conn:
+        if kiosk:
+            offered = access.kiosk_actions(kiosk_row(conn, kiosk))
+            if action not in offered:
+                raise HTTPException(400, f"{action} isn't available at {kiosk}" +
+                                    (f" — use {' / '.join(offered)}." if offered else " — this location records area entry and exit only."))
         refuse_expired_pass(conn, employee, kiosk)
         refuse_unsafe_entry(conn, employee, kiosk, action)
         last = last_action_today(conn, employee)
@@ -630,6 +643,26 @@ async def record_event(request: Request):
              payload.get("mood") if consent else None, payload.get("attire")),
         )
     return JSONResponse({"ok": True, "duplicate": False, "ts": stamp(ts)})
+
+
+async def gate_pass(request: Request):
+    """Hands-free pass through a gate-mode location: the camera saw `employee` live (token), the server
+    decides IN or OUT from the gate's direction and where they are now. Never touches attendance."""
+    p = await request.json()
+    employee = (p.get("employee") or "").strip()
+    kiosk = (p.get("kiosk") or "").strip()
+    if not employee or not kiosk:
+        raise HTTPException(400, "employee and kiosk required")
+    if not event_token_ok(p.get("token"), employee, kiosk):
+        raise HTTPException(403, "Not verified by the camera — please look at the screen again.")
+    with db() as conn:
+        k = kiosk_row(conn, kiosk)
+        if not access.is_gate(k):
+            raise HTTPException(400, f"{kiosk} is not set up as a gate")
+        refuse_expired_pass(conn, employee, kiosk)
+        out = access.record(conn, employee, k, now(), similarity=p.get("similarity"))
+        out["count"] = access.area_count(conn, out["area"], now())
+    return JSONResponse({"ok": True, **out})
 
 
 async def _converse(text: str, p: dict) -> dict:
@@ -710,6 +743,9 @@ async def kiosk_config(request: Request):
         vis = conn.execute("SELECT AVG(valence), COUNT(*) FROM sightings WHERE day=? AND kind='visitor' AND kiosk=?", (today, name)).fetchone()
         allv = conn.execute("SELECT AVG(valence) FROM sightings WHERE day=? AND valence IS NOT NULL", (today,)).fetchone()[0]
         chats = conn.execute("SELECT COUNT(*) FROM interactions WHERE day=? AND kiosk=? AND channel!='greeting'", (today, name)).fetchone()[0]
+        k["offered"] = list(access.kiosk_actions(k))
+        if access.is_gate(k):
+            k["inside"] = access.area_count(conn, k["area"].strip(), ts)
     for m in media:
         m["url"] = f"/media/{m['file']}"
     return JSONResponse({
@@ -1227,6 +1263,7 @@ async def rename_employee(request: Request):
         await cf("PUT", f"/subjects/{name}", json={"subject": new})
     with db() as conn:
         conn.execute("UPDATE events SET employee=? WHERE employee=?", (new, name))
+        conn.execute("UPDATE access SET person=? WHERE person=?", (new, name))
         for t, col in (("people", "name"), ("sightings", "person"), ("interactions", "person"), ("memories", "person")):
             conn.execute(f"UPDATE {t} SET {col}=? WHERE {col}=?", (new, name))
     return JSONResponse({"ok": True})
@@ -1313,6 +1350,54 @@ async def forget_person(request: Request):
     return JSONResponse({"ok": True})
 
 
+async def access_presence(request: Request):
+    """Who is inside each area right now (gate-mode locations)."""
+    require_pin(request)
+    with db() as conn:
+        areas = access.presence(conn, now())
+    return JSONResponse({"areas": areas, "stale_hours": access.STALE_HOURS})
+
+
+def _access_rows(request: Request):
+    date_from, date_to = _range(request)
+    sql, args = "SELECT * FROM access WHERE day BETWEEN ? AND ?", [date_from, date_to]
+    for key in ("area", "person", "kiosk"):
+        if request.query_params.get(key):
+            sql += f" AND {key}=?"
+            args.append(request.query_params[key])
+    with db() as conn:
+        return [dict(r) for r in conn.execute(sql + " ORDER BY id DESC LIMIT ?", args + [int(request.query_params.get("limit", 2000))])]
+
+
+async def access_log(request: Request):
+    require_pin(request)
+    return JSONResponse({"rows": _access_rows(request)})
+
+
+async def access_csv(request: Request):
+    require_pin(request)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["timestamp", "person", "area", "direction", "kiosk", "similarity", "source", "note"])
+    for r in reversed(_access_rows(request)):
+        w.writerow([r["ts"], r["person"], r["area"], r["direction"], r["kiosk"] or "", r["similarity"] or "", r["source"], r["note"] or ""])
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="area-access.csv"'})
+
+
+async def access_out(request: Request):
+    """Admin closes someone's presence in an area (missed exit), recorded as a manual OUT."""
+    require_pin(request)
+    p = await request.json()
+    person, area = (p.get("person") or "").strip(), (p.get("area") or "").strip()
+    if not person or not area:
+        raise HTTPException(400, "person and area required")
+    with db() as conn:
+        out = access.record(conn, person, {"name": None, "area": area, "direction": "out"}, now(),
+                            source="admin", move="OUT", note=(p.get("note") or "Marked out by admin").strip()[:200])
+    return JSONResponse({"ok": True, **out})
+
+
 async def kiosks_list(request: Request):
     require_pin(request)
     with db() as conn:
@@ -1320,6 +1405,7 @@ async def kiosks_list(request: Request):
         for r in conn.execute("SELECT name FROM kiosks ORDER BY name COLLATE NOCASE").fetchall():
             k = kiosk_row(conn, r["name"])
             k["media"] = [dict(m) for m in conn.execute("SELECT * FROM media WHERE kiosk=? ORDER BY position, id", (r["name"],))]
+            k["offered"] = list(access.kiosk_actions(k))
             rows.append(k)
         shared = [dict(m) for m in conn.execute("SELECT * FROM media WHERE kiosk='*' ORDER BY position, id")]
     return JSONResponse({"kiosks": rows, "shared_media": shared})
@@ -1345,6 +1431,21 @@ async def kiosk_save(request: Request):
             fields["safety_rule"] = rule
         if "safety_enforce" in p:
             fields["safety_enforce"] = 1 if p["safety_enforce"] else 0
+        if "mode" in p:
+            if p["mode"] not in access.MODES:
+                raise HTTPException(400, f"mode must be one of {access.MODES}")
+            fields["mode"] = p["mode"]
+        if "actions" in p:
+            fields["actions"] = access.clean_actions(p["actions"])
+        if "area" in p:
+            fields["area"] = (p["area"] or "").strip()[:80] or None
+        if "direction" in p:
+            if p["direction"] not in access.DIRECTIONS:
+                raise HTTPException(400, f"direction must be one of {access.DIRECTIONS}")
+            fields["direction"] = p["direction"]
+        cur = kiosk_row(conn, name)
+        if fields.get("mode", cur.get("mode")) == "gate" and not fields.get("area", cur.get("area")):
+            raise HTTPException(400, "A gate needs an area (e.g. Departure Hall)")
         if fields:
             conn.execute(f"UPDATE kiosks SET {', '.join(f'{k}=?' for k in fields)} WHERE name=?", (*fields.values(), name))
     return JSONResponse({"ok": True})
@@ -1566,6 +1667,11 @@ routes = [
     Route("/api/recognize", recognize, methods=["POST"]),
     Route("/api/greet", greet, methods=["POST"]),
     Route("/api/event", record_event, methods=["POST"]),
+    Route("/api/access", gate_pass, methods=["POST"]),
+    Route("/api/access", access_log),
+    Route("/api/access.csv", access_csv),
+    Route("/api/access/presence", access_presence),
+    Route("/api/access/out", access_out, methods=["POST"]),
     Route("/api/talk", talk, methods=["POST"]),
     Route("/api/listen", listen, methods=["POST"]),
     Route("/api/kiosk/{name}", kiosk_config),

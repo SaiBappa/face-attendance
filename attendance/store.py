@@ -17,6 +17,7 @@ SQLite schema for Aura. One file, created/migrated on start-up.
   shifts         the roster: rostered shifts per person/day (CSV import, HR push or manual)
   alerts         supervisor alerts (no-show, late, understaffed, …) with ack/resolve state
   alert_routes   per-department webhook + supervisor for alerts ('*' = default)
+  access         area entry/exit through gate-mode locations (who is inside where; see access.py)
 
 Rows produced by the demo generator carry demo=1 so they can be removed in one go.
 """
@@ -214,6 +215,23 @@ CREATE TABLE IF NOT EXISTS alert_routes (
     webhook    TEXT
 );
 
+CREATE TABLE IF NOT EXISTS access (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts         TEXT NOT NULL,
+    day        TEXT NOT NULL,
+    person     TEXT NOT NULL,
+    area       TEXT NOT NULL,
+    kiosk      TEXT,
+    direction  TEXT NOT NULL,              -- IN | OUT
+    similarity REAL,
+    source     TEXT NOT NULL DEFAULT 'gate',  -- gate | admin
+    note       TEXT,
+    demo       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_access_person ON access(person, area, id);
+CREATE INDEX IF NOT EXISTS idx_access_area ON access(area, id);
+CREATE INDEX IF NOT EXISTS idx_access_day ON access(day);
+
 CREATE TABLE IF NOT EXISTS announcements (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     kiosk   TEXT NOT NULL DEFAULT '*',
@@ -231,7 +249,11 @@ MIGRATIONS = {
     # flight board on the ambient screen: departures | arrivals | both | off
     "kiosks": {"flights": "TEXT DEFAULT 'both'",
                # safety rule everyone entering this area must meet; enforce = refuse entry when PPE is missing
-               "safety_rule": "TEXT", "safety_enforce": "INTEGER NOT NULL DEFAULT 0"},
+               "safety_rule": "TEXT", "safety_enforce": "INTEGER NOT NULL DEFAULT 0",
+               # what the location is for (access.py): attendance (default) | gate; attendance buttons offered
+               # (comma list, NULL = all four); a gate's area and direction (both | in | out)
+               "mode": "TEXT NOT NULL DEFAULT 'attendance'", "actions": "TEXT", "area": "TEXT",
+               "direction": "TEXT NOT NULL DEFAULT 'both'"},
     "safety_checks": {"action": "TEXT", "blocked": "INTEGER NOT NULL DEFAULT 0",
                       "auto": "INTEGER NOT NULL DEFAULT 0"},   # passed by camera alone, no checklist shown
     # allow entry without the checklist when the camera confirms every PPE item of the rule

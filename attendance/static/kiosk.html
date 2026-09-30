@@ -160,7 +160,7 @@
   @keyframes sh { to { background-position:-200% 0; } }
 
   /* ------------------------------------------------------------------ actions */
-  #actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:clamp(10px,1.8vh,16px); width:min(1100px,100%); }
+  #actions { display:grid; grid-template-columns:repeat(var(--n,4),minmax(0,1fr)); gap:clamp(10px,1.8vh,16px); width:min(1100px,100%); }
   #actions button { position:relative; border:1px solid var(--line); border-radius:24px; padding:clamp(14px,2.6vh,34px) 8px clamp(12px,2.2vh,30px); background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
     display:flex; flex-direction:column; align-items:center; gap:6px; font-size:clamp(18px,min(3.2vw,2.8vh),34px); font-weight:700; letter-spacing:.02em; transition:transform .15s, box-shadow .3s, background .3s; }
   #actions button small { font-size:13px; font-weight:500; color:var(--muted); letter-spacing:0; }
@@ -170,6 +170,8 @@
   #actions button.suggest::after { content:"Suggested"; position:absolute; top:-10px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; background:var(--c); color:#fff; border-radius:999px; padding:3px 9px; }
   .a-IN { --c:var(--in); } .a-BREAK { --c:var(--break); } .a-BACK { --c:var(--back); } .a-OUT { --c:var(--out); }
   #actions .ic { background:var(--c); }
+  #actions button.off { display:none; }   /* not offered at this location */
+  #actions[data-n="1"] { grid-template-columns:minmax(0,1fr) !important; }
 
   #tools { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; align-items:center; }
   .pill { display:inline-flex; align-items:center; gap:9px; border:1px solid var(--line); background:var(--glass); border-radius:999px; padding:13px 20px; font-size:17px; backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
@@ -788,8 +790,17 @@
     clearInterval(welcomeTimer);
     $('headline').textContent = '';
     $('sub').innerHTML = '';
+    const k = S.cfg?.kiosk || {};
+    if (isGate()) {
+      const verb = { in: 'enter', out: 'exit' }[k.direction] || 'enter or exit';
+      $('hint').innerHTML = `<b>Look at me</b> to ${verb} ${esc(k.area)} — no need to stop or tap` +
+        (k.inside != null ? ` · <b>${k.inside}</b> staff inside` : '');
+      return;
+    }
     $('hint').innerHTML = '<b>Look at me</b> to clock in · <b>tap</b> to ask me anything, in any language';
   }
+  // gate mode (access.py): hands-free entry/exit of an area, no buttons, no chat
+  const isGate = () => S.cfg?.kiosk?.mode === 'gate' && !!S.cfg?.kiosk?.area;
 
   function toAmbient() {
     if (S.chatting) closeChat();
@@ -833,7 +844,14 @@
     const lastTxt = j.last_action ? `${LAST[j.last_action] || j.last_action} ${new Date(j.last_ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not clocked in yet today';
     $('sub').textContent = lastTxt;
     $('lines').innerHTML = '<div class="shimmer" style="width:70%;opacity:1;animation:sh 1.2s linear infinite"></div><div class="shimmer" style="width:52%;opacity:1;animation:sh 1.2s linear infinite"></div>';
-    document.querySelectorAll('#actions button').forEach(b => b.classList.toggle('suggest', b.dataset.a === j.suggested));
+    const offered = S.cfg?.kiosk?.offered || ['IN', 'BREAK', 'BACK', 'OUT'];
+    // e.g. an IN/OUT-only screen after a BREAK elsewhere: suggest OUT rather than a hidden BACK
+    const sug = offered.includes(j.suggested) ? j.suggested : (!j.last_action || j.last_action === 'OUT' ? 'IN' : 'OUT');
+    $('actions').dataset.n = offered.length; $('actions').style.setProperty('--n', offered.length);
+    document.querySelectorAll('#actions button').forEach(b => {
+      b.classList.toggle('off', !offered.includes(b.dataset.a));
+      b.classList.toggle('suggest', b.dataset.a === sug && offered.includes(sug));
+    });
     $('typeBtn').classList.add('hidden'); $('notMe').classList.remove('hidden');
     show(['actions', 'tools', 'countdown']);
     startCountdown(STAFF_TIMEOUT_S);
@@ -973,6 +991,7 @@
     if (j.matched && j.pass_expired) return showPassAlert(j);
     if (j.matched) {
       if (j.employee === S.cooldownName && Date.now() < S.cooldownUntil) return;
+      if (isGate() && j.gate) { if (S.state !== 'staff') gatePass(j); return; }
       if (S.state !== 'staff' && !S.chatting) showStaff(j);
       return;
     }
@@ -1001,7 +1020,11 @@
       if (j.size && j.size < 0.14) $('sub').textContent = 'Step a little closer';
       // frames now arrive ~every 100 ms, so also require a minimum span: someone still turning
       // towards the camera shouldn't be called a visitor before their face is usable
-      if (S.unmatched >= 3 && Date.now() - S.firstUnmatchedAt >= VISITOR_MIN_MS) showVisitor();
+      if (S.unmatched >= 3 && Date.now() - S.firstUnmatchedAt >= VISITOR_MIN_MS) {
+        if (!isGate()) showVisitor();
+        // a gate is staff-only: no visitor chat, just say we don't know them (keeps scanning — they may turn)
+        else if (S.unmatched >= 8) { $('headline').textContent = 'Not recognised'; $('sub').textContent = 'Please look straight at the screen, or show your pass to the officer.'; }
+      }
     }
   }
 
@@ -1171,6 +1194,28 @@
       setTimeout(toAmbient, 3000);
     }
   });
+
+  // ---- gate: record the pass straight away, show the result, back to watching
+  async function gatePass(j) {
+    setState('staff'); S.current = j; S.paused = true; touch();
+    dbg.walkup(`Gate: ${j.employee}`);
+    const first = j.employee.split(' ')[0], area = j.gate.area;
+    try {
+      const r = await post('/api/access', { employee: j.employee, kiosk: KIOSK, token: j.token, similarity: j.similarity });
+      const time = new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const inn = r.move === 'IN';
+      const note = r.duplicate ? 'Already recorded a moment ago.'
+        : r.missed_exit ? 'Your last exit wasn\'t recorded — please use the exit screen when you leave.'
+        : r.missed_entry ? 'Your entry wasn\'t recorded — please use the entry screen next time.' : '';
+      flash(`${inn ? 'Entered' : 'Exited'} · ${time}`, `${j.employee} · ${area}${note ? ' — ' + note : ''}`, inn ? 'var(--in)' : 'var(--out)');
+      if (!r.duplicate) { chime(); speak(`${inn ? 'Welcome' : 'Goodbye'}, ${first}.`); }
+      if (S.cfg?.kiosk) S.cfg.kiosk.inside = r.count;
+    } catch (e) {
+      flash('Not recorded', e.message, 'var(--out)'); beep(220, 300, 'square');
+    }
+    S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+    setTimeout(toAmbient, 2600);
+  }
 
   // ---- ramp safety pack: PPE checklist + restedness, resolves with the recorded check (or null if cancelled)
   S.ppeLabels = {};
