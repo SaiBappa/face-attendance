@@ -13,6 +13,11 @@ live attendance / assistance / safety data into operational alerts.
                  the kiosk, not by the scan; at most once per person per kiosk every PASS_ALERT_MINUTES)
   spoof          a photo or screen showing a staff member's face was held up to a kiosk (failed the
                  liveness check; logged live, at most once per person per kiosk every PASS_ALERT_MINUTES)
+  area_zone      someone entered an area their security pass zone doesn't cover (logged live at the gate)
+  passback       entered an area again without an exit, or exited without an entry (logged live at the gate)
+  overstay       inside an area longer than its maximum stay
+  capacity       more people inside an area than its capacity
+  no_exit        entered an area and never exited (ACCESS_STALE_HOURS), or still inside after clocking OUT
 
 Each alert has a stable `key`, so re-scans never duplicate it. New alerts are posted to the
 department's webhook (Admin → Alerts → routing) or ALERT_WEBHOOK_URL, and shown in the Admin
@@ -26,6 +31,7 @@ from datetime import datetime, timedelta
 
 import httpx
 
+import access
 import roster
 from store import db
 
@@ -49,6 +55,11 @@ TYPES = {  # type -> (icon, label, severity)
     "safety": ("🦺", "Safety check flagged", "high"),
     "pass_expired": ("⛔", "Expired security pass", "high"),
     "spoof": ("📵", "Photo / screen at kiosk", "high"),
+    "area_zone": ("🚷", "Not authorised for area", "high"),
+    "passback": ("🔁", "Entry / exit mismatch", "low"),
+    "overstay": ("⏳", "Overstay in area", "medium"),
+    "capacity": ("🚪", "Area over capacity", "high"),
+    "no_exit": ("🚶", "No exit recorded", "low"),
 }
 
 
@@ -87,6 +98,23 @@ def spoof_incident(conn, person, department, kiosk, now: datetime = None) -> boo
                 f"Someone held up a photo or screen showing {person} at the {kiosk or 'kiosk'} kiosk. "
                 "It failed the liveness check, so nothing was recorded.",
                 now, person, department, kiosk)
+
+
+def gate_incident(conn, flag, person, department, kiosk, area, zone=None, min_zone=None, missed_exit=False,
+                  now: datetime = None) -> bool:
+    """A flagged pass through a gate (access.record's `flag`). True when a new alert was created."""
+    now = now or datetime.now()
+    ts = now.isoformat(timespec="seconds")
+    if flag == "zone":
+        text = (f"{person} entered {area} at {kiosk} with a {zone.capitalize() if zone else 'no'} zone pass on file — "
+                f"this area needs {min_zone.capitalize()} or higher. They are recorded inside; please check.")
+        return _add(conn, f"area_zone|{person}|{area}|{ts}", "area_zone", text, now, person, department, kiosk)
+    if flag == "passback":
+        text = (f"{person} entered {area} at {kiosk} again without an exit being recorded — possible tailgating or a missed exit."
+                if missed_exit else
+                f"{person} left {area} at {kiosk} without an entry being recorded — possible tailgating on the way in.")
+        return _add(conn, f"passback|{person}|{area}|{ts}", "passback", text, now, person, department, kiosk)
+    return False
 
 
 def scan(conn, now: datetime = None) -> int:
@@ -162,6 +190,10 @@ def scan(conn, now: datetime = None) -> int:
         lead = f"{r['person']} was refused entry at {r['kiosk']}:" if r["blocked"] else f"{r['person']} clocked in with"
         new += _add(conn, f"safety|{r['id']}", "safety", f"{lead} " + " and ".join(bits) + ".",
                     now, r["person"], r["department"], r["kiosk"])
+
+    # --- areas: overstay, over capacity, entries with no exit (access.py)
+    for a in access.due_alerts(conn, now):
+        new += _add(conn, a["key"], a["type"], a["text"], now, a["person"], depts.get(a["person"]), a["kiosk"])
     return new
 
 
@@ -211,5 +243,5 @@ async def loop():
 
 def settings() -> dict:
     return {"scan_seconds": SCAN_S, "no_show_minutes": NO_SHOW_MIN, "late_alert_minutes": LATE_MIN,
-            "clockout_grace_minutes": CLOCKOUT_GRACE, "pass_alert_minutes": PASS_ALERT_MIN, "break_max_minutes": BREAK_MAX, "understaff_min": UNDERSTAFF_MIN,
+            "clockout_grace_minutes": CLOCKOUT_GRACE, "area_exit_grace_minutes": access.EXIT_GRACE_MIN, "pass_alert_minutes": PASS_ALERT_MIN, "break_max_minutes": BREAK_MAX, "understaff_min": UNDERSTAFF_MIN,
             "webhook": bool(WEBHOOK), "types": {k: {"icon": v[0], "label": v[1], "severity": v[2]} for k, v in TYPES.items()}}

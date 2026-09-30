@@ -1220,9 +1220,17 @@
       const note = r.duplicate ? 'Already recorded a moment ago.'
         : r.missed_exit ? 'Your last exit wasn\'t recorded — please use the exit screen when you leave.'
         : r.missed_entry ? 'Your entry wasn\'t recorded — please use the entry screen next time.' : '';
-      flash(`${inn ? 'Entered' : 'Exited'} · ${time}`, `${j.employee} · ${area}${inn && r.reason ? ' · ' + r.reason : ''}${note ? ' — ' + note : ''}`, inn ? 'var(--in)' : 'var(--out)');
-      if (!r.duplicate && !reason) chime();
-      if (!r.duplicate) speak(`${inn ? 'Welcome' : 'Goodbye'}, ${first}.`);
+      const cap = z => z ? z[0].toUpperCase() + z.slice(1) : '';
+      if (r.flag === 'zone') {
+        // entry recorded (they are inside) but their pass doesn't cover this area: security has been alerted
+        flash(`Not authorised · ${area}`, `${j.employee} — your ${r.zone ? cap(r.zone) + ' zone ' : ''}pass doesn't cover ${area} (${cap(r.min_zone)} or higher needed). Security has been notified.`, 'var(--out)', '⛔');
+        beep(220, 500, 'square'); speak(`${first}, you are not authorised for ${area}. Security has been notified.`);
+      } else {
+        flash(`${inn ? 'Entered' : 'Exited'} · ${time}`, `${j.employee} · ${area}${inn && r.reason ? ' · ' + r.reason : ''}${note ? ' — ' + note : ''}`,
+          r.flag === 'passback' ? '#d97706' : inn ? 'var(--in)' : 'var(--out)');
+        if (!r.duplicate && !reason) chime();
+        if (!r.duplicate) speak(`${inn ? 'Welcome' : 'Goodbye'}, ${first}.`);
+      }
       if (S.cfg?.kiosk) S.cfg.kiosk.inside = r.count;
     } catch (e) {
       flash('Not recorded', e.message, 'var(--out)'); beep(220, 300, 'square');
@@ -1312,8 +1320,8 @@
     });
   }
 
-  function flash(t, s, color) {
-    $('doneT').textContent = t; $('doneS').textContent = s;
+  function flash(t, s, color, icon = '✓') {
+    $('doneT').textContent = t; $('doneS').textContent = s; $('done').querySelector('.check').textContent = icon;
     $('done').style.setProperty('--c', color); $('done').style.background = color;
     $('done').classList.add('show');
     setTimeout(() => $('done').classList.remove('show'), 3200);

@@ -34,7 +34,7 @@ Admin (X-Admin-Pin):
   /api/insights, /api/insights/person/{name}, /api/status/mood, /api/interactions(.csv), /api/demo, /api/engines
   /api/roster…  (CSV import, JSON push from HR systems, edit, coverage)   /api/alerts…  (feed, ack, routing)
   /api/access/presence (who is inside each area), /api/access (movements), /api/access.csv, /api/access/out
-  PUT /api/areas/{name} {reasons: [...], ask_reason}  reasons offered (and required) on entry to an area
+  PUT /api/areas/{name} {reasons: [...], ask_reason, min_zone, max_minutes, capacity}  per-area rules
 Each location has a mode (PUT /api/kiosks/{name} {mode, actions, area, direction}, see access.py):
   attendance (default: IN / BREAK / BACK / OUT, or a chosen subset) or gate (hands-free area entry/exit).
 
@@ -666,6 +666,11 @@ async def gate_pass(request: Request):
         except access.ReasonRequired as e:
             raise HTTPException(400, str(e))
         out["count"] = access.area_count(conn, out["area"], now())
+        if out.get("flag") and alerts.gate_incident(conn, out["flag"], employee, profile(conn, employee).get("department"),
+                                                    kiosk, out["area"], out.get("zone"), out.get("min_zone"), out.get("missed_exit")):
+            task = asyncio.create_task(alerts.deliver())   # after this block commits the alert
+            _bg.add(task)
+            task.add_done_callback(_bg.discard)
     return JSONResponse({"ok": True, **out})
 
 
@@ -1277,7 +1282,7 @@ PROFILE_FIELDS = ("role", "department", "shift_start", "birthday", "joined", "la
                   "record_card", "dob", "pass_expiry", "zone")
 
 # authorised airside zone colours, highest access first
-ZONES = ("green", "red", "orange", "blue", "yellow", "white")
+ZONES = access.ZONES
 # must be on file before a face can be enrolled
 REQUIRED_FOR_ENROL = {"record_card": "record card number", "pass_expiry": "security pass expiry", "zone": "authorised zone"}
 
@@ -1382,7 +1387,11 @@ async def area_save(request: Request):
     if p.get("ask_reason") and not [x for x in (p.get("reasons") or []) if str(x).strip()]:
         raise HTTPException(400, "Add at least one reason to ask for")
     with db() as conn:
-        access.save_settings(conn, name, p.get("reasons") or [], bool(p.get("ask_reason")))
+        try:
+            access.save_settings(conn, name, p.get("reasons") or [], bool(p.get("ask_reason")),
+                                 p.get("min_zone"), p.get("max_minutes"), p.get("capacity"))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
         return JSONResponse({"ok": True, **access.settings(conn, name)})
 
 
@@ -1395,10 +1404,10 @@ async def access_csv(request: Request):
     require_pin(request)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["timestamp", "person", "area", "direction", "reason", "kiosk", "similarity", "source", "note"])
+    w.writerow(["timestamp", "person", "area", "direction", "reason", "flag", "kiosk", "similarity", "source", "note"])
     for r in reversed(_access_rows(request)):
-        w.writerow([r["ts"], r["person"], r["area"], r["direction"], r["reason"] or "", r["kiosk"] or "", r["similarity"] or "",
-                    r["source"], r["note"] or ""])
+        w.writerow([r["ts"], r["person"], r["area"], r["direction"], r["reason"] or "", r["flag"] or "", r["kiosk"] or "",
+                    r["similarity"] or "", r["source"], r["note"] or ""])
     return Response(buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition": 'attachment; filename="area-access.csv"'})
 

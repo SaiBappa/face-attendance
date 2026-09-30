@@ -222,6 +222,12 @@ the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't d
   **Reasons** (Admin → Areas → an area → *Ask a reason on entry*): for restricted rooms, the gate shows the
   area's reasons as big buttons and records the entry only once one is tapped (cancel or 30 s = not recorded);
   exits stay hands-free. The reason shows on the Areas board, the movement log and the CSV.
+  **Area rules and alerts** (same place): *lowest pass zone allowed* (Green = highest) — someone whose pass
+  doesn't cover the area is still recorded inside (they are) but flagged, the gate shows a red "Not
+  authorised" and supervisors are alerted at once; *maximum stay* and *capacity*. Alerts go to the usual
+  Alerts feed and department webhooks: `area_zone`, `passback` (entered again without an exit, or exited
+  without an entry — both live), `overstay`, `capacity` (once per area per hour) and `no_exit` (no exit
+  after `ACCESS_STALE_HOURS`, or still inside `AREA_EXIT_GRACE_MINUTES` (30) after clocking OUT).
   The same person at the same gate within `GATE_REPEAT_SECONDS` (60) is ignored. An expired pass still locks
   the screen. A tablet can't physically stop anyone: a gate records and alerts; a turnstile can be added later.
 
