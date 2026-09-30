@@ -228,7 +228,7 @@ the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't d
   Alerts feed and department webhooks: `area_zone`, `passback` (entered again without an exit, or exited
   without an entry — both live), `overstay`, `capacity` (once per area per hour) and `no_exit` (no exit
   after `ACCESS_STALE_HOURS`, or still inside `AREA_EXIT_GRACE_MINUTES` (30) after clocking OUT).
-  The same person at the same gate within `GATE_REPEAT_SECONDS` (60) is ignored. An expired pass still locks
+  The screen holds someone until they step out of view, and the same person at the same gate within `GATE_REPEAT_SECONDS` (10) is ignored. An expired pass still locks
   the screen. A tablet can't physically stop anyone: a gate records and alerts; a turnstile can be added later.
 
 **Emergency muster** — set one or more kiosks' purpose to **Muster point** (assembly points). Admin →

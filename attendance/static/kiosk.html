@@ -1258,7 +1258,9 @@
     } catch (e) {
       flash('Not recorded', e.message, 'var(--out)'); beep(220, 300, 'square');
     }
-    S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+    // hold them until they step out of view (no timer): standing at the gate must not toggle them back,
+    // but walking away and coming straight back is a real second pass
+    S.cooldownName = j.employee; S.cooldownUntil = Infinity;
     setTimeout(toAmbient, 2600);
   }
 

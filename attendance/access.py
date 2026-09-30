@@ -31,7 +31,9 @@ MODES = ("attendance", "gate", "muster")   # muster: emergency muster point (mus
 DIRECTIONS = ("both", "in", "out")
 ATTENDANCE_ACTIONS = ("IN", "BREAK", "BACK", "OUT")
 STALE_HOURS = float(os.environ.get("ACCESS_STALE_HOURS", "16"))
-REPEAT_SECONDS = int(os.environ.get("GATE_REPEAT_SECONDS", "60"))   # same person at the same gate: ignore repeats
+# same person at the same gate within this: a repeat, not a new pass. The kiosk itself holds someone until they
+# leave the frame, so this only covers a face-detection blip; longer would swallow a quick out-and-back.
+REPEAT_SECONDS = int(os.environ.get("GATE_REPEAT_SECONDS", "10"))
 EXIT_GRACE_MIN = int(os.environ.get("AREA_EXIT_GRACE_MINUTES", "30"))  # still inside this long after clocking OUT -> alert
 # authorised airside zone colours on the security pass, highest access first (people.zone)
 ZONES = ("green", "red", "orange", "blue", "yellow", "white")
