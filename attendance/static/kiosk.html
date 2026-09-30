@@ -170,7 +170,14 @@
   #actions button.suggest::after { content:"Suggested"; position:absolute; top:-10px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; background:var(--c); color:#fff; border-radius:999px; padding:3px 9px; }
   .a-IN { --c:var(--in); } .a-BREAK { --c:var(--break); } .a-BACK { --c:var(--back); } .a-OUT { --c:var(--out); }
   #actions .ic { background:var(--c); }
-  #actions button.off { display:none; }   /* not offered at this location */
+  #actions button.off { display:none; }
+  /* muster point during an emergency: red banner over everything but the check-in result */
+  #musterBar { display:none; position:fixed; left:0; right:0; top:0; z-index:20; padding:calc(14px + env(safe-area-inset-top)) 24px 14px; background:#b91c1c; color:#fff; text-align:center; font-weight:750; font-size:clamp(20px,3.2vw,36px); letter-spacing:-.01em; box-shadow:0 10px 40px -10px rgba(0,0,0,.6); animation:mpulse 1.6s ease-in-out infinite; }
+  #musterBar small { display:block; font-weight:600; font-size:clamp(14px,1.8vw,20px); opacity:.9; margin-top:4px; }
+  body.muster-on #musterBar { display:block; }
+  body.muster-on #board, body.muster-on #pulse, body.muster-on #infoCard { display:none !important; }   /* nothing but the check-in during an emergency */
+  @keyframes mpulse { 50% { background:#991b1b; } }
+  @media (prefers-reduced-motion: reduce) { #musterBar { animation:none; } }   /* not offered at this location */
   #actions[data-n="1"] { grid-template-columns:minmax(0,1fr) !important; }
 
   #tools { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; align-items:center; }
@@ -484,6 +491,7 @@
   <div><div class="ico" aria-hidden="true">⛔</div><h2 id="paT">Security pass expired</h2><div class="who" id="paWho"></div>
   <p id="paS"></p><div class="log">🚨 Incident logged · Supervisor notified</div></div>
 </div>
+<div id="musterBar" role="alert">🚨 EMERGENCY — look at the screen to check in as safe<small id="musterCount"></small></div>
 <div id="done"><div><div class="check">✓</div><h2 id="doneT"></h2><p id="doneS"></p></div></div>
 <div id="start"><div><div class="orb"></div><h2>Tap to wake Aura</h2><p>Enables camera, microphone and voice on this screen.</p></div></div>
 <div id="status"></div>
@@ -635,6 +643,7 @@
       renderTicker(j.announcements || []);
       renderPulse(j.pulse || {});
       renderPrompts();
+      renderMuster();
       if (S.state === 'ambient') { ambientText(); if ($('infoCard').classList.contains('hidden')) rotateCard(); }
     } catch (e) { status('Server unreachable — retrying'); }
   }
@@ -793,6 +802,11 @@
     $('headline').textContent = '';
     $('sub').innerHTML = '';
     const k = S.cfg?.kiosk || {};
+    if (isMuster()) {
+      $('hint').innerHTML = k.muster ? '<b>Look at me</b> to check in as safe — no need to tap'
+        : '<b>Muster point</b> · no emergency in progress';
+      return;
+    }
     if (isGate()) {
       const verb = { in: 'enter', out: 'exit' }[k.direction] || 'enter or exit';
       $('hint').innerHTML = `<b>Look at me</b> to ${verb} ${esc(k.area)} — no need to stop or tap` +
@@ -803,6 +817,13 @@
   }
   // gate mode (access.py): hands-free entry/exit of an area, no buttons, no chat
   const isGate = () => S.cfg?.kiosk?.mode === 'gate' && !!S.cfg?.kiosk?.area;
+  // muster point (muster.py): during an emergency a recognised face is checked in as safe
+  const isMuster = () => S.cfg?.kiosk?.mode === 'muster';
+  function renderMuster() {
+    const m = isMuster() ? S.cfg.kiosk.muster : null;
+    document.body.classList.toggle('muster-on', !!m);
+    if (m) $('musterCount').textContent = `${m.safe} of ${m.total} accounted for` + (m.extra ? ` · ${m.extra} not on the list` : '');
+  }
 
   function toAmbient() {
     if (S.chatting) closeChat();
@@ -994,6 +1015,7 @@
     if (j.matched) {
       if (j.employee === S.cooldownName && Date.now() < S.cooldownUntil) return;
       if (isGate() && j.gate) { if (S.state !== 'staff') gatePass(j); return; }
+      if (isMuster()) { if (S.state !== 'staff') musterCheckin(j); return; }
       if (S.state !== 'staff' && !S.chatting) showStaff(j);
       return;
     }
@@ -1023,7 +1045,8 @@
       // frames now arrive ~every 100 ms, so also require a minimum span: someone still turning
       // towards the camera shouldn't be called a visitor before their face is usable
       if (S.unmatched >= 3 && Date.now() - S.firstUnmatchedAt >= VISITOR_MIN_MS) {
-        if (!isGate()) showVisitor();
+        if (!isGate() && !isMuster()) showVisitor();
+        else if (isMuster() && S.unmatched >= 8) { $('headline').textContent = 'Not recognised'; $('sub').textContent = 'Please tell the fire warden your name so they can mark you safe.'; }
         // a gate is staff-only: no visitor chat, just say we don't know them (keeps scanning — they may turn)
         else if (S.unmatched >= 8) { $('headline').textContent = 'Not recognised'; $('sub').textContent = 'Please look straight at the screen, or show your pass to the officer.'; }
       }
@@ -1234,6 +1257,28 @@
       if (S.cfg?.kiosk) S.cfg.kiosk.inside = r.count;
     } catch (e) {
       flash('Not recorded', e.message, 'var(--out)'); beep(220, 300, 'square');
+    }
+    S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
+    setTimeout(toAmbient, 2600);
+  }
+
+  // ---- muster point: check in as safe
+  async function musterCheckin(j) {
+    setState('staff'); S.current = j; S.paused = true; touch();
+    const first = j.employee.split(' ')[0];
+    try {
+      const r = await post('/api/muster/checkin', { employee: j.employee, kiosk: KIOSK, token: j.token });
+      if (!r.active) {
+        flash('No emergency in progress', `${j.employee} — this is a muster point; nothing to check in for right now.`, 'var(--back)', 'ℹ︎');
+      } else {
+        flash(`Safe · ${j.employee}`, (r.already ? 'Already checked in. ' : 'You are accounted for. ') + `${r.safe} of ${r.total} safe` +
+          (r.on_list ? '' : ' · you were not on the list — the warden can see you here') + '.', 'var(--in)');
+        if (!r.already) { chime(); speak(`${first}, you are checked in as safe.`); }
+        S.cfg.kiosk.muster = { ...(S.cfg.kiosk.muster || {}), safe: r.safe, total: r.total, extra: r.extra };
+        renderMuster();
+      }
+    } catch (e) {
+      flash('Not recorded', `${e.message} Tell the fire warden your name.`, 'var(--out)', '✕'); beep(220, 300, 'square');
     }
     S.cooldownName = j.employee; S.cooldownUntil = Date.now() + COOLDOWN_MS;
     setTimeout(toAmbient, 2600);
@@ -1485,6 +1530,17 @@
 
   toAmbient();
   loadConfig(); setInterval(loadConfig, 60000);
+  // a muster point must notice an emergency within seconds, not a minute
+  setInterval(async () => {
+    if (!isMuster()) return;
+    try {
+      const j = await fetch('/api/kiosk/' + encodeURIComponent(KIOSK)).then(r => r.json());
+      const was = !!S.cfg.kiosk.muster;
+      S.cfg.kiosk.muster = j.kiosk.muster; S.cfg.kiosk.mode = j.kiosk.mode;
+      renderMuster();
+      if (S.state === 'ambient' && was !== !!j.kiosk.muster) ambientText();
+    } catch (_) {}
+  }, 5000);
   loadBoard();
 })();
 </script>

@@ -35,6 +35,8 @@ Admin (X-Admin-Pin):
   /api/roster…  (CSV import, JSON push from HR systems, edit, coverage)   /api/alerts…  (feed, ack, routing)
   /api/access/presence (who is inside each area), /api/access (movements), /api/access.csv, /api/access/out
   PUT /api/areas/{name} {reasons: [...], ask_reason, min_zone, max_minutes, capacity}  per-area rules
+  /api/muster… emergency roll call: GET (active board + history), POST start, POST {id}/end, POST {id}/mark,
+  GET {id}.csv; kiosks with mode 'muster' check people in as safe (POST /api/muster/checkin, no PIN)
 Each location has a mode (PUT /api/kiosks/{name} {mode, actions, area, direction}, see access.py):
   attendance (default: IN / BREAK / BACK / OUT, or a chosen subset) or gate (hands-free area entry/exit).
 
@@ -66,6 +68,7 @@ from starlette.staticfiles import StaticFiles
 
 import access
 import alerts
+import muster
 import brain
 import flights
 import insights
@@ -532,8 +535,9 @@ def _recognize_result(faces: list, kiosk: str, encounter: str) -> JSONResponse:
         last = last_action_today(conn, employee)
         prof = profile(conn, employee)
         consent = bool(prof.get("mood_consent", 1))
-        expired = pass_expired(prof)
         k = kiosk_row(conn, kiosk)
+        # at a muster point safety comes first: an expired pass never locks the screen or blocks a check-in
+        expired = pass_expired(prof) and k.get("mode") != "muster"
         gate = access.state(conn, employee, k, now()) if access.is_gate(k) else None
         if expired:
             pass_incident(conn, employee, prof, kiosk)
@@ -755,6 +759,9 @@ async def kiosk_config(request: Request):
         k["offered"] = list(access.kiosk_actions(k))
         if access.is_gate(k):
             k["inside"] = access.area_count(conn, k["area"].strip(), ts)
+        if k.get("mode") == "muster":
+            mu = muster.active(conn)
+            k["muster"] = {"id": mu["id"], "started": mu["started"], **muster.totals(conn, mu["id"])} if mu else None
     for m in media:
         m["url"] = f"/media/{m['file']}"
     return JSONResponse({
@@ -1395,6 +1402,95 @@ async def area_save(request: Request):
         return JSONResponse({"ok": True, **access.settings(conn, name)})
 
 
+def _deliver_alerts_soon():
+    task = asyncio.create_task(alerts.deliver())
+    _bg.add(task)
+    task.add_done_callback(_bg.discard)
+
+
+async def muster_checkin(request: Request):
+    """Face check-in at a muster point during an emergency. Expired passes are not refused here."""
+    p = await request.json()
+    employee, kiosk = (p.get("employee") or "").strip(), (p.get("kiosk") or "").strip()
+    if not employee or not kiosk:
+        raise HTTPException(400, "employee and kiosk required")
+    if not event_token_ok(p.get("token"), employee, kiosk):
+        raise HTTPException(403, "Not verified by the camera — please look at the screen again.")
+    with db() as conn:
+        if kiosk_row(conn, kiosk).get("mode") != "muster":
+            raise HTTPException(400, f"{kiosk} is not a muster point")
+        return JSONResponse(muster.checkin(conn, employee, kiosk, now()))
+
+
+async def muster_overview(request: Request):
+    require_pin(request)
+    with db() as conn:
+        m = muster.active(conn)
+        areas = sorted({r["area"] for r in conn.execute("SELECT DISTINCT area FROM access")} |
+                       {r["area"].strip() for r in conn.execute("SELECT area FROM kiosks WHERE mode='gate' AND area IS NOT NULL AND TRIM(area)!=''")})
+        points = [r["name"] for r in conn.execute("SELECT name FROM kiosks WHERE mode='muster' ORDER BY name")]
+        return JSONResponse({"active": muster.board(conn, m["id"]) if m else None, "history": muster.history(conn),
+                             "areas": areas, "points": points})
+
+
+async def muster_start(request: Request):
+    require_pin(request)
+    p = await request.json()
+    note = (p.get("note") or "").strip()[:300]
+    with db() as conn:
+        try:
+            out = muster.start(conn, p.get("areas") or [], bool(p.get("on_duty")), note, (p.get("by") or "").strip()[:80], now())
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+        where = "all areas" if out["areas"] == ["*"] else ", ".join(out["areas"])
+        alerts._add(conn, f"muster|{out['id']}", "muster",
+                    f"EMERGENCY muster started for {where}{' and everyone on duty' if p.get('on_duty') else ''}: "
+                    f"{out['total']} people to account for." + (f" {note}" if note else ""), now())
+    _deliver_alerts_soon()
+    return JSONResponse({"ok": True, **out})
+
+
+async def muster_mark(request: Request):
+    require_pin(request)
+    p = await request.json()
+    with db() as conn:
+        try:
+            muster.mark(conn, request.path_params["mid"], (p.get("person") or "").strip(), p.get("safe", True) is not False,
+                        (p.get("by") or "").strip()[:80], (p.get("note") or "").strip()[:200], now())
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return JSONResponse({"ok": True, **muster.totals(conn, request.path_params["mid"])})
+
+
+async def muster_end(request: Request):
+    require_pin(request)
+    p = await request.json()
+    with db() as conn:
+        try:
+            return JSONResponse({"ok": True, **muster.end(conn, request.path_params["mid"], (p.get("by") or "").strip()[:80],
+                                                         p.get("mark_out", True) is not False, now())})
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+
+
+async def muster_csv(request: Request):
+    require_pin(request)
+    with db() as conn:
+        b = muster.board(conn, request.path_params["mid"])
+    if not b:
+        raise HTTPException(404, "No such muster")
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    m = b["muster"]
+    w.writerow(["muster", m["id"], "started", m["started"], "ended", m["ended"] or "", "areas", " / ".join(m["areas"])])
+    w.writerow(["person", "department", "status", "on_list", "last_area", "inside_since", "safe_at", "safe_by", "safe_kiosk", "note"])
+    for x in b["people"]:
+        w.writerow([x["person"], x["department"] or "", x["status"], "yes" if x["on_list"] else "no (checked in)", x["area"] or "",
+                    x["since"] or "", x["safe_ts"] or "", x["safe_by"] or "", x["safe_kiosk"] or "", x["note"] or ""])
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="muster-{m["id"]}.csv"'})
+
+
 async def access_log(request: Request):
     require_pin(request)
     return JSONResponse({"rows": _access_rows(request)})
@@ -1700,6 +1796,12 @@ routes = [
     Route("/api/access/presence", access_presence),
     Route("/api/access/out", access_out, methods=["POST"]),
     Route("/api/areas/{name}", area_save, methods=["PUT"]),
+    Route("/api/muster", muster_overview),
+    Route("/api/muster/start", muster_start, methods=["POST"]),
+    Route("/api/muster/checkin", muster_checkin, methods=["POST"]),
+    Route("/api/muster/{mid:int}/mark", muster_mark, methods=["POST"]),
+    Route("/api/muster/{mid:int}/end", muster_end, methods=["POST"]),
+    Route("/api/muster/{mid:int}.csv", muster_csv),
     Route("/api/talk", talk, methods=["POST"]),
     Route("/api/listen", listen, methods=["POST"]),
     Route("/api/kiosk/{name}", kiosk_config),

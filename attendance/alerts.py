@@ -17,6 +17,7 @@ live attendance / assistance / safety data into operational alerts.
   passback       entered an area again without an exit, or exited without an entry (logged live at the gate)
   overstay       inside an area longer than its maximum stay
   capacity       more people inside an area than its capacity
+  muster         an emergency muster (roll call) was started (logged live)
   no_exit        entered an area and never exited (ACCESS_STALE_HOURS), or still inside after clocking OUT
 
 Each alert has a stable `key`, so re-scans never duplicate it. New alerts are posted to the
@@ -60,6 +61,7 @@ TYPES = {  # type -> (icon, label, severity)
     "overstay": ("⏳", "Overstay in area", "medium"),
     "capacity": ("🚪", "Area over capacity", "high"),
     "no_exit": ("🚶", "No exit recorded", "low"),
+    "muster": ("🚨", "Emergency muster", "high"),
 }
 
 

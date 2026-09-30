@@ -20,6 +20,7 @@ SQLite schema for Aura. One file, created/migrated on start-up.
   access         area entry/exit through gate-mode locations (who is inside where; see access.py)
   areas          per-area settings: entry reasons (and whether one must be chosen), lowest pass zone
                  allowed, maximum stay and capacity
+  musters        emergency roll calls (see muster.py); muster_roll = who must be accounted for, and who is safe
 
 Rows produced by the demo generator carry demo=1 so they can be removed in one go.
 """
@@ -243,6 +244,33 @@ CREATE TABLE IF NOT EXISTS areas (
     min_zone    TEXT,                      -- lowest pass zone colour allowed in (NULL = anyone)
     max_minutes INTEGER,                   -- overstay alert after this long inside
     capacity    INTEGER                    -- over-capacity alert above this many inside
+);
+
+CREATE TABLE IF NOT EXISTS musters (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    started    TEXT NOT NULL,
+    started_by TEXT,
+    areas      TEXT,                       -- JSON list of evacuated areas, ["*"] = all
+    on_duty    INTEGER NOT NULL DEFAULT 0, -- roll also includes everyone clocked in
+    note       TEXT,
+    ended      TEXT,
+    ended_by   TEXT,
+    status     TEXT NOT NULL DEFAULT 'active'   -- active | ended
+);
+
+CREATE TABLE IF NOT EXISTS muster_roll (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    muster_id  INTEGER NOT NULL,
+    person     TEXT NOT NULL,
+    area       TEXT,                       -- where they were recorded inside (NULL = on duty, area unknown)
+    since      TEXT,
+    status     TEXT NOT NULL DEFAULT 'missing',  -- missing | safe
+    safe_ts    TEXT,
+    safe_by    TEXT,                       -- kiosk | admin
+    safe_kiosk TEXT,
+    on_list    INTEGER NOT NULL DEFAULT 1, -- 0 = not on the roll, checked in at a muster point anyway
+    note       TEXT,
+    UNIQUE (muster_id, person)
 );
 
 CREATE TABLE IF NOT EXISTS announcements (

@@ -27,7 +27,7 @@ import json
 import os
 from datetime import datetime, timedelta
 
-MODES = ("attendance", "gate")
+MODES = ("attendance", "gate", "muster")   # muster: emergency muster point (muster.py)
 DIRECTIONS = ("both", "in", "out")
 ATTENDANCE_ACTIONS = ("IN", "BREAK", "BACK", "OUT")
 STALE_HOURS = float(os.environ.get("ACCESS_STALE_HOURS", "16"))
@@ -38,8 +38,8 @@ ZONES = ("green", "red", "orange", "blue", "yellow", "white")
 
 
 def kiosk_actions(k: dict) -> tuple:
-    """Attendance buttons offered at a location; none at a gate."""
-    if (k.get("mode") or "attendance") == "gate":
+    """Attendance buttons offered at a location; none at a gate or muster point."""
+    if (k.get("mode") or "attendance") != "attendance":
         return ()
     chosen = [a for a in (k.get("actions") or "").upper().split(",") if a in ATTENDANCE_ACTIONS]
     return tuple(a for a in ATTENDANCE_ACTIONS if a in chosen) or ATTENDANCE_ACTIONS

@@ -231,12 +231,23 @@ the person's *enrolled* photos (`LEARN_ANCHOR_SIMILARITY`), so the model can't d
   The same person at the same gate within `GATE_REPEAT_SECONDS` (60) is ignored. An expired pass still locks
   the screen. A tablet can't physically stop anyone: a gate records and alerts; a turnstile can be added later.
 
+**Emergency muster** — set one or more kiosks' purpose to **Muster point** (assembly points). Admin →
+**Emergency** → *Start muster* (all areas or chosen ones, optionally everyone clocked in) takes a roll of
+everyone recorded inside, alerts supervisors, and turns muster-point screens red within ~5 s: a recognised
+face is checked in as **safe** (an expired pass never blocks this; people not on the roll are added as
+safe). The board lists **missing** people first with where they were last seen, lets a supervisor mark
+someone safe (e.g. confirmed by radio) or undo it, and exports a CSV. *End muster* can record everyone as
+having left the evacuated areas so headcounts restart clean. Past musters stay listed with their report.
+It depends on gates having recorded who went in — people who entered without passing a gate aren't on
+the roll unless you include everyone clocked in.
+
 ## Admin page (`/admin`)
 
 | Tab | What |
 |---|---|
 | Today | who is IN / on BREAK / OUT now (with mood), auto-refresh |
 | Areas | who is inside each gate-controlled area now, movements, CSV, mark out |
+| Emergency | start / run / end a muster roll call, mark safe, past musters with CSV |
 | Log & Export | date range + employee filter, **Download CSV**, delete mistakes |
 | People | profiles (department, shift, birthday, language, mood consent), rename, delete, forget |
 | Enrol | camera capture or photo upload |

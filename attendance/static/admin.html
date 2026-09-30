@@ -137,6 +137,17 @@
   .areas { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr)); gap:14px; margin-bottom:18px; }
   .areas .card { margin:0; }
   .area-n { font-size:34px; font-weight:700; letter-spacing:-.02em; line-height:1; }
+  .btn.alarm { background:var(--bad) !important; border-color:var(--bad) !important; color:#fff !important; }
+  .mu-live { border:2px solid var(--bad); background:linear-gradient(0deg, var(--surface), var(--bad-soft)); }
+  .mu-kpi { display:flex; gap:28px; flex-wrap:wrap; margin:6px 0 14px; }
+  .mu-kpi b { display:block; font-size:44px; line-height:1; letter-spacing:-.03em; }
+  .mu-kpi span { color:var(--muted); font-weight:600; font-size:13px; }
+  .mu-bar { height:10px; border-radius:99px; background:var(--bad-soft); overflow:hidden; margin-bottom:16px; }
+  .mu-bar i { display:block; height:100%; background:var(--ok); transition:width .4s; }
+  .mu-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr)); gap:8px; }
+  .mu-p { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+  .mu-p.miss { border-color:color-mix(in srgb, var(--bad) 50%, var(--line)); }
+  .mu-p .who { flex:1; min-width:0; }
   .area-set { margin-top:10px; } .area-set summary { cursor:pointer; color:var(--accent); font-weight:600; font-size:13px; }
   .area-list { list-style:none; margin:12px 0 0; padding:0; display:grid; gap:6px; }
   .area-list li { display:flex; align-items:center; gap:10px; }
@@ -440,6 +451,7 @@
   <nav>
     <button data-s="status" class="active"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Today</button>
     <button data-s="areas"><svg class="i" viewBox="0 0 24 24"><path d="M4 21V4.5L13 3v18"/><path d="M13 5h5a2 2 0 012 2v14M2.5 21h19"/><circle cx="10" cy="12.5" r=".9"/></svg>Areas</button>
+    <button data-s="muster"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.2v.3"/></svg>Emergency<span class="nbadge" id="musterBadge" hidden>!</span></button>
     <button data-s="log"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M18 13v7m-3-3l3 3 3-3"/></svg>Log &amp; Export</button>
     <button data-s="people"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/></svg>People</button>
     <button data-s="enrol"><svg class="i" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><circle cx="12" cy="10.5" r="2.8"/><path d="M8 17c1-1.5 2.4-2.2 4-2.2s3 .7 4 2.2"/></svg>Enrol</button>
@@ -496,6 +508,15 @@
       <div style="display:flex;gap:8px;align-self:flex-end;flex-wrap:wrap"><button class="btn" id="axGo">Show</button><button class="btn ghost" id="axCsv">⬇︎ Download CSV</button></div>
     </div>
     <div class="tablewrap"><table><thead><tr><th>Time</th><th>Person</th><th>Area</th><th>Move</th><th>Reason / flag</th><th class="hide-sm">Location</th><th class="num hide-sm">Match</th></tr></thead><tbody id="axBody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ================= EMERGENCY MUSTER ================= -->
+<section id="s-muster">
+  <div id="muLive"></div>
+  <div class="card">
+    <div class="card-h"><h2>Past musters</h2></div>
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>Started</th><th>Ended</th><th>Areas</th><th class="num">Safe</th><th class="num">Missing at end</th><th></th></tr></thead><tbody id="muHist"></tbody></table></div>
   </div>
 </section>
 
@@ -841,7 +862,7 @@
   const kioskLink = name => `${location.origin}/?kiosk=${enc(name || 'Main')}`;
 
   // ---- gate ----
-  function unlock() { $('gate').hidden = true; $('app').hidden = false; show((location.hash.slice(1).split('=')[0]) || 'status'); health(); refreshNames(); setTimeout(() => pollAlerts().catch(() => {}), 0); }
+  function unlock() { $('gate').hidden = true; $('app').hidden = false; show((location.hash.slice(1).split('=')[0]) || 'status'); health(); refreshNames(); setTimeout(() => { pollAlerts().catch(() => {}); musterBadge(); }, 0); }
   function lock() { PIN = ''; sessionStorage.removeItem('pin'); $('app').hidden = true; $('gate').hidden = false; $('pin').value = ''; }
   $('pinGo').onclick = async () => {
     PIN = $('pin').value; sessionStorage.setItem('pin', PIN);
@@ -855,6 +876,7 @@
   const PAGES = {
     status: ['Today', 'Who is on duty right now', () => loadStatus()],
     areas: ['Areas', 'Who is inside each area right now — hands-free gates, entry and exit', () => loadAreas()],
+    muster: ['Emergency', 'Muster roll call: who has to be accounted for, and who is safe', () => loadMuster()],
     log: ['Log & Export', 'Every clock event, filter and download for payroll', () => loadLog()],
     people: ['People', 'Staff profiles, face enrolment and consent', () => loadPeople()],
     enrol: ['Enrol', 'Add face photos so the kiosk recognises staff', () => refreshNames()],
@@ -962,6 +984,72 @@
   $('axCsv').onclick = () => { const p = axParams(); p.set('pin', PIN); location.href = '/api/access.csv?' + p; };
   // auto-refresh, but never while an area's reasons are being edited (it would wipe the edit)
   setInterval(() => { if (!$('app').hidden && $('s-areas').classList.contains('active') && !document.activeElement?.closest?.('details.area-set')) loadAreas().catch(() => {}); }, 15000);
+
+  // ---- emergency muster (muster.py) ----
+  let MU = null;
+  const muName = () => sessionStorage.getItem('muName') || '';
+  async function loadMuster() {
+    const j = await api('/api/muster');
+    MU = j;
+    $('musterBadge').hidden = !j.active;
+    $('muHist').innerHTML = j.history.map(m => `<tr><td>${m.id}</td><td>${fmtDT(m.started)}${m.started_by ? `<div class="muted">${esc(m.started_by)}</div>` : ''}</td><td>${m.ended ? fmtDT(m.ended) : '<span class="pill bad">in progress</span>'}</td><td>${m.areas.includes('*') ? 'All areas' : esc(m.areas.join(', '))}${m.on_duty ? ' + on duty' : ''}${m.note ? `<div class="muted">${esc(m.note)}</div>` : ''}</td><td class="num">${m.safe} / ${m.total}</td><td class="num">${m.status === 'ended' ? m.missing : '—'}</td><td><button class="btn ghost sm" data-csv="${m.id}">CSV</button></td></tr>`).join('') || '<tr><td colspan=7 class="empty">No musters yet</td></tr>';
+    $('muHist').querySelectorAll('[data-csv]').forEach(b => b.onclick = () => location.href = `/api/muster/${b.dataset.csv}.csv?pin=${enc(PIN)}`);
+    const pointsNote = j.points.length ? `Muster points: <b>${j.points.map(esc).join(', ')}</b> — staff check in there by face.`
+      : '⚠️ No muster point yet: in <a href="#locations">Locations</a>, set a kiosk\'s purpose to <b>Muster point</b>. You can still mark people safe here.';
+    if (!j.active) {
+      $('muLive').innerHTML = `<div class="card">
+        <div class="card-h"><h2>Start an emergency muster</h2></div>
+        <p class="muted" style="margin-top:0">Takes a roll of everyone recorded inside the chosen areas right now (and, optionally, everyone clocked in). Muster-point screens turn red and check people in as safe by face; supervisors get an alert.</p>
+        <div class="field"><span>Areas being evacuated</span><div class="row" style="margin:0;gap:14px"><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="muAll" checked><b>All areas</b></label>${j.areas.map(a => `<label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" class="muArea" value="${esc(a)}" disabled>${esc(a)}</label>`).join('')}</div></div>
+        <label class="switch" style="margin:12px 0"><input type="checkbox" id="muDuty"><span class="sl"></span><span>Also account for everyone clocked in (on duty, on break)</span></label>
+        <div class="grid2"><label class="field"><span>What's happening (optional)</span><input id="muNote" placeholder="e.g. Fire alarm, Terminal 1 east"></label><label class="field"><span>Your name</span><input id="muBy" value="${esc(muName())}" placeholder="Shown on the record"></label></div>
+        <p class="hint">${pointsNote}</p>
+        <div class="row" style="margin:6px 0 0"><button class="btn alarm" id="muStart">🚨 Start muster</button></div>
+      </div>`;
+      $('muAll').onchange = () => document.querySelectorAll('.muArea').forEach(x => { x.disabled = $('muAll').checked; if (x.disabled) x.checked = false; });
+      $('muStart').onclick = async () => {
+        const areas = $('muAll').checked ? [] : [...document.querySelectorAll('.muArea:checked')].map(x => x.value);
+        if (!$('muAll').checked && !areas.length) return toast('Pick at least one area, or All areas', true);
+        sessionStorage.setItem('muName', $('muBy').value.trim());
+        if (!confirm(`Start an EMERGENCY muster for ${areas.length ? areas.join(', ') : 'all areas'}?\n\nMuster-point screens will turn red and supervisors will be alerted.`)) return;
+        try { const r = await api('/api/muster/start', jsonBody('POST', { areas, on_duty: $('muDuty').checked, note: $('muNote').value.trim(), by: $('muBy').value.trim() })); toast(`Muster started — ${r.total} to account for`); loadMuster().catch(fail); } catch (e) { fail(e); }
+      };
+      return;
+    }
+    const b = j.active, m = b.muster;
+    const miss = b.people.filter(x => x.status === 'missing'), safe = b.people.filter(x => x.status === 'safe');
+    const where = x => x.area ? `${esc(x.area)} since ${fmtT(x.since)}` : (x.note ? esc(x.note) : 'on duty');
+    $('muLive').innerHTML = `<div class="card mu-live">
+      <div class="card-h"><h2>🚨 Muster in progress</h2><span class="muted">since ${fmtT(m.started)} (${dur(m.started)}) · ${m.areas.includes('*') ? 'all areas' : esc(m.areas.join(', '))}${m.on_duty ? ' + on duty' : ''}${m.started_by ? ' · started by ' + esc(m.started_by) : ''}</span></div>
+      ${m.note ? `<p style="margin-top:0"><b>${esc(m.note)}</b></p>` : ''}
+      <div class="mu-kpi"><div><b style="color:var(--bad)">${b.missing}</b><span>missing</span></div><div><b style="color:var(--ok)">${b.safe}</b><span>safe</span></div><div><b>${b.total}</b><span>on the roll</span></div>${b.extra ? `<div><b>${b.extra}</b><span>checked in, not on the list</span></div>` : ''}</div>
+      <div class="mu-bar"><i style="width:${b.total ? Math.round(100 * b.safe / b.total) : 100}%"></i></div>
+      <h3 style="margin:0 0 8px">Missing (${miss.length})</h3>
+      <div class="mu-list">${miss.map(x => `<div class="mu-p miss">${avatar(x.person, 'sm')}<div class="who"><b>${esc(x.person)}</b><div class="muted" style="font-size:12px">${x.department ? esc(x.department) + ' · ' : ''}last seen ${where(x)}${x.exited ? ` · <b>exited ${fmtT(x.exited)}</b>` : ''}</div></div><button class="btn sm" data-safe="${esc(x.person)}">Mark safe</button></div>`).join('') || '<div class="notice">Everyone on the roll is accounted for.</div>'}</div>
+      <h3 style="margin:18px 0 8px">Safe (${safe.length})</h3>
+      <div class="mu-list">${safe.map(x => `<div class="mu-p">${avatar(x.person, 'sm')}<div class="who"><b>${esc(x.person)}</b><div class="muted" style="font-size:12px">${fmtT(x.safe_ts)} · ${x.safe_by === 'admin' ? 'marked by supervisor' + (x.note ? ': ' + esc(x.note) : '') : 'at ' + esc(x.safe_kiosk || 'muster point')}${x.on_list ? '' : ' · <span class="pill warn">not on list</span>'}</div></div>${x.on_list ? `<button class="btn ghost sm" data-undo="${esc(x.person)}" title="Undo — back to missing">Undo</button>` : ''}</div>`).join('') || '<div class="muted">Nobody yet.</div>'}</div>
+      <p class="hint">${pointsNote}</p>
+      <div class="row" style="margin:14px 0 0;border-top:1px solid var(--line);padding-top:14px"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="muOut" checked>Record everyone on the roll as having left the evacuated areas</label><span style="flex:1"></span><button class="btn ghost" id="muCsv">⬇︎ CSV</button><button class="btn danger" id="muEnd">End muster</button></div>
+    </div>`;
+    $('muLive').querySelectorAll('[data-safe]').forEach(x => x.onclick = async () => {
+      const note = prompt(`Mark ${x.dataset.safe} as safe.\n\nHow was this confirmed? (optional)`, 'Confirmed by radio');
+      if (note === null) return;
+      try { await api(`/api/muster/${m.id}/mark`, jsonBody('POST', { person: x.dataset.safe, note, by: muName() })); loadMuster().catch(fail); } catch (e) { fail(e); }
+    });
+    $('muLive').querySelectorAll('[data-undo]').forEach(x => x.onclick = async () => {
+      if (!confirm(`Put ${x.dataset.undo} back on the missing list?`)) return;
+      try { await api(`/api/muster/${m.id}/mark`, jsonBody('POST', { person: x.dataset.undo, safe: false })); loadMuster().catch(fail); } catch (e) { fail(e); }
+    });
+    $('muCsv').onclick = () => location.href = `/api/muster/${m.id}.csv?pin=${enc(PIN)}`;
+    $('muEnd').onclick = async () => {
+      if (!confirm(miss.length ? `${miss.length} people are still MISSING.\n\nEnd the muster anyway?` : 'Everyone is accounted for. End the muster?')) return;
+      try { const r = await api(`/api/muster/${m.id}/end`, jsonBody('POST', { by: muName(), mark_out: $('muOut').checked })); toast(`Muster ended${r.marked_out ? ` · ${r.marked_out} marked out of their areas` : ''}`); loadMuster().catch(fail); } catch (e) { fail(e); }
+    };
+  }
+  setInterval(() => { if (!$('app').hidden && $('s-muster').classList.contains('active')) loadMuster().catch(() => {}); }, 5000);
+  // the Emergency tab shows a badge from any page while a muster is running
+  const musterBadge = () => api('/api/muster').then(j => { $('musterBadge').hidden = !j.active; }).catch(() => {});
+  setInterval(() => { if (!$('app').hidden && !$('s-muster').classList.contains('active')) musterBadge(); }, 20000);
 
   // ---- mood charts ----
   // valence -1..1 -> score 0..100 (50 = calm); colour scale red → amber → grey (calm) → teal → green, same as Insights
@@ -1325,7 +1413,7 @@
     renderAnns(a.announcements);
   }
   function renderKList() {
-    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${k.mode === 'gate' ? `🚪 ${esc(k.area || '—')} · ${esc({ both: 'entry + exit', in: 'entry', out: 'exit' }[k.direction] || '')}` : k.actions ? esc(k.actions.replace(/,/g, ' / ')) : ''}${k.mode === 'gate' || k.actions ? ' · ' : ''}${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media${k.safety_rule ? ` · ${+k.safety_enforce ? '⛔' : '🦺'} ${k.safety_rule === DEPT_RULE ? 'Department rules' : esc(k.safety_rule)}` : ''}</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
+    $('kList').innerHTML = KIOSKS.map(k => `<button class="kitem${k.name === SEL ? ' active' : ''}" data-k="${esc(k.name)}"><div class="top"><b>${esc(k.name)}</b>${online(k) ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>'}</div><div class="muted">${k.mode === 'muster' ? '🚨 muster point' : k.mode === 'gate' ? `🚪 ${esc(k.area || '—')} · ${esc({ both: 'entry + exit', in: 'entry', out: 'exit' }[k.direction] || '')}` : k.actions ? esc(k.actions.replace(/,/g, ' / ')) : ''}${k.mode === 'gate' || k.mode === 'muster' || k.actions ? ' · ' : ''}${esc(k.zone || '—')} · ${(k.info || []).length} cards · ${(k.media || []).length} media${k.safety_rule ? ` · ${+k.safety_enforce ? '⛔' : '🦺'} ${k.safety_rule === DEPT_RULE ? 'Department rules' : esc(k.safety_rule)}` : ''}</div><div class="hint" style="margin:0">Last seen ${esc(ago(k.last_seen))}</div></button>`).join('') || '<div class="empty">No kiosks yet.</div>';
     $('kList').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { SEL = b.dataset.k; renderKList(); renderEditor(); if (innerWidth < 900) $('kEditor').scrollIntoView({ behavior: 'smooth' }); });
   }
   const DEPT_RULE = '@department';   // location setting: each worker's own department rule (safety.DEPT_RULE)
@@ -1352,7 +1440,8 @@
         <div class="field span2"><span>Theme</span><div class="themes">${Object.entries(THEMES).map(([v, l]) => `<label class="theme-opt"><input type="radio" name="k_theme" value="${v}"${(k.theme || 'lagoon') === v ? ' checked' : ''}><span><i class="th-${v}"></i>${l}</span></label>`).join('')}</div></div>
         <label class="field"><span>Flight board</span><select id="k_flights">${Object.entries(FLIGHT_OPTS).map(([v, l]) => `<option value="${v}"${(k.flights || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <div class="field span2"><span>Voice</span><label class="switch"><input type="checkbox" id="k_voice"${+k.voice !== 0 ? ' checked' : ''}><span class="sl"></span><span>Aura speaks replies aloud and listens for questions</span></label></div>
-        <label class="field"><span>Purpose</span><select id="k_mode"><option value="attendance"${(k.mode || 'attendance') === 'attendance' ? ' selected' : ''}>Attendance — clock in / out</option><option value="gate"${k.mode === 'gate' ? ' selected' : ''}>Gate — hands-free area entry &amp; exit</option></select></label>
+        <label class="field"><span>Purpose</span><select id="k_mode"><option value="attendance"${(k.mode || 'attendance') === 'attendance' ? ' selected' : ''}>Attendance — clock in / out</option><option value="gate"${k.mode === 'gate' ? ' selected' : ''}>Gate — hands-free area entry &amp; exit</option><option value="muster"${k.mode === 'muster' ? ' selected' : ''}>Muster point — emergency roll call</option></select></label>
+        <div class="field span2" data-for="muster"><div class="hint" style="margin:0">Normally shows the usual screen. When an emergency muster is started (<a href="#muster">Emergency</a>), it turns red within seconds and checks staff in as <b>safe</b> by face — no taps. An expired pass never blocks a check-in here.</div></div>
         <div class="field" data-for="attendance"><span>Buttons offered</span><div class="row" style="margin:0;gap:14px">${['IN', 'BREAK', 'BACK', 'OUT'].map(a => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="k_act" value="${a}"${(k.offered || ['IN', 'BREAK', 'BACK', 'OUT']).includes(a) ? ' checked' : ''}>${tag(a)}</label>`).join('')}</div></div>
         <label class="field" data-for="gate"><span>Area</span><input id="k_area" value="${esc(k.area || '')}" placeholder="e.g. Departure Hall" list="areaList"></label>
         <label class="field" data-for="gate"><span>This screen records</span><select id="k_dir">${Object.entries({ both: 'Entry and exit (toggles each pass)', in: 'Entry only', out: 'Exit only' }).map(([v, l]) => `<option value="${v}"${(k.direction || 'both') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
